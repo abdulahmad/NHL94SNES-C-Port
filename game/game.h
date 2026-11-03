@@ -18,7 +18,6 @@
 #include "screen/display.h"
 #include "play/hockey.h"
 #include "play/logic.h"
-#include "system/middle.h"
 #include "menus/optsetup.h"
 #include "play/penalty.h"
 #include "play/period.h"
@@ -29,4 +28,4 @@
 #include "system/snes.h"
 #include "sound/sound.h"
 #include "menus/stats.h"
-#include "screen/video.h"
+#include "system/middle.h"

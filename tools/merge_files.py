@@ -62,7 +62,12 @@ def main():
     tinc = '#include "%s.h"' % os.path.relpath(os.path.join(ROOT, target), os.path.join(ROOT, 'game')).replace(os.sep, '/')
     for s in sources:
         sinc = '#include "%s.h"' % os.path.relpath(os.path.join(ROOT, s), os.path.join(ROOT, 'game')).replace(os.sep, '/')
-        if tinc in t:
+        # the target's #include goes where the later of the two was (a header may need what the
+        # headers before the source's declared)
+        if tinc in t and sinc in t and t.index(tinc) < t.index(sinc):
+            t = re.sub(r'^' + re.escape(tinc) + r'\r?\n', '', t, flags=re.M)
+            t = t.replace(sinc, tinc)
+        elif tinc in t:
             t = re.sub(r'^' + re.escape(sinc) + r'\r?\n', '', t, flags=re.M)
         else:
             t = t.replace(sinc, tinc)
