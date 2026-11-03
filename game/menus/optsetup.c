@@ -306,6 +306,6 @@ start:;
     g.pojoy = (uint16_t)(g.OptPlayers - 5);
     if (g.OptPlayMode == 1) d2 = PasswordScreen();
     w16(RAM_OFF_PassWord, r16(RAM_OFF_PassWord) | 0x0080);
-    maketree();
+    MakeTree();
     PlayerSelect(a2, d2);
 }

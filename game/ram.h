@@ -710,7 +710,7 @@ struct G {
     uint16_t OptPlayers; /* FigureJoy regular season: index * 4 into the controller team list, as 93S FigureJoy .fjnpo lda OptPlayers; ... */
     uint16_t notdemo; /* DefaultMenus sets $FFFF, setoptions clears it for the attract demo; FigureJoy / PlayerSelect / ... */
     uint16_t pojoy; /* ReadPassBits stores the range-4 field here like 93S sta pojoy; FigureJoy adds it to the pad list index; ... */
-    uint16_t postarts; /* ReadPassBits stores the range-32 field ($FFFF on a bad checksum) like 93S postarts; maketree, ... */
+    uint16_t postarts; /* ReadPassBits stores the range-32 field ($FFFF on a bad checksum) like 93S postarts; MakeTree, ... */
     uint8_t potree[32]; /* FigureJoy reads byte [#$34D2 + potreeteam] as 93S potree,potreeteam; PlayoffScreen compares potree,x. */
     uint16_t potreeteam; /* ReadPassBits range-16 field (93S potreeteam); NewPO, FigureJoy, EncodePW, PlayoffScreen. */
     uint8_t PassWord[20]; /* password characters */

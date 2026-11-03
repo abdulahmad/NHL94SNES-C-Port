@@ -14,7 +14,7 @@ void PushBits(uint16_t d0, uint16_t d1);
 void ReadPassBits(void);
 void WritePassBits(void);
 void FigureJoy(void);
-void maketree(void);
+void MakeTree(void);
 void NewPO(void);
 void ResolveGames(void);
 uint32_t GetPlayerName(void);

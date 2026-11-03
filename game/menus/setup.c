@@ -597,18 +597,18 @@ void UpdateScoutingDisplay(void)
 }
 
 /* After a game: the password and the playoff screen; in a playoff series with a user game the next game
- * (from its scouting report unless sflags3 bit 2 was set), else back to the start (Restart). Never returns
+ * (from its scouting report unless sflags3 bit 2 was set), else back to the start (Opening2). Never returns
  * on the cartridge. */
 void GameOver(void)
 {
     g.FrameByNumber = 0;
     EncodePW();
     PlayoffScreen();
-    if (g.OptPlayMode != 1 || (g.gamenum & 0x8000)) { Restart(); return; }
+    if (g.OptPlayMode != 1 || (g.gamenum & 0x8000)) { Opening2(); return; }
     g.PassWord[0] &= 0x7F;
     g.PassWord[1] &= 0x7F;
     DecodePW();
-    maketree();
+    MakeTree();
     uint16_t t = g.sflags3[0] & 4;
     g.sflags3[0] &= (uint16_t)~4;
     if (t) StartGame();
@@ -684,12 +684,12 @@ static void restart_go(void)
     if (g.OptPlayMode != 4) { StartGame(); return; }
     PlayShootout();
     g.FrameByNumber = 0;
-    g.playoffRoundIdx = 0;   /* (back to Restart's start: jmp, not an entry) */
+    g.playoffRoundIdx = 0;   /* (back to Opening2's start: jmp, not an entry) */
     hal_stack_reset(restart_go);
 }
 /* Back to the option screens from anywhere (the end of a game or the demo, exit game): out of the playoffs,
  * then restart_go on a fresh stack */
-void Restart(void)
+void Opening2(void)
 {
     g.playoffRoundIdx = 0;
     hal_stack_reset(restart_go);
@@ -697,7 +697,7 @@ void Restart(void)
 
 
 /* The cold start after Reset_Fast: the intro, bank $7F cleared, the password and default options, the
- * title screen, then the option screens (Restart, which the original falls into) */
+ * title screen, then the option screens (Opening2, which the original falls into) */
 void Opening(void)
 {
     Multi5Init();
@@ -716,5 +716,5 @@ void Opening(void)
     TitleScreen();
     FadeOutSound();
     while (g.brightness || g.MusicOn) hal_wait_interrupt();
-    Restart();
+    Opening2();
 }

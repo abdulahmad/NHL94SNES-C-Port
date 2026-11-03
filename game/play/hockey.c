@@ -2472,7 +2472,7 @@ uint16_t AskExitGame(void)
     return g.curitem[0];
 }
 
-/* In the demo: Start pauses, any other button ends it (Restart); in mode 4 with pads on teams, Start on
+/* In the demo: Start pauses, any other button ends it (Opening2); in mode 4 with pads on teams, Start on
  * any of them pauses from that pad */
 static void demo_read(void)
 {
@@ -2491,7 +2491,7 @@ static void demo_read(void)
     if (!d1) return;
     g.fadestep = 0;
     g.FrameByNumber = 0;
-    Restart();
+    Opening2();
 }
 /* The game loop's pad check after each frame: in the demo a button pauses or ends it (demo_read) */
 void demoread(void)
@@ -2638,12 +2638,12 @@ uint16_t PauseTimeout(uint16_t d1)
     return PauseMenuPoll();
 }
 /* Exit game: A / B ask to be sure (AskExitGame), then the game is abandoned for the option screens
- * (Restart) */
+ * (Opening2) */
 uint16_t PauseExitGame(uint16_t d1)
 {
     if (!(d1 & 0x8080) || !AskExitGame()) return PauseMenuPoll();
     g.FrameByNumber = 0;
-    Restart();
+    Opening2();
     return 0;
 }
 /* Instant replay: A / B fade out to the replay (ReplayMode, the music noted in replaymusic) and back,
@@ -4520,7 +4520,7 @@ int BadPasswordPrompt(void)
         if (!d3) continue;
         if (d3 & 0x4000) {
             g.OptPlayMode = 2;
-            Restart();
+            Opening2();
             return 0;
         }
         if (d3 & 0x8080) break;

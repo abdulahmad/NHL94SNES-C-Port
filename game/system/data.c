@@ -228,7 +228,7 @@ void FigureJoy(void)
 /* Build the playoff tree: the 16 seats of tree postarts into potree, the winner of each pair (by
  * WinBits) after them, then this round's series (gst1 / gst2, home first in the 2-3-2 rounds of
  * bosgames 2, 3 and 5) with their scores cleared, and FigureJoy */
-void maketree(void)
+void MakeTree(void)
 {
     uint32_t bank = 0x7E0000;
     uint16_t a1 = (uint16_t)(SYM_playoffseats + (uint16_t)(g.postarts << 4));
@@ -283,7 +283,7 @@ void NewPO(void)
         g.bosgames = 0;
         for (int i = 0; i < 8; i++) g.gspotwins[i] = g.gspobwins[i] = 0;
     }
-    maketree();
+    MakeTree();
 }
 
 /* the bit of win bit k (BitMaskTable) */
@@ -385,7 +385,7 @@ void EncodePW(void)
     if (!g.OptPlayMode) return;
     g.OptPlayMode = 1;
     ResolveGames();
-    maketree();
+    MakeTree();
     if (g.playoffRoundIdx == 4) {
         ResetPassWord();
         goto out;
@@ -401,7 +401,7 @@ void EncodePW(void)
         for (int x = 7; x >= 0; x--) g.passbits[x] = g.tpassbits[x];
         ReadPassBits();
     }
-    maketree();
+    MakeTree();
     return;
 out:
     w16(RAM_OFF_PassWord, (uint16_t)(r16(RAM_OFF_PassWord) | 0x80));

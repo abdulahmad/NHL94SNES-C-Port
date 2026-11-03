@@ -23,5 +23,5 @@ void UpdateScoutingDisplay_scroll(uint32_t a1, uint16_t d0);
 void UpdateScoutingDisplay(void);
 
 void GameOver(void);
-void Restart(void);
+void Opening2(void);
 void Opening(void);
