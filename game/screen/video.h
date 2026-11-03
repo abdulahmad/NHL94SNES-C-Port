@@ -1,4 +1,4 @@
-/* display.c: the score and clock displays (src/routines/display). */
+/* video.c: the score and clock displays (src/routines/video). */
 #pragma once
 #include <stdint.h>
 

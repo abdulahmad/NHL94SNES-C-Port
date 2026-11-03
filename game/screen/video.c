@@ -1,4 +1,4 @@
-/* display: the score, clock, crowd and sort coordinates (src/routines/display). */
+/* video: the score, clock, crowd and sort coordinates (src/routines/video). */
 #include "game.h"
 
 /* Referee graphics: only clears the referee flag here */

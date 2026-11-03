@@ -15,7 +15,7 @@
 #include "screen/cards.h"
 #include "play/collide.h"
 #include "screen/crowd.h"
-#include "screen/display.h"
+#include "screen/video.h"
 #include "play/hockey.h"
 #include "play/logic.h"
 #include "menus/optsetup.h"
