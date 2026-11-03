@@ -15,12 +15,15 @@ What decides each kind of name and place in the C ports. Workers and the splitte
 | First comment line of a routine | its asm file and label (`collide94.asm:checkcoll.`) |
 | Other games' names | never in comments; lineage lives in the asm repositories' `docs/name_map.csv` |
 
-## Status (tools/check_names.py, 2026-11-03)
+## Status (tools/check_names.py, 2026-11-03, after the renames)
 
 | ok | other_module | renamed | missing |
 |---|---|---|---|
-| 334 | 269 | 99 | 4 |
+| 397 | 299 | 6 | 4 |
 
 ## Learned
 
 (One line per correction, newest last.)
+* 2026-11-03: an asm local `Parent.x` is the C function `Parent_x`; the names gate counts them as the same name.
+* 2026-11-03: renaming a routine renames its locals too (`old_x` to `new_x`, C functions and `SYM_`s): the clock's table pairs each C function with its `SYM_`, and a local left behind drops out of it (`tools/rename_routines.py` does both; check the table's size, `awk -f tools/gen_fnsyms.awk ...`, stays the same).
+* 2026-11-03: parked (UNSURE): a rename whose new name is already another C name or `SYM_` (`randomd0sd0` to `randomd0s`, a C helper's name; the asm's anonymous locals `.t1`/`.t2` where the C has `SYM_..._t1` at another address: setoptions_t1xxxxxxxxxxx, setoptions_t2xxx, IntroSequence_t1xxxxxxxxxxxx, DrawSpritePieces_cacheat, DrawSpritePieces_cacheframe). They need the symbol file regenerated from the current asm, or names in the asm.

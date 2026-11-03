@@ -18,8 +18,8 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `assfaceoffpl` | `$9FB27C` | Assignment $17: a player taking the face off. |
 | `assstanley` | `$9EA69D` | Assignment 9, the Stanley Cup: skate to the side of the screen (x +-90, the scroll y) holding the cup, then face that way, locked 20 frames. |
 | `check4bench` | `$9FDC4C` | When a line change wants player o off (and he caused no penalty): to the bench (assignment $0C, pf2unav) unless he is going there already or has the puck, or, for the same roster player, a new assignment from his new position. |
-| `assnothing` | `$9E8BD7` | A computer player stands still (doplayeracc with no direction); a human is left alone. |
-| `ass_start` | (a helper) | (assdefo / asswingd / assdefd's start, as asswingo's: on offense the carrier gets asspuckc ($11) on top and the other team's puck makes it assignment def, on defense his own team's does; the clock stopped: assnothing; check4bench; a human is left alone; the first time, the timers reset. |
+| `donothing` | `$9E8BD7` | A computer player stands still (doplayeracc with no direction); a human is left alone. |
+| `ass_start` | (a helper) | (assdefo / asswingd / assdefd's start, as asswingo's: on offense the carrier gets asspuckc ($11) on top and the other team's puck makes it assignment def, on defense his own team's does; the clock stopped: donothing; check4bench; a human is left alone; the first time, the timers reset. |
 | `ass_timer` | (a helper) | (temp1 -= d7; when it runs out, plus add, at least 0; nonzero then) |
 | `assdefo` | `$9E8804` | Assignment 1: a defenseman on offense holds the blue line on his side (x +-80, at the puck x when it is on his side, halfway otherwise; y by the puck's zone, 98 when offside), avoiding the carrier. |
 | `asswingd` | `$9E8968` | Assignment 3: a wing on defense covers his side (x +-100, at the puck x when it is on his side), at a y following the puck between his blue line and goal line (the limit when the carrier is a goalie or his team is offside). |
@@ -47,13 +47,13 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `GetHot` | `$9BC002` | The hot spot of object o's sprite frame: the frame record's signed bytes at +$12 / +$13, x negated when the frame is flipped (attribute $0800), y unless it is flipped vertically ($1000); on the horizontal screen turned a quarter, (x, y) -> (y, -x). |
 | `AdjustFacingDirection` | `$9EDC06` | Turn goalie o's facing a step the short way toward want, at most a step per 6 ticks. |
 | `playeracc` | `$9EA719` | Player g.curobj accelerates toward direction dir, up to his top speed: a step of the direction (none into the wall he last hit), scaled by weight and leg strength and the frames elapsed (d7), added to his velocity unless his speed would pass the limit for his leg speed and energy; then, with line changes on, one call in 64 wears his energy down. |
-| `revplayeracc` | `$9EAB64` | Flip direction dir when player o skates backwards, then accelerate toward it. |
+| `noturn` | `$9EAB64` | Flip direction dir when player o skates backwards, then accelerate toward it. |
 | `skatetopuckinit` | `$9EDEA7` | Where the puck will be soon: its position plus half the high byte of its velocity. |
-| `PuckIChk` | `$9EF751` | Icing: once armed and not yet called, the loose puck past the far goal line calls it. |
+| `puckIChk` | `$9EF751` | Icing: once armed and not yet called, the loose puck past the far goal line calls it. |
 | `CompShoot` | `$9EE10B` | Computer player o shoots: the swing time temp2b is the distance to the goal line / 8, at most 20, and the assignment becomes assshoot ($13). |
 | `puckshadow` | `$9EEF34` | The puck shadow (object o) follows the puck, one unit off it, while the puck frame shows. |
 | `EvadePC` | `$9E8904` | A skateto callback: when the puck carrier will be within 40 of player o next frame on both axes, the direction away from him; otherwise direction d0 as it was. |
-| `StopNA` | `$9EA539` | Slow player o down without changing his animation: a human goalie (not carrying the puck) loses half his speed, everybody else ($70 + legstr) * timestep per axis, down to zero. |
+| `stopna` | `$9EA539` | Slow player o down without changing his animation: a human goalie (not carrying the puck) loses half his speed, everybody else ($70 + legstr) * timestep per axis, down to zero. |
 | `avd_zones` | (a helper) | (.27 for a skater, .48 for a goalie: lim is $2C or $24) |
 | `avd_skater` | (a helper) | (the skater's cases: .t2x when tmp1 = 0, else the table .26 by tmp0) |
 | `avd_goalie` | (a helper) | (the goalie's cases: .t3 when tmp1 = 0, else the table .47 by tmp0) |
@@ -65,7 +65,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `puckflip` | `$9EDE5E` | Spin the puck: its facing flipped by bit 0 of d0, its flip animation started. |
 | `check4check` | `$9EA164` | A chance to check: on 2 random rolls against (20 - checking) * 2 (with penalties on), an opponent within 34 straight ahead of player o, not already holding / locked, is hooked or held (Acheck) or burst into (burst, by player a3), by where o is and 7 in 8 of the random bits. |
 | `findpc` | `$9FCBB6` | Choose the player for pad d4 (X = o, a3 the player again after the search): when o is a free skater close to the puck, or the pad's best skater (distance to the puck, plus a penalty for the puck's direction against the one preferred from o's goal, the two XORed) has it already, o starts a sweep check unless locked; else the best one takes the pad. |
-| `dostop` | `$9EA4F7` | Player o stops: a fast one (over $1000 on an axis) glides (backwards) or plays the stop (the puck carrier with the skate stop sound $11), then slows down (StopNA). |
+| `dostop` | `$9EA4F7` | Player o stops: a fast one (over $1000 on an axis) glides (backwards) or plays the stop (the puck carrier with the skate stop sound $11), then slows down (stopna). |
 | `noturn0` | `$9EAAB3` | Player o's wanted direction needs no turn (d0 = wanted - facing, * 2; d2 the direction to skate): facing it he skates (backwards, stumbling injured, with the puck), otherwise he stops when moving within 90 degrees of it, else turns a step and glides. |
 | `doplayeracc` | `$9EA8A9` | Player o skates toward direction d0 (low nibble: 0-7, 8 none, 9 stop): goalies by goalieacc; skaters decide on skating backwards (in their own half, the puck ahead, or staying so), then turn toward it at a rate falling with speed, or need no turn (noturn0), and accelerate. |
 | `skate_avoid` | (a helper) | (skateto's avoidance routine, a0: run through the RAM trampoline jmlvector, which is set) |
@@ -73,7 +73,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `skatetopuck` | `$9EAFB5` | Player o skates to where the puck will be (around the goals, led by his hot spot and velocity), aiming again every 5 frames; a skater facing the puck (head on to its travel) at the right range from its carrier sweep checks instead (as player a3, who then also skates). |
 | `off_spot` | (a helper) | (asswingo / asscentero: a new spot from the table row d2 (x, x spread, y, y spread) in temp3 temp4, unless the row is the same as last time and the random word is not small) |
 | `off_zone` | (a helper) | (asswingo / asscentero: d2 = the zone of puck y d0 (lead d3) seen from the player's goal: 0 back, 8 mid, 16 past the blue line (unless offside), 24 past the goal line) |
-| `ass_start` | (a helper) | (asswingo / asscentero / asscenterd's start: on offense the carrier gets asspuckc ($11) on top and the other team's puck makes it assignment def, on defense his own team's does; the clock stopped: assnothing; then check4bench; a human is left alone; the first time, the timers (and with spots the last spot row) reset. |
+| `ass_start` | (a helper) | (asswingo / asscentero / asscenterd's start: on offense the carrier gets asspuckc ($11) on top and the other team's puck makes it assignment def, on defense his own team's does; the clock stopped: donothing; then check4bench; a human is left alone; the first time, the timers (and with spots the last spot row) reset. |
 | `ass_timer` | (a helper) | (temp1 -= d7; nonzero when it ran out: then reloaded with add, at least 0) |
 | `asswingo` | `$9E8A6A` | Assignment 4: a wing on offense skates (avoiding the carrier) to a spot of the puck's zone (puck y led by its velocity), picked again as the zone changes or at random when his timer runs out. |
 | `asscentero` | `$9E843C` | Assignment 6: the center on offense, the same with his own spots (CenterOSpots) by the puck y. |
@@ -173,7 +173,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `PauseSubmenuDone` | `$9FE2AE` | The end of a pause submenu: the whole text map redrawn, A = 1 |
 | `WaitButtonRelease` | `$9B865F` | Wait until the pause pad's buttons are up (the pads are read by the interrupt) |
 | `TitleDelay` | `$9DB884` | A busy loop of x passes, none once a pad press has ended the title (titleskip) |
-| `InitScoutDisplay` | `$9FC87C` | Reset the scouting report text scroll; a0 = TestList |
+| `InitScoutingDisplay` | `$9FC87C` | Reset the scouting report text scroll; a0 = TestList |
 | `StartCredits` | `$9DB9F7` | Reset the credits state |
 | `ResetPassWord` | `$9BCDE2` | Blank the password |
 | `StartHatTrick` | `$9BA189` | Start the hat trick sprites: clear the ten slots and set hattrick |
@@ -184,7 +184,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `GetPlayerRecord` | `$9FC732` | The roster record of player d0 of team a2 (a0): past the team header, then d0 records of (length word + 8) bytes |
 | `restoreteams` | `$9FC702` | Put both teams' players on the bench (tmap 6) |
 | `updatecrowdf` | `$9B9F7A` | Every game loop: the crowd's hold counts down (at most 60), then its level (at most $480) falls by impactstep, to 0 |
-| `GetPadTeam` | `$9FC76C` | The team of the controller that paused (a2: 0 home, 2 visitors); a negative pausepad is minus the side whose first controller counts |
+| `seta2` | `$9FC76C` | The team of the controller that paused (a2: 0 home, 2 visitors); a negative pausepad is minus the side whose first controller counts |
 | `InitCrowdExcite` | `$9B9B6B` | At a period start (not overtime): crowd excitement $10 per playoff stage |
 | `ChoosePauseMenu` | `$9FE4BF` | The longer pause menu when this side still has a timeout (clock stopped, not the intermission), else the standard one; the first item shown kept inside it |
 | `ShuffleTitleTeams` | `$9DBCF8` | Fill titleteams with the 26 team numbers in random order |
@@ -195,7 +195,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `UpdateBenchCheer` | `$9C9FED` | Each frame: step the cheering bench through its frames, and end it ($FFFF) after its rounds |
 | `PrintToStatsPage` | `$9EC894` | Print string a1 at printx / printy into the stats page buffer (32 wide) through SmallFontMap. |
 | `ComparePlayerStats` | `$9C8C22` | Compare stat column statcolumn of the players at order slots x and y of team a2: statstemp = 1 when y's is greater (signed bytes; goals + assists as words), else 0 |
-| `MesAreaDone` | `$9ECE06` | End the string built in mesarea: its length word = a1 - mesarea; a1 = mesarea |
+| `FinalizeTextBuffer` | `$9ECE06` | End the string built in mesarea: its length word = a1 - mesarea; a1 = mesarea |
 | `BigLetterPlayoff` | `$9D9C53` | RenderBigText's letter hooks: letter tile bigtextchar (two rows) at printx / printy of screenmap2 (PlayoffScreen) or screenmap (DrawSelectTeam) |
 | `BigLetterSelect` | `$9D9C76` | RenderBigText's letter hook on the team select screen: tile bigtextchar (two rows) in screenmap |
 | `NextTitleTeam` | `$9DBD36` | The next team of the shuffled title list, shuffling again after the 26th |
@@ -230,15 +230,15 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `UpdateCrowdMeter` | `$9B9BA5` | The crowd meter (d0): sqrt(CwdExciteLvl * 4) + 65, at most 128; the peak and the running average |
 | `PrintScrollHint` | `$9B9A5D` | Print the scroll hint under a summary list |
 | `PrintPasswordHelp` | `$9BCBD8` | Print the password screen keys |
-| `PlayerNumName` | `$9FC372` | mesarea = the uniform number and name of roster player d0 of team a2; a1 = mesarea |
-| `PlayerShortName` | `$9FC4D0` | mesarea = the number, first initial and last name of roster player d0 of team a2 (a word written at a time); a1 = mesarea |
+| `getname` | `$9FC372` | mesarea = the uniform number and name of roster player d0 of team a2; a1 = mesarea |
+| `FormatPlayerNumInitial` | `$9FC4D0` | mesarea = the number, first initial and last name of roster player d0 of team a2 (a word written at a time); a1 = mesarea |
 | `PWprint` | `$9BC6C9` | Print the password (PassWord's characters through PasstoText), unless it is hidden (bit 7) |
 | `DrawExitPrompt` | `$9FF063` | Draw the exit question (game or shootout) and the No / Yes lines, the one at curitem highlighted |
-| `EraseScoutName` | `$9FC5A6` | Erase the scouting report name line of side a2 |
+| `ClearRosterName` | `$9FC5A6` | Erase the scouting report name line of side a2 |
 | `CheckCrowdMeter` | `$9B9BF8` | The crowd meter into CurCrowdMeter: 110 dB or more sets CrowdLoud; under 105 dB a loud crowd's raised hot / cold values come down |
 | `PrintOtherScore` | `$9BC543` | Other scores: game curitem's two teams with their scores, and its period label (one on for a decided period 4) |
-| `pmenu_goalie` | (a helper) | Pmenu's goalie item: when item d0 is the menu's goalie item, the side's goalie's last name (or None) |
-| `Pmenu` | `$9FEA24` | Draw the pause menu: five items of the current list from psfirst, the selected one (psitem) highlighted, each with its value, centred on column $11 |
+| `pmenu_goalie` | (a helper) | SetupPauseScreen's goalie item: when item d0 is the menu's goalie item, the side's goalie's last name (or None) |
+| `SetupPauseScreen` | `$9FEA24` | Draw the pause menu: five items of the current list from psfirst, the selected one (psitem) highlighted, each with its value, centred on column $11 |
 | `SetSPAUpdate` | `$9EA403` | Start sprite animation anim on object o (as SetSPAFromA) and update it at once |
 | `Goal` | `$9EF319` | The puck is in the net (o, the puck): the score and team stats, the siren and the crowd, the score summary and the players' goals and assists, the scoreboard, the scorers celebrate, the puck pops up at the goal line and the goal whistle. |
 | `clockcont_0` | `$9F8B79` | The end of a period: the puck's whistle assignment and the horn; from the third period on, unless tied, the skaters of the team ahead celebrate (the first of them with assignment 9 and every pad flag cleared after a won Stanley Cup final in a playoff mode), the game is over: the crowd, the end of game message (and the cup's). |
@@ -284,7 +284,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `titlelogo_tiles` | (a helper) | The title logo's graphics: n bytes at unpackbuf to a byte per pixel (palette bits added) from titlelogobuf+$40, 32 source bytes at a time; the bytes to send |
 | `LoadTitleLogo` | `$9DBB14` | The centre ice logo of team a in the title's mode 7 map: the map buffer sent, then the logo's map centred at ($42, $40), its graphics unpacked, converted and sent |
 | `teamstat_value` | (a helper) | Game stats: one team's (a2) number of stat row curitem at printx (centred): a count, a ratio as a percentage, a pair "a/b", or a time, from the TeamStatSources entry (penalty rows only with penalties) |
-| `PrintTeamStatRows` | `$9C8F9B` | The game stats page: each team stat's name (the list without penalties when they are off) and both teams' numbers |
+| `DisplayStats` | `$9C8F9B` | The game stats page: each team stat's name (the list without penalties when they are off) and both teams' numbers |
 | `scoring_line` | (a helper) | One scoring summary line set at printy from the goal entry at a3: period, time, team, strength (SH / PP by the two kinds of each), the scorer and below him the assists |
 | `FillScoringPage` | `$9B95B0` | The scoring summary page in the stats page buffer: a line set per goal of the score summary |
 | `stat_cell` | (a helper) | One stat, a column's palette, at printx |
@@ -308,7 +308,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `hl_team` | (a helper) | Team a2 for a highlight: full energy, its players on the ice, no touches |
 | `StartHL2` | `$9F8E1C` | The highlight of playoff game a0 / 2 (d1): its ticker box and "Highlight from" for 3 seconds (Start skips it, and the rest), then the game played from a faceoff with the cpu on both sides for a few seconds of clock (a button ends it, a tied game given a goal), the score kept, the menu screen and music back. |
 | `AskExitGame` | `$9FF00B` | Ask "exit game?": up / down choose (curitem 0 or 1), A / B take it, Start cancels (0); returns it |
-| `demo_read` | (a helper) | In the demo: Start pauses, any other button ends it (Restart); in mode 4 with pads on teams, Start on any of them pauses from that pad |
+| `demo_read` | (a helper) | In the demo: Start pauses, any other button ends it (Opening2); in mode 4 with pads on teams, Start on any of them pauses from that pad |
 | `demoread` | `$9F967B` | The game loop's pad check after each frame: in the demo a button pauses or ends it (demo_read) |
 | `SelectPauseController` | `$9FE618` | The pause controller: the pad that has it (a negative pausepad: the first pad of that side to press a button takes it, the menu rebuilt), its buttons with repeat in *d1 / *d3; it is given up after a while idle; in the intermission's demo the pause times out (Start). |
 | `PauseResume` | `$9FE733` | The pause menu handlers (the item chosen, with the pad's new presses d1); A: 0 leaves the menu |
@@ -316,47 +316,47 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `PauseGoalieMode` | `$9FE3FF` | Goalie control (manual or automatic): A / B / left / right switch it for the pause controller's team |
 | `PauseGoalie` | `$9FE3BA` | (the goalie: right / A / B the next one, after the last none; left the one before, before the first none, from none the last) |
 | `PauseTimeout` | `$9FE431` | Timeout: A / B use one of the team's timeouts (if it has one left), its players rested, "timeout" and the team's name shown a moment |
-| `PauseExitGame` | `$9FE741` | Exit game: A / B ask to be sure (AskExitGame), then the game is abandoned for the option screens (Restart) |
+| `PauseExitGame` | `$9FE741` | Exit game: A / B ask to be sure (AskExitGame), then the game is abandoned for the option screens (Opening2) |
 | `PauseReplay` | `$9FE272` | Instant replay: A / B fade out to the replay (ReplayMode, the music noted in replaymusic) and back, the frame count kept |
 | `pause_handler` | (a helper) | The handler at addr (jmlvector) |
 | `PauseMenuPoll` | `$9FE19E` | The pause menu: the items shown, the pause controller's buttons (Start resumes), up / down move the item (five shown from psfirst), another button runs it (its handler from PauseMenuHandlers through the RAM trampoline, by menu list) |
-| `PauseMenu` | `$9FE11D` | Pick the pause menu (a shootout: 4, or 3 before the game; the overtime period: 1; before the game: 2; else ChoosePauseMenu's), a frame of sprites, both sides' colours white, then the menu |
+| `Pausemode_menu` | `$9FE11D` | Pick the pause menu (a shootout: 4, or 3 before the game; the overtime period: 1; before the game: 2; else ChoosePauseMenu's), a frame of sprites, both sides' colours white, then the menu |
 | `Pausemode` | `$9F937B` | Pause mode: the text map saved, the sound stopped, the scoreboard screen with the pause menu until it is left, then the text map and the screen back, the pause sounds, the frame clock restarted |
 | `Gameloop` | `$9F8511` | The game loop, a pass per frame elapsed: the frames per second, a team song now and then in the third period without music, the step sizes, the pads, the clock (or the penalty shot timer: its end), the crowd's cheers, a frame of the game, the demo's pads, the pause (forced by a MultiPlayer 5 warning). |
 | `ReloadRink` | `$9FE79F` | Back to the rink after a pause screen: the rink map, its tiles, the centre ice logo, the faceoff, logo and referee tiles, the fonts (remapped), the score and team block tiles to VRAM, the screen registers and the palette; then the horizontal rink, the sprites, and the screen faded in |
 | `gamestats_loop` | (a helper) | The game stats screen's braces round the rows shown (when rows are hidden above / below), the page sent; then up / down scroll the rows (a row at a time, the IRQ split moving), Start leaves |
-| `ShowGameStats` | `$9C8D2E` | The game stats screen: both teams' blocks and the team stats (6 rows of 16, 11 without penalties, at a time) |
+| `StatsReport` | `$9C8D2E` | The game stats screen: both teams' blocks and the team stats (6 rows of 16, 11 without penalties, at a time) |
 | `summary_page` | (a helper) | A summary list's rows shown (from listtop, listrows of them, 3 text rows each) to VRAM y, or the none message when the list has `empty` entries |
 | `summary_loop` | (a helper) | The penalty / scoring summary list: Start leaves, up / down scroll it a row (six rows drawn while the IRQ split slides, then five), the arrows redrawn (the penalties' pad read with key repeat) |
 | `summary_screen` | (a helper) | A summary screen: its title in letter sprites, the colours, the heading, the list (with the scroll hint from 6 entries) |
 | `otherscores_loop` | (a helper) | The other scores list: its braces (none above the first game shown, or the user's game first), each frame; Start leaves, up / down scroll a game (the user's game, skipped in the list, stepped over) |
-| `ShowOtherScores` | `$9BC25A` | The other scores screen: the other games of the round (the user's skipped), five at a time |
+| `ShowScores` | `$9BC25A` | The other scores screen: the other games of the round (the user's skipped), five at a time |
 | `pause_screen` | (a helper) | The pause menu's screens: A / B show one, then the rink comes back (A = 1); other buttons go on polling |
 | `period_column` | (a helper) | One column of the period stats at printx: the period's label (none past lastperiod), the total's, then both teams' goals (curitem 0) or shots in that period, and the title of what is shown |
 | `DrawPeriodStats` | `$9F8064` | The period stats page: the pictures, the title, both teams' blocks and a column per period and the total |
-| `ShowPeriodStats` | `$9F8000` | The period stats screen: Y switches goals / shots, Start leaves |
-| `ShowPlayerStats` | `$9C8583` | The player stats screen of the pausing team (Y the other team): up / down scroll the rows, left / right the sorted column (column 0: the goalies), Start leaves |
+| `PeriodStatsScreen` | `$9F8000` | The period stats screen: Y switches goals / shots, Start leaves |
+| `PlayerStatsScreen` | `$9C8583` | The player stats screen of the pausing team (Y the other team): up / down scroll the rows, left / right the sorted column (column 0: the goalies), Start leaves |
 | `picboxmap_add` | (a helper) | Add base to every word of the map unpacked at picboxmap (its width and height first, the words from +6) |
 | `LoadPlayerCardScreen` | `$9DC697` | The player card screen's graphics: the team logo sprites, the screen registers, the fonts (remapped), the team block, card back and frame tiles to VRAM, the card picture map, the card back map into text map 2, the palettes, the "switch cards" text, the sprites and the scroll |
 | `card_starters` | (a helper) | The six starters' roster bytes of team a2 (its team data + the word at +$C) |
-| `card_starter` | (a helper) | (ShowPlayerCards: whether roster player p is one of the six starters at a3, whose cards come first) |
-| `ShowPlayerCards` | `$9DBD4F` | The player cards of the pausing team: right / left the next / previous card (the team card, the six line slots, then the roster without the starters), Y the other team, Start leaves |
+| `card_starter` | (a helper) | (PlayerCards: whether roster player p is one of the six starters at a3, whose cards come first) |
+| `PlayerCards` | `$9DBD4F` | The player cards of the pausing team: right / left the next / previous card (the team card, the six line slots, then the roster without the starters), Y the other team, Start leaves |
 | `crowdmeter_lit` | (a helper) | The crowd meter's lit part: the first crowdmeterlit words of each row of map [p0] (width and height, then the words from +6) plus a, into the map at [p1] (r7 words a row) at column x, row y |
 | `crowdmeter_bar` | (a helper) | The crowd meter for level a dB: (a - 50) / 4 cells lit, past 18 the broken meter |
 | `crowdmeter_values` | (a helper) | The crowd meter's three values (current, peak, average; curitem's highlighted) and its bar for it |
-| `ShowCrowdMeter` | `$9BA428` | The crowd meter screen: the current, peak and average levels, up / down choose the one the meter shows, Start leaves |
+| `CrowdMeterScreen` | `$9BA428` | The crowd meter screen: the current, peak and average levels, up / down choose the one the meter shows, Start leaves |
 | `DrawEditLinesTitle` | `$9B8970` | The line editor's title: the background redrawn (drawlinesback, then the band IRQ line back), the label, team a2's block and the pictures |
 | `DrawEditLinesTop` | `$9B890F` | The line editor's top: cleared, the title, the frame outline |
 | `PrintLinePlayers` | `$9B8B60` | The players of the selected line (SelectedPlayerIdx; 0: the goalies) of team a2, a row a slot with its position name, the cursor slot highlighted (its player the home matchup picture); then the title |
 | `PrintLineNames` | `$9B8810` | The selected line's name (the line change names, or the best line names without line changes), then its players |
 | `PrintLinePlayerList` | `$9B9249` | The line editor's pick list: pickrows players from picktop + 1 (the cursor's highlighted), each with attribute d4 of mask (goalies' from the goalie list) |
-| `EditLinesMenu` | `$9B8A15` | The line editor's menu (Start): Return to game (A = $FFFF) or Restore default lines (team a2's lines loaded again, A = 0) |
-| `EditLinesScreen` | `$9B869B` | The line editor of the pausing team: left / right the line (with line changes on; lines 6 and 7 have four slots), up / down the slot, A / B pick a player for it, Start the menu |
-| `PauseEditLines` | `$9FE305` | Edit lines from the pause menu: A / B open the line editor (EditLinesScreen), then the rink is reloaded |
+| `LineEditorExit` | `$9B8A15` | The line editor's menu (Start): Return to game (A = $FFFF) or Restore default lines (team a2's lines loaded again, A = 0) |
+| `LineEditor` | `$9B869B` | The line editor of the pausing team: left / right the line (with line changes on; lines 6 and 7 have four slots), up / down the slot, A / B pick a player for it, Start the menu |
+| `PauseEditLines` | `$9FE305` | Edit lines from the pause menu: A / B open the line editor (LineEditor), then the rink is reloaded |
 | `PauseShootoutSetup` | `$9FE2CF` | Shootout setup from the pause menu: A / B open the shooter order (ShootoutShooters), then the rink is reloaded |
 | `ScoutTypeWord` | `$9ECB2B` | Type the word at a1 (d1 characters) at the report's line column: on a new line when the column d0 is past 20, its leading spaces dropped at the start of a line |
 | `ScoutPlainWord` | `$9ECAB7` | Copy the next plain word of the script a2 (with the spaces after it) into mesarea and type it at column d0; a "," or "." adds 40 frames to the report timer. |
-| `ScoutTypeText_3` | `$9ECD7C` | (ScoutTypeText's .3: type the string at a1 as one word, a word more counted in PlayerScrollCtr; returns the column d0 moved on by its length) |
+| `ScoutHomeCity_3` | `$9ECD7C` | (ScoutTypeText's .3: type the string at a1 as one word, a word more counted in PlayerScrollCtr; returns the column d0 moved on by its length) |
 | `ScoutTypeText` | `$9ECD36` | Type the string at a1 word by word from column d0, the words wrapping at 20 columns |
 | `ScoutAppend` | `$9ECD19` | Type string a1 (copied to a fresh mesarea) from column d0 |
 | `ScoutExtremely` | `$9ECC71` | Script code %e: "extremely " when the hot / cold totals differ by 8 or more (hotextreme), else the script's next word (a2 past the code) |
@@ -426,7 +426,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `Findhittype` | `$9EE698` | Player o's swing for direction *d0 (made relative to his facing): 0 forehand, 1 backhand. |
 | `CalcAngleOffset` | `$9EE0CD` | The cross product of the goalie vector d0 / d1 and (d3 / d4 - the puck), divided by d2 (*d3 is left the point's x from the puck). |
 | `getlchoice` | `$9FD7B2` | The line for choice d0 (0-2) of team a2 by the man advantage, from the table: choice + 3 * the current line, 21 on when the counts on the ice differ and 21 more when the other team has more (or as many); -1 for none. |
-| `Holdplayer` | `$9EA24C` | Hold button: unless player o is the goalie or locked in his burst, the opponent with the lowest distance + 16 * facing difference (folded to 0-4) is a0 (none: -1), and Acheck hooks or holds. |
+| `holdplayer` | `$9EA24C` | Hold button: unless player o is the goalie or locked in his burst, the opponent with the lowest distance + 16 * facing difference (folded to 0-4) is a0 (none: -1), and Acheck hooks or holds. |
 | `SetShotMode` | `$9EE17A` | Start a shot by player o: no pass direction, shot mode (sflags 8), aimed at the goal, speed 15, the forehand or backhand shot. |
 | `Sweepcheck` | `$9EA242` | Start a sweep check by player o (held in pf2aip). |
 | `burst` | `$9E81F9` | Check button: a speed burst along the facing of player a3 (o, the same player, for the lock and the energy): energy * $233 >> 16, after paying $CC of it with line changes on (automatic ones: from a fixed $1000). |
@@ -442,8 +442,8 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `setlccords` | `$9FE089` | The print position (printx / printy) and size of team a2's line change box: its side's spot (setlccordsPos, the other side with the teams switched, 21 rows apart; the print's carry goes into the add), 12 wide (returned) and 6 high (*d1; 5, a row lower, when choice 2 has no line). |
 | `SetLCmode2` | `$9FD325` | Draw team a2's line change box: its area erased (but over the faceoff box) and framed (in the upper half a plain box first; in the lower half sf3llcs set), then a row per line choice (all of them while it is open, else the chosen one with the current line): the button letter, the line's name and its energy bar; then the team's name. |
 | `SetLCmode` | `$9FD2FE` | Open the line change box of player o's team (line changes on, not automatic; not open yet): tmflags bit 3, the pass and shot directions off, SetLCmode2. |
-| `lcfound2` | `$9FDE13` | Close team a2's line change box: its area erased (but over the faceoff box; sf3llcs cleared in the lower half), then the scoreboard. |
-| `lcfound` | `$9FE001` | Team a2 changes to the line of row d2 (remembered; none there: nothing): player a3 is done with the box (pflags bit 3), his team's box closes (tmflags bit 3, no pad), its line set and put on the ice (setpersonel), lcfound2. |
+| `lcfound_close` | `$9FDE13` | Close team a2's line change box: its area erased (but over the faceoff box; sf3llcs cleared in the lower half), then the scoreboard. |
+| `lcfound` | `$9FE001` | Team a2 changes to the line of row d2 (remembered; none there: nothing): player a3 is done with the box (pflags bit 3), his team's box closes (tmflags bit 3, no pad), its line set and put on the ice (setpersonel), lcfound_close. |
 | `lineinput` | `$9FD733` | Pad input of player o while his team's line change box is open (d1 the new presses, d0 the direction): a redraw request (tmflags bit 0) closes and reopens it; Y, B, A pick row 0, 1, 2 (lcfound, by a3); Select closes it keeping the line; otherwise he skates when done with the box and free (with the d0 a redraw left). |
 | `goalie_input` | (a helper) | (doinput's .13: a goalie skates unless his flags say he is out of his crease, not covering) |
 | `take_goalie` | (a helper) | (doinput's .17: the pad d4 takes its team's goalie, with manual goalies) |
@@ -456,7 +456,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 |---|---|---|
 | `SetSPAFromA` | `$9EA3F1` | Start animation anim on object o (the same one keeps going). |
 | `pucknothing` | `$9EDE81` | The puck slides and its spin restarts: during the spin frames its face turns around. |
-| `GoalieCount` | `$9ED300` | The number of goalies of team a2: the nibbles of its goalie odds word (byte-swapped) until the rest is zero. |
+| `GetGoalieCount` | `$9ED300` | The number of goalies of team a2: the nibbles of its goalie odds word (byte-swapped) until the rest is zero. |
 | `AssignPadPlayer` | `$9FCB68` | Pad d4 takes control of player d0: its old player is released (pfna set, his pad bit cleared, playerpad -1, a goalie's goalieflags cleared), the new one marked (pflags bit 3, playerpad). |
 | `StartPenaltyShot` | `$9EC72D` | A penalty shot for shooter BA_Sktr_SCnum, unless one is pending: his team (BA_Team, its tmPenShots), one man each on the ice, the shooter's roster number; the faceoff spot saved and cleared. |
 | `GoaliePuckVector` | `$9EDC44` | d0 / d1 = the vector from goalie o to the puck; when one of them is behind the goal line ($108) and the other in front, d1 = +-1 so he faces out. |
@@ -488,14 +488,14 @@ routine, a part a routine shares with others, or a small function of the C's own
 | Function | Original | What it does |
 |---|---|---|
 | `AdvanceStringPtr` | `$9ED323` | a1 = string n of the string list a1 (each string starts with its length word) |
-| `addteamstat` | `$9FC975` | Add amount to the team stat whose home word is at stat (the visitors' is the next word), for player o's team |
+| `ChkShotStat_add` | `$9FC975` | Add amount to the team stat whose home word is at stat (the visitors' is the next word), for player o's team |
 | `AlignBigNumber` | `$9F9DFB` | Move printx left by the width of string a1 in the big font after its first character (one column for a 1, else two) |
 | `ClearPenaltyBuffer` | `$9EC107` | Clear the list of called penalties |
-| `CountPowerPlayTime` | `$9EB1C9` | The team with more players on the ice gets one more tick of power play time |
+| `updatePPTeamTime` | `$9EB1C9` | The team with more players on the ice gets one more tick of power play time |
 | `RemovePlayerFromList` | `$9EA6FA` | Remove the box list entry before index a0 by moving the rest down to the end marker (bit 7); returns a0 stepped back |
 | `reenergizeteam` | `$9FDD9D` | Give every player of team a2 full energy (the out-of-the-game check that follows can never pass) |
 | `chkatop` | `$9EB198` | Add to the attack zone time of the team with the puck past a blue line |
-| `coinsearch` | `$9EB6F7` | Count team a2's players kept off the ice by penalties (the penalty flag $2000 cleared on the way) to set how many it has on the ice (at least 4) |
+| `InProgress_ap` | `$9EB6F7` | Count team a2's players kept off the ice by penalties (the penalty flag $2000 cleared on the way) to set how many it has on the ice (at least 4) |
 | `PenBoxSpot` | `$9EBEA1` | The penalty box y spot of player o (r2): +-11 by team times (his team's players in the box, at most 2, plus 3) |
 | `GetLowestPen` | `$9EBB92` | The power play time left (d0), from the box times: team a2 on the power play, a3 the shorthanded team |
 | `AvgCline` | `$9FDD19` | The average energy of team a2's players on the ice (d0; 0 when none) |
@@ -509,14 +509,14 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `db_w16` | (a helper) | (PenGoalStuff's store through the data bank: only the bytes in its WRAM, below $2000, are written) |
 | `PenGoalStuff` | `$9EB94C` | After a goal by team a2 on team a1: PenBuf's entries without minutes or not for the scoring team become $34 (period 3 clears it), then, when the scoring team had more players on the ice, the first scored-on player in the box whose penalty is not coincidental comes out. |
 | `InProgress_exit` | `$9EB6B8` | The penalties are over: end the penalty mode, the puck to its faceoff assignment, then InProgress_coin |
-| `PrintStringFromList` | `$9ECFC6` | Print string d0 of the string list a1 (each string starts with its length word); returns a1 past it |
-| `TickerTeam` | `$9FA586` | One ticker line at column px (NewTicker3's, on the stack): team d0's name, its score d1 at px + $17 |
-| `PrintPerLabel` | `$9F9D80` | Print the label of the current period (overtime's one column to the left) |
-| `printteamname` | `$9FBD66` | Print team d3's name (0 home), then move down two rows |
+| `Fprint` | `$9ECFC6` | Print string d0 of the string list a1 (each string starts with its length word); returns a1 past it |
+| `PrintGameInfo` | `$9FA586` | One ticker line at column px (NewTicker3's, on the stack): team d0's name, its score d1 at px + $17 |
+| `printscores1_per` | `$9F9D80` | Print the label of the current period (overtime's one column to the left) |
+| `printscores1_ps_name` | `$9FBD66` | Print team d3's name (0 home), then move down two rows |
 | `ClearPenaltyMessage` | `$9EC913` | Clear the penalty message area on the horizontal rink (a 24 x 3 frame) |
 | `linebar` | `$9FDFA6` | Draw the energy bar of team a2's line d0: five bar characters by its energy (at most $1000); returns that energy (left in d0) |
 | `pplpen` | `$9FA21E` | One penalty box line (above row $0B): player d0 / 2 of team a2's number and his time left |
-| `PrintTeamNameAndScore` | `$9F9DB0` | Print team a2's (d3's for the name) name, then its score mod 100 as two characters |
+| `printscores1_ps` | `$9F9DB0` | Print team a2's (d3's for the name) name, then its score mod 100 as two characters |
 | `DispPen` | `$9FA1B8` | Team a2's penalty box lines: the players with a running penalty clock first, then the others |
 | `setscore_goals` | (a helper) | SetScore's goals for team d0 against team d1: the weights of d0's row (bits 4-6 of its team record's +8 word) plus those of d1's row (bits 0-2) of the SetScore_5 table; one of the 4 picked |
 | `SetScore` | `$9F9EB7` | Play one period of playoff game a0 / 2 with random goals; after period 3 a game within a goal goes to overtime (period 3 again, flag 2), or in period 4 a tie goes to team 1 |
@@ -555,7 +555,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `NewTicker` | `$9FA458` | The next ticker score once the clock is at 8:00 or less |
 | `ticker_start` | (a helper) | The score ticker from the last game of the round when it has none (or it is at game 0 and so is the user's game); then the next game |
 | `DoHiLights` | `$9FA636` | Playoffs: the highlight of each game of the round still pending (and not played out) |
-| `IntermissionTick` | `$9FA393` | In the intermission (demoflag): the next ticker score every $150 frames, until the ticker is back at its first game: then the highlights. |
+| `Intermission_tick` | `$9FA393` | In the intermission (demoflag): the next ticker score every $150 frames, until the ticker is back at its first game: then the highlights. |
 | `Intermission` | `$9FA2A6` | Between periods: both teams set up, the ticker started, the pause controller the first pad with a team (none: 0), the scoreboard and the pause menu until it is left |
 
 ### `game/play/period.c` (2)
@@ -563,7 +563,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | Function | Original | What it does |
 |---|---|---|
 | `GetTeamRating` | `$9D87B5` | The team rating of team a2: byte 4 of its scouting report. |
-| `StatsReport` | `$9FC896` | Clear the text screen and draw the horizontal rink's scoreboard background: the screen erased between its two print positions, the two halves of the rink map (rinkmapbuf, columns 0 and $10 of row $55, 32 by 28) to the screen maps at $0400 and $0800, then USBoard. |
+| `SetHor_rink` | `$9FC896` | Clear the text screen and draw the horizontal rink's scoreboard background: the screen erased between its two print positions, the two halves of the rink map (rinkmapbuf, columns 0 and $10 of row $55, 32 by 28) to the screen maps at $0400 and $0800, then USBoard. |
 
 ### `game/play/shootout.c` (14)
 
@@ -658,24 +658,24 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `scout_rank` | (a helper) | (ScoutingReport's .t1xx: player d3's hot value d0 into team y's three hottest and three coldest, the ones below moved down) |
 | `scout_team` | (a helper) | (ScoutingReport's .11: team a2's players' hot values, rating minus base rating of the first rating column: their sum, and the hottest and coldest) |
 | `scout_hotcold` | (a helper) | (ScoutingReport's .10: the hot and cold players of both teams; the hotter team (none when the sums are within 4) and whether by much (8)) |
-| `scout_list` | (a helper) | (ScoutingReport's .12: the commentary's paragraph list (from InitScoutDisplay's a0): $1D, $1C, the hot team's $1E, $1F, $20 when the teams differ, $21, the end; no delays, the screen's time) |
+| `scout_list` | (a helper) | (ScoutingReport's .12: the commentary's paragraph list (from InitScoutingDisplay's a0): $1D, $1C, the hot team's $1E, $1F, $20 when the teams differ, $21, the end; no delays, the screen's time) |
 | `ScoutingReport` | `$9D8129` | The scouting report screen: both teams' hot and cold players, the matchups (paged by the pads' Y / B, A and on a timer) and the scrolling commentary (X starts it again; down held: no delays), until Start or, in the demo, its time runs out. |
 
 ### `game/screen/video.c` (23)
 
 | Function | Original | What it does |
 |---|---|---|
-| `show_rink` | `$9FBC41` | Set the rink scroll from the camera position (horizontal mode has its own) |
+| `updatescroll` | `$9FBC41` | Set the rink scroll from the camera position (horizontal mode has its own) |
 | `ProcessInputWithRepeat` | `$9B852C` | Key repeat: held buttons d3 repeat (into d1) after a delay; a change d2 restarts it. |
 | `appstring` | `$9ECFA5` | Append string [a1] to string [a3] (each a length word, then the bytes; a word is stored per byte) |
-| `ReadJoy1` | `$9B84F5` | Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held |
+| `Readjoy1` | `$9B84F5` | Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held |
 | `PushNumber` | `$9FC5EB` | d0 as a decimal string ending at mesareaEnd, no leading zeros; returns a1, the string |
 | `WeightedRandomSelect` | `$9D9CD2` | A random index 0 ... |
-| `projxy` | `$9BC10F` | Project rink position d0 / d1 (height d2) to the screen: d0 = x, d1 = y ($4E20 off the screen) |
+| `find3d` | `$9BC10F` | Project rink position d0 / d1 (height d2) to the screen: d0 = x, d1 = y ($4E20 off the screen) |
 | `eraser` | `$9FBD9C` | Fill a d0 by d1 rectangle of the text map at printx / printy with tile d2 (plus the font set) |
 | `PushTime` | `$9FA3D7` | The time d0 (seconds) as a minutes:seconds string ending at mesareaEnd; returns a1, the string |
-| `RemapTiles` | `$9B854B` | Send d0 tiles from [a0] to video memory, each pixel's colour remapped through the table [a1]; returns a0 advanced past them |
-| `sroot` | `$9BB3BE` | The square root of the 32-bit d0 (a binary search, the range narrowed first) |
+| `remap` | `$9B854B` | Send d0 tiles from [a0] to video memory, each pixel's colour remapped through the table [a1]; returns a0 advanced past them |
+| `Sroot` | `$9BB3BE` | The square root of the 32-bit d0 (a binary search, the range narrowed first) |
 | `print_pos` | (a helper) | the text map entry of the print position, and the carry the 65816 leaves (print's .1) |
 | `print_control` | (a helper) | a control record (the negated byte n): palette and priority into printa, the font set, the map |
 | `print_dirty` | (a helper) | the changed range of the text map: entry e (the map word index) |
@@ -683,10 +683,10 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `big_tile` | (a helper) | a big font tile: the map word at BigFontMap + off, its tile bases and printa |
 | `printbig` | `$9ECE15` | Print string [a1] with the big font (2 by 2 tiles a character, narrow ones 1 wide; lower case as upper case, a space a blank block) at printx / printy |
 | `Framer` | `$9D8000` | Draw a d0 by d1 frame (FramerMap: corners, edges, the fill) at printx / printy, the changed range of the text map kept |
-| `InitSortObjects` | `$9CA227` | Clear the objects ($76E bytes from Xpos) and set the 16 sort objects up from their start table (9 words each: x, y, height, frame, attribute, collision width and height, assignment, flags), the sort lists in order; then sort them |
+| `defaultsprites_0` | `$9CA227` | Clear the objects ($76E bytes from Xpos) and set the 16 sort objects up from their start table (9 words each: x, y, height, frame, attribute, collision width and height, assignment, flags), the sort lists in order; then sort them |
 | `forceblack` | `$8086A9` | Turn the screen black: fade out (when lit), forced blank, PPU registers reset |
 | `QueueTextDMA` | `$9FBF75` | Queue the changed part of the text map (textdirtylo to textdirtyhi) for transfer to video memory |
-| `ShowRinkRows` | `$9FBFA0` | Queue the rink map rows that the vertical scroll brought on screen (at most $1D: the whole screen) into the BG2 ring of rows, and set BG2's scroll |
+| `updatescroll_rows` | `$9FBFA0` | Queue the rink map rows that the vertical scroll brought on screen (at most $1D: the whole screen) into the BG2 ring of rows, and set BG2's scroll |
 | `waitxsr` | `$9FA5EA` | Wait d0 + 1 frames (drawing each one) or until a pad with a team holds a button (ReadjoyA's d3); returns the pad read last (zero when no pad has a team: the direct page's d0-d3 as they were) |
 
 ## Menus: setup, the options, rosters and lines
@@ -731,11 +731,11 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `UpdateScoutingDisplay_next` | `$9EC9D7` | Skip d0 lines of the script a2 (from PregameText a1), then print from there |
 | `UpdateScoutingDisplay_scroll` | `$9EC9B1` | Start paragraph d0 of PregameText a1 on a new line (a blank line before it once text is up) |
 | `UpdateScoutingDisplay` | `$9EC95C` | Every frame of the scouting report: when its timer runs out (at once with asv negative), the next word of the paragraph, or the next paragraph of the list TestList; at the list's end the timer stops and the screen stays 480 frames |
-| `GameOver` | `$9F8DB6` | After a game: the password and the playoff screen; in a playoff series with a user game the next game (from its scouting report unless sflags3 bit 2 was set), else back to the start (Restart). |
+| `GameOver` | `$9F8DB6` | After a game: the password and the playoff screen; in a playoff series with a user game the next game (from its scouting report unless sflags3 bit 2 was set), else back to the start (Opening2). |
 | `PeriodOver` | `$9F8CB1` | End of a period: fade out, the menu or playoff music, the teams turned around (players out of the game back on the bench), the next period number (tied after the third: overtime, again in a playoff game), the intermission; then game over (GameOver) or the next period (StartPer). |
 | `restart_go` | (a helper) | Start over: the menu music (unless it is playing), vertical mode, the option screens, then the game (StartGame) or the shootout, after which it starts over again. |
-| `Restart` | `$9F82D2` | Back to the option screens from anywhere (the end of a game or the demo, exit game): out of the playoffs, then restart_go on a fresh stack |
-| `Opening` | `$9F8283` | The cold start after Reset_Fast: the intro, bank $7F cleared, the password and default options, the title screen, then the option screens (Restart, which the original falls into) |
+| `Opening2` | `$9F82D2` | Back to the option screens from anywhere (the end of a game or the demo, exit game): out of the playoffs, then restart_go on a fresh stack |
+| `Opening` | `$9F8283` | The cold start after Reset_Fast: the intro, bank $7F cleared, the password and default options, the title screen, then the option screens (Opening2, which the original falls into) |
 
 ### `game/menus/stats.c` (15)
 
@@ -755,7 +755,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `SetupScreen` | `$9DD9AD` | Common start of the stats screens: the old screen faded out, the team logo sprites unpacked, the video registers, the small font, Framer, team block, nine tile and outline tiles one after the other (each set's first tile kept), the menu background (its 7 x 7 logo box part and the whole map in textmap2) and its palettes; for setupvis $21 and up (less $21) the setup background over it; colour 0 black, the sprite palettes, the text map cleared, the sprites started and the matchup pictures drawn |
 | `line_list_redraw` | (a helper) | (SelectLinePlayer's .10: the column title (DispAttribCtr of SkaterAttribColumns, AttribMenuGoalie for the goalies, stepped back past the end), "PLAYER", the arrows when the list scrolls, and the list of team a2) |
 | `SelectLinePlayer` | `$9B8D86` | Line editor: pick a player of team a2 for the cursor slot (lineslots - linecursor) of line SelectedPlayerIdx from the list of defensemen (the last slots) or forwards, 9 rows at a time, starting at the player in the slot; left / right change the attribute column. |
-| `TeamRoster` | `$9D9D26` | The team roster screen (pause menu) of the pause pad's team: the title, frames, team block and the current line with an attribute column; then the loop (TeamRosterLoop): start leaves (RosterRtl), Y switches team (SwapRosterTeam, then TeamRosterRedraw), left / right step the column (MoveRosterColumn), up / down the line (0-7) |
+| `TeamRosterScreen` | `$9D9D26` | The team roster screen (pause menu) of the pause pad's team: the title, frames, team block and the current line with an attribute column; then the loop (TeamRosterLoop): start leaves (RosterRtl), Y switches team (SwapRosterTeam, then TeamRosterRedraw), left / right step the column (MoveRosterColumn), up / down the line (0-7) |
 
 ## Sound: the sound CPU's uploads and the sound effects
 
@@ -763,7 +763,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 
 | Function | Original | What it does |
 |---|---|---|
-| `SPCUpload` | `$8095C6` | Sound driver command 3: send the n (X) bytes of the sample at [p0] to the sound CPU, loop point (the next sample slot) y, each byte through APUIO2 with its count on APUIO1 echoed back |
+| `SPCSendSample` | `$8095C6` | Sound driver command 3: send the n (X) bytes of the sample at [p0] to the sound CPU, loop point (the next sample slot) y, each byte through APUIO2 with its count on APUIO1 echoed back |
 | `StreamSfx` | `$9C9A7F` | Ask for streamed sound effect a (1-6): a different stream playing (3 and up) has its sound stopped, and the stream starts over; a different stream 1 or 2 keeps playing |
 | `SPCTitleToMenu` | `$9C9891` | Turn the title sample set into the menu set: the last three samples dropped (command 4), the four of the menu set after its first 12 sent |
 | `StartSoundVoice` | `$80A697` | Put the note of track x / 2 (CurTrack; TrackInst its entry, EventCode the note, EventData1 the velocity, EventData2 the length) on a free voice with its pitch, volumes and envelope, sent by SeqCmd07; nothing without an entry, a voice, or a length for two special entries. |
@@ -802,7 +802,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `wpb_value` | (a helper) | value d0 of range d1 into the password bits, added to the checksum in d7 (.t1) |
 | `WritePassBits` | `$9BC623` | The playoff state into the password bits, with a checksum (the running sum kept in d7) |
 | `FigureJoy` | `$9D995D` | Which team each controller plays: in the playoffs the series of the user's team gives HomeTeam, VisTeam, OptTeam2 and gamenum and the pads in use their team (the same table word for each); in the demo, play modes 0 and 4 only the other games |
-| `maketree` | `$9D9783` | Build the playoff tree: the 16 seats of tree postarts into potree, the winner of each pair (by WinBits) after them, then this round's series (gst1 / gst2, home first in the 2-3-2 rounds of bosgames 2, 3 and 5) with their scores cleared, and FigureJoy |
+| `MakeTree` | `$9D9783` | Build the playoff tree: the 16 seats of tree postarts into potree, the winner of each pair (by WinBits) after them, then this round's series (gst1 / gst2, home first in the 2-3-2 rounds of bosgames 2, 3 and 5) with their scores cleared, and FigureJoy |
 | `NewPO` | `$9D98D3` | New playoffs with team 1 (25 at most): a random tree (from the next of a random number on) that holds the team, its seat potreeteam and the tree postarts, the first round; bosgames 7 for single games (play mode 2), else 0 and the series wins cleared; then the tree |
 | `rg_winbits` | (a helper) | the round's winners d3 (a bit a series, set for the second team) into WinBits at the round's first bit d2, and the next round |
 | `ResolveGames` | `$9F94AE` | Record the played playoff game (gamenum, the score tmscore) and the series wins: single games (bosgames 7) decide the round at once; in best of seven the round ends after the seventh game or, before round 3, once the user's series is decided (the other series played out at random and the password bits of the moment kept in tpassbits). |
@@ -816,10 +816,10 @@ routine, a part a routine shares with others, or a small function of the C's own
 
 | Function | Original | What it does |
 |---|---|---|
-| `randoma` | `$9BB370` | A random number from 0 to limit-1 |
+| `randomd0A` | `$9BB370` | A random number from 0 to limit-1 |
 | `Mod100` | `$9F9E15` | d0 mod 100 |
 | `randomd0sd0` | `$9BB3B0` | randomd0s with the range in d0: a random number from -d0 to d0-1 (clears the carry) |
-| `PutDigits2` | `$9FC5BE` | The two digit (BCD) number d0 as two characters at [a1], a blank for a leading zero; returns a1 past them |
+| `ConvertByteToDigits` | `$9FC5BE` | The two digit (BCD) number d0 as two characters at [a1], a blank for a leading zero; returns a1 past them |
 | `PushNumberWidth` | `$9FC63B` | d0 as d1 digits, right aligned with leading blanks, in PushWidthBuf (more digits run on to the left); returns a1, the string, and in *a the last quotient (0) |
 | `PushNumberWrap` | `$9FC623` | PushNumberWidth, with d0 taken mod 100 when the width d1 is 2 |
 | `FramerRow` | `$9D804F` | One row of a frame into the text map at printx / printy: the corner [p0], d0 - 2 of the middle tile [p0+2], the corner [p0+4], each plus tmp0; printy steps down. |
@@ -878,8 +878,8 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `IRQ_BG1Scroll` | `$9B93C1` | A two-part BG1 split: BG1VOFS = BG3VScroll, then IRQ_BG1Scroll_t1 at line $30 |
 | `IRQ_BG1Scroll_t1` | `$9B93DE` | IRQ_BG1Scroll's second part (at line $30): BG1VOFS back to $FFFF, then IRQ_BG1Scroll again |
 | `spc_send` | (a helper) | (the SPCCmd routines' send: cmd to APUIO0, then wait for the driver to echo it back) |
-| `SPCCmd0E` | `$8097B7` | Command $0E: the volume of voice x, a the left (APUIO2) and y the right (APUIO3) |
-| `SPCCmd02` | `$80959A` | Command $02: the sample count (the result, a byte) and the free sound RAM pointer (*x, a word: APUIO1 and APUIO2) |
+| `SPCSetVolume` | `$8097B7` | Command $0E: the volume of voice x, a the left (APUIO2) and y the right (APUIO3) |
+| `SPCStatus` | `$80959A` | Command $02: the sample count (the result, a byte) and the free sound RAM pointer (*x, a word: APUIO1 and APUIO2) |
 | `SeqCmd0B` | `$80A4FD` | Sequencer: command $0B, the pitch SendPitch of voice y (APUIO2 and APUIO3) |
 | `SeqCmd08Init` | `$80A3F5` | Sequencer: clear the command $08 values (after keying every voice off), then send command $08 (the volume and pitch modulation) and $82 (noise and echo voices) |
 | `SeqCmd08Init_send` | `$80A40F` | Send command $08 (SoundVolume's high byte as both sides' main volume, PitchModVoices) and $82 (NoiseVoices, EchoVoices) as they stand: SeqCmd08Init's second half, entered too by SeqCmd08, the volume fade and the events that change one of them |
@@ -906,9 +906,9 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `Sin` | `$80954D` | sin / cos of a (1024 steps a circle, $0100 = 1), from the quarter-wave SineTable |
 | `Div32x32U` | `$8091CA` | n / d into the result (32 bits), the remainder in *rem, unsigned, by shift and subtract (the divisor is first shifted until its top bit is set: d = 0 never ends) |
 | `spc_ack` | (a helper) | Sound driver commands $07 (voice x: volume, sample, ADSR from [p0]), $08 (main volume, pitch modulation, noise, echo, FLG), $09 (echo), $0A (the echo filter: 8 bytes), each in two or three sends |
-| `SPCCmd07` | `$809649` | Command $07: voice x's volume, sample and ADSR, 5 bytes from [p0] in two sends ($07, $81) |
+| `SPCSetVoice` | `$809649` | Command $07: voice x's volume, sample and ADSR, 5 bytes from [p0] in two sends ($07, $81) |
 | `spc_cmd5` | (a helper) | (SPCCmd08 and SPCCmd09: 5 bytes from [p0] in two sends, cmd with the first three, cmd2 with the last two) |
-| `SPCCmd0A` | `$80970C` | Command $0A: the 8 echo filter coefficients from [p0], in three sends ($0A, $84, $85) |
+| `SPCSetFIR` | `$80970C` | Command $0A: the 8 echo filter coefficients from [p0], in three sends ($0A, $84, $85) |
 | `SPCDownload` | `$8098BF` | Sound driver command $11: x bytes of sound RAM from address y to [p0], a byte a handshake on APUIO1 |
 | `ResetPPURegs` | `$8086D5` | Reset the scroll, window and colour math registers and their copies |
 | `SpriteFrameEnd` | `$80AFDE` | Move the unused OAM entries off screen (Y = $E1), swap the OAM buffers and set OAMReady |
@@ -939,7 +939,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `FindFreeVoice` | `$80A610` | A voice for the sound at InstPtr (byte 0: the voices it may use, $2A: its priority): a free one from after the last used (VoiceRotor), else the usable one of no higher priority with the highest state, then age (the ages are read from voice 7 down whatever voice is tested; the 16-bit best age takes InstVolL and VoiceVolL), which is cut (command $0C; $FF none) |
 | `SPCStreamStart` | `$8097D9` | Sound driver command $0F: start streaming a sample of x bytes from [StreamSrc] with loop point y, sending its first block ($8A bytes, or $73 when STAT78's version bits are 0); a byte a handshake on APUIO1. |
 | `SPCStreamNext` | `$80983E` | Sound driver command $10: the next block of the stream ($8A bytes, or $73 when STAT78 bit 4 is clear; the rest when it is the last, 0 = 65536); the bytes still left |
-| `SPCIPLUpload` | `$80AE7B` | Send the stream at [p0] through the sound CPU's boot loader: blocks of length, sound RAM address and data, a length of 0 ending it with the start address (each block's kick value the last index + 4, never 0) |
+| `SPCUpload` | `$80AE7B` | Send the stream at [p0] through the sound CPU's boot loader: blocks of length, sound RAM address and data, a length of 0 ending it with the start address (each block's kick value the last index + 4, never 0) |
 | `PasteMapPart` | `$808E7C` | Copy a part of map [*p0] (its width at +0, entries from +6): r4 entries by r4+2 rows from column r6, row r6+2, into the map at [*p1] (r7 entries a row) at column x, row y, adding a to each entry; *p0 and *p1 end past the last row (their low words, with the original's carries) |
 | `PasteMapPart_t1` | `$808ED2` | Fill y bytes at [p1] with the byte a, from the top down (y = 1 goes round the 64 KB) |
 | `ReadTrackEvent` | `$80A58E` | Read the next event of the track at CurTrackPtr: its delta (ReadVarLen, not kept), its code into EventCode and its data into EventData1 / EventData2 by the code (a note: the key and its length; $E7 skips a block) |
@@ -969,8 +969,8 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `FreeCacheEntry_go` | `$80B77B` | Free tile cache entry x: the last entry moves into its slot (its frame pointed at it), and its VRAM run is given back, joined with a free run after it (blocks: in the same row of 8) and with a free run before it |
 | `FreeCacheEntry` | `$80B772` | Free entry x of frame number y (its FrameCacheOf slot cleared); _A: the entry in a's high byte |
 | `FreeFrameTiles` | `$80B719` | Free the VRAM tiles of the frame at [p0] (by its number with FrameByNumber); not cached: nothing. |
-| `FreeFrameTiles_freeframe` | `$80B724` | (unused entries) FreeFrameTiles for frame a of the sprite set at [p1]; the sum of the free block run lengths, walking from index SpriteBlockTiles |
-| `FreeCacheEntry_go_countfree` | `$80B8AE` | (unused entry) The sum of the free block run lengths, walking BlockRuns from SpriteBlockTiles (after a free run the step is the sum so far, as the original) |
+| `FreeFrameTiles_t1` | `$80B724` | (unused entries) FreeFrameTiles for frame a of the sprite set at [p1]; the sum of the free block run lengths, walking from index SpriteBlockTiles |
+| `FreeFrameTiles_t2` | `$80B8AE` | (unused entry) The sum of the free block run lengths, walking BlockRuns from SpriteBlockTiles (after a free run the step is the sum so far, as the original) |
 | `SpriteFrameStart` | `$80AF7B` | Start filling OAMDrawBuf after the reserved entries (the high table's shift from the byte offset, as the original); age the tile cache's use marks and free the entries not drawn since |
 | `DMAToCGRAM` | `$808723` | DMA x colours from [p0] to CGRAM at colour y: at once with the screen blanked (none for x = 0; y is a byte there, CGADD), else left for the NMI (CGDMALen etc.; the colour word as y is) |
 | `DMAToCGRAM_t3` | `$808766` | (unused entry) x colours from colour y of [p0] into [p1]: a = 0 fills them with y * 2 (the index, as the original leaves it in A), $0100 copies them, else scales each component by the byte a / 256 (the multiplier) |
@@ -998,7 +998,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `hf_number` | (a helper) | (.149 / .150: a number of the stream: 1 and 2 bits (0-3), or k zeros, a 1 and k + 3 bits over the base of .151; HuffBits the window after it) |
 | `DecompressHuffman` | `$80BBB3` | Huffman data at (p0) + 5 in data bank db to WRAM at p1 through the port. |
 | `Decompress` | `$80C373` | Unpack the data at [p0] to WRAM at [p1] (through the WRAM port, once the DMA queue is empty) by its format word: $FB10 LZ, $FB46 pairs, $FB30 Huffman, $FB7A run-length; the unpacked size from the header (its big-endian word at +3), or 1 for an unknown format |
-| `SPCUploadBlock` | `$809906` | SPCUpload of the sample at [p0]: its loop point and length (big-endian words), then the BRR blocks from +4 (the sound locked meanwhile) |
+| `SPCUploadBlock` | `$809906` | SPCSendSample of the sample at [p0]: its loop point and length (big-endian words), then the BRR blocks from +4 (the sound locked meanwhile) |
 | `NMI` | `$808147` | The NMI vector: NMI_Fast, then NMI_FrameHookReturn unless NMISkip was set when it came |
 | `NMI_Fast` | `$80814B` | The NMI: nothing while NMISkip is set (the 16-bit RDNMI read takes TIMEUP too), else the DMA budget for the frame, the NMI hook (NMIHookNext taken when set), then NMI_HookReturn. |
 | `nmi_dma` | (a helper) | (a DMA of channel 0 for a queue entry: its source and size from the entry, to VRAM at +6, if the budget left covers cost + its size; 0 when not) |
