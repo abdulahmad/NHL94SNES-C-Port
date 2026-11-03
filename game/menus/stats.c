@@ -507,3 +507,29 @@ redraw:
         ShowRosterLine(a2);
     }
 }
+
+/* statsorder[i] = i for the rows of the list (one at least) */
+void InitStatsOrder(void)
+{
+    uint16_t a = 0, y = 0xFFFF;
+    do {
+        y++;
+        w8(RAM_OFF_statsorder + y, (uint8_t)a);
+        a++;
+    } while (y < g.listend[0]);
+}
+
+/* The first and last row of the player stats list of team a2: its goalies (statcolumn 0), else
+ * its skaters (after the goalies); curitem the first */
+void SetPlayerStatsRange(uint16_t a2)
+{
+    if (!g.statcolumn) {
+        g.listtop[0] = 0;
+        g.listend[0] = GetGoalieCount(a2);
+    } else {
+        g.listtop[0] = GetGoalieCount(a2);
+        g.listend[0] = GetPlayerCount(a2);
+    }
+    g.listend[0]--;
+    g.curitem[0] = g.listtop[0];
+}

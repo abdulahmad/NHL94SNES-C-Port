@@ -279,23 +279,6 @@ void CheckPAL(void)
     if (io_r16(0x213F) & 0x0010) g.vcountstep = 0x3333;
 }
 
-/* a2: the team of the controller that owns the pause menu (2 the away team, else 0) */
-uint16_t GetPauseTeam(void)
-{
-    return r16(RAM_OFF_cont1team + g.pausepad) == 2 ? 2 : 0;
-}
-
-/* statsorder[i] = i for the rows of the list (one at least) */
-void InitStatsOrder(void)
-{
-    uint16_t a = 0, y = 0xFFFF;
-    do {
-        y++;
-        w8(RAM_OFF_statsorder + y, (uint8_t)a);
-        a++;
-    } while (y < g.listend[0]);
-}
-
 /* Pad n: direction, new presses, changed buttons, buttons held */
 Pad ReadjoyA(uint16_t n)
 {
@@ -3318,21 +3301,6 @@ void NMI_Tick(void)
 }
 
 /* ---- the sequencer ---- */
-
-/* The first and last row of the player stats list of team a2: its goalies (statcolumn 0), else
- * its skaters (after the goalies); curitem the first */
-void SetPlayerStatsRange(uint16_t a2)
-{
-    if (!g.statcolumn) {
-        g.listtop[0] = 0;
-        g.listend[0] = GetGoalieCount(a2);
-    } else {
-        g.listtop[0] = GetGoalieCount(a2);
-        g.listend[0] = GetPlayerCount(a2);
-    }
-    g.listend[0]--;
-    g.curitem[0] = g.listtop[0];
-}
 
 /* (the instrument entry at InstPtr, in the sound entries' bank) */
 static uint8_t ip8(uint8_t y) { return lm8((((uint32_t)g.SoundBank[0] << 16) + g.InstPtr + y) & 0xFFFFFF); }

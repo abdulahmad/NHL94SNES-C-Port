@@ -20,3 +20,5 @@ void ShowRosterLine(uint16_t a2);
 void SetupScreen(void);
 uint16_t SelectLinePlayer(uint16_t a2, uint16_t r7);
 void TeamRosterScreen(void);
+void InitStatsOrder(void);
+void SetPlayerStatsRange(uint16_t a2);

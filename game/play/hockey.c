@@ -5444,3 +5444,9 @@ void IntroSequence(void)
     do RandomWord(); while (!IntroSequence_4(&s));
     forceblack();
 }
+
+/* a2: the team of the controller that owns the pause menu (2 the away team, else 0) */
+uint16_t GetPauseTeam(void)
+{
+    return r16(RAM_OFF_cont1team + g.pausepad) == 2 ? 2 : 0;
+}
