@@ -18,6 +18,11 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
   commit), `test/check.sh` 7 of 7 after each and the clock's routine table unchanged (851). The names gate now treats
   an asm local `Parent.x` as the C `Parent_x`. Status: ok 397 (was 334), other module 299, renamed 6 (parked, see
   docs/RULES.md), missing 4.
+* Re-cut: every original routine now sits in its asm module's file (one commit per unit: logic, setup, middle,
+  video, replay's helpers, hockey, stats, decompress, main, sound, then snes.c's routines). New files
+  `game/system/decompress.c`, `game/system/main.c`; `game/system/snes.c` keeps only the port's glue. The names gate
+  now counts one-line functions too: 855 routines, ok 844, other module 0, renamed 6 (parked), missing 5.
+  `test/check.sh` 7 of 7, the clock table 851, 0 warnings and the vanilla gate after every unit.
 
 ## Next, in order
 
@@ -26,8 +31,8 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 2. Otherwise build them (plan S2): a libretro SNES core with a CPU hook, recorded sessions, a lockstep player in
    `test/oracle/`, resyncing at lag frames as 1nput's Genesis player does.
 3. Coverage report (plan S3), and the cost model measured against the oracle (plan S4).
-4. ~~Renames~~ (done but 6 parked). Next: the re-cut to the NHL94SNES folders (`--list other_module`, 299), one asm
-   module per unit. The names gate, `test/check.sh` and the clock table's size must stay the same.
+4. ~~Renames~~ and ~~re-cut~~ done (6 renames parked: they need the symbol file regenerated from the current asm,
+   or names for the asm's anonymous locals). Order inside each file (ROM order, docs/RULES.md) is not yet checked.
 
 ## Needs
 
