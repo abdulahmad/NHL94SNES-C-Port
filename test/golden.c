@@ -6,6 +6,7 @@
  * Game Setup's 5-minute periods 30 seconds (the ROM's period table's first entry set to 30 once
  * loaded, the cartridge itself having no shorter game), so a whole game fits a short run. A script is "FRAME:BUTTON+BUTTON,..." (# lines are comments): pad 1's buttons held from that frame
  * on, "2." to "5." before a button for pads 2-5 (any of pads 3-5 puts the multitap in port 2). */
+#define _POSIX_C_SOURCE 200809L   /* strtok_r (glibc declares it only for POSIX; MinGW always) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
