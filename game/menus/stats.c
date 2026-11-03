@@ -450,7 +450,7 @@ uint16_t SelectLinePlayer(uint16_t a2, uint16_t r7)
  * the current line with an attribute column; then the loop (TeamRosterLoop): start leaves
  * (RosterRtl), Y switches team (SwapRosterTeam, then TeamRosterRedraw), left / right step the
  * column (MoveRosterColumn), up / down the line (0-7) */
-void TeamRoster(void)
+void TeamRosterScreen(void)
 {
     uint16_t a2 = GetPauseTeam();
     g.SelectedPlayerIdx = (uint16_t)(r16(RAM_OFF_tmline + a2) + 1);

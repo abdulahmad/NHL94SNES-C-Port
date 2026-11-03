@@ -5603,7 +5603,7 @@
 #define SYM_WeightedRandomSelect_1 0x9D9CECu
 #define SYM_WeightedRandomSelect_2 0x9D9CF7u
 #define SYM_WeightedRandomSelect_loop 0x9D9D03u
-#define SYM_TeamRoster 0x9D9D26u
+#define SYM_TeamRosterScreen 0x9D9D26u
 #define SYM_TeamRosterRedraw 0x9D9DE2u
 #define SYM_TeamRosterRedraw_1 0x9D9E0Du
 #define SYM_TeamRosterLoop 0x9D9E2Du

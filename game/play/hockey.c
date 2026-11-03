@@ -3242,7 +3242,7 @@ uint16_t PauseGameStats(uint16_t d1) { return pause_screen(d1, StatsReport); }
 uint16_t PausePenaltySummary(uint16_t d1) { return pause_screen(d1, ShowPenaltySummary); }
 uint16_t PauseScoringSummary(uint16_t d1) { return pause_screen(d1, ShowScoringSummary); }
 uint16_t PauseOtherScores(uint16_t d1) { return pause_screen(d1, ShowScores); }
-uint16_t PauseTeamRoster(uint16_t d1) { return pause_screen(d1, TeamRoster); }
+uint16_t PauseTeamRoster(uint16_t d1) { return pause_screen(d1, TeamRosterScreen); }
 
 
 /* One column of the period stats at printx: the period's label (none past lastperiod), the total's, then
