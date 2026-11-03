@@ -22,7 +22,7 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
   video, replay's helpers, hockey, stats, decompress, main, sound, then snes.c's routines). New files
   `game/system/decompress.c`, `game/system/main.c`; `game/system/snes.c` keeps only the port's glue. The names gate
   now counts one-line functions too: 855 routines, ok 844, other module 0, renamed 6 (parked), missing 5.
-  `test/check.sh` 7 of 7, the clock table 851, 0 warnings and the vanilla gate after every unit.
+  `test/check.sh` 7 of 7, the clock table 851 and 0 warnings after every unit; the vanilla gate passes at the end.
 
 ## Next, in order
 
