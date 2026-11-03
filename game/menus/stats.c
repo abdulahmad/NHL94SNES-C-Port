@@ -92,7 +92,7 @@ uint32_t AttribStatus(uint16_t d0, uint16_t a2)
  * included, r2 its weights) */
 void GetNameandAttrib(uint16_t d0, uint16_t d4, uint16_t mask, uint16_t a2, uint16_t r2)
 {
-    print(PlayerNumName(a2, d0));
+    print(getname(a2, d0));
     g.printx = 0x19;
     if (!g.pausesubmenu) g.printx++;
     if (d4 >= 3) {

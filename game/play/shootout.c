@@ -131,7 +131,7 @@ void PrintShooterNames(uint16_t a2)
         g.printx = 5;
         a5 = print(a5);
         g.printx = 8;
-        print(PlayerNumName(a2, (uint16_t)(m8(a3) - 1)));
+        print(getname(a2, (uint16_t)(m8(a3) - 1)));
         a3 = (a3 & 0xFF0000) | (uint16_t)(a3 + 1);
         g.printy += 2;
     } while (!((d1 = (uint16_t)(d1 - 1)) & 0x8000));

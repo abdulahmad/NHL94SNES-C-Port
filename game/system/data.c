@@ -366,7 +366,7 @@ uint32_t GetPlayerName(void)
 {
     uint16_t d0 = g.TempPlOffset, a2 = 0;
     if (d0 & 0x8000) { d0 &= 0xFF; a2 = 2; }
-    return PlayerNumName(a2, d0);
+    return getname(a2, d0);
 }
 
 /* mesarea = the number, first initial and last name of player TempPlOffset; a1 past it */
@@ -374,7 +374,7 @@ uint32_t GetPlayerNumInitial(void)
 {
     uint16_t d0 = g.TempPlOffset, a2 = 0;
     if (d0 & 0x8000) { d0 &= 0xFF; a2 = 2; }
-    return PlayerShortName(a2, d0);
+    return FormatPlayerNumInitial(a2, d0);
 }
 
 /* After a playoff game: work out the winners and the new password and tree; when the user won it
@@ -453,13 +453,13 @@ void ShowGoalBox(void)
         }
     }
     printbig(a1);
-    print(PlayerShortName(a2, m8(a4 + 3)));
+    print(FormatPlayerNumInitial(a2, m8(a4 + 3)));
     uint16_t d0 = m8(a4 + 4);
     if (d0 & 0x80) return;
     print(SYM_AssistByTxt);
-    print(PlayerShortName(a2, d0));
+    print(FormatPlayerNumInitial(a2, d0));
     d0 = m8(a4 + 5);
     if (d0 & 0x80) return;
     print(SYM_ShowGoalBoxPos2);
-    print(PlayerShortName(a2, d0));
+    print(FormatPlayerNumInitial(a2, d0));
 }

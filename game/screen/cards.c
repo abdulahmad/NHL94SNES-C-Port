@@ -197,7 +197,7 @@ void DrawPlayerCard(uint16_t a2)
             t = (uint16_t)(m8(a3 + slot) - 1);
         }
         g.curplayer[0] = t;
-        card_print(PlayerNumName(a2, g.curplayer[0]), 0xC);
+        card_print(getname(a2, g.curplayer[0]), 0xC);
         if ((uint16_t)(g.curplayer[0] - GoalieCount(a2)) & 0x8000) {
             card_print(SYM_RosterGroups + 18, 0xD);
             FindGoalieStrengths(a2);

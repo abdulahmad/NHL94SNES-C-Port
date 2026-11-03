@@ -85,7 +85,7 @@ void setoptions_10(uint16_t *a2)
 void setoptions_t1xxxxxxxxxxx(uint16_t x, uint16_t *a2)
 {
     *a2 = x;
-    uint32_t a1 = PlayerShortName(x, GetMatchupPlayer(g.setupmatchup, x));
+    uint32_t a1 = FormatPlayerNumInitial(x, GetMatchupPlayer(g.setupmatchup, x));
     if (!x) MemCopy(a1, 0x000A5C, 0x31);
 }
 

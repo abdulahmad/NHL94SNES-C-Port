@@ -1309,7 +1309,7 @@ void Intermission(void)
         print((SYM_IntermissionPos & 0xFF0000) | (uint16_t)(SYM_IntermissionPos + 5));
         Framer(0x16, 7);
         printscores1();
-    } while (PauseMenu());
+    } while (Pausemode_menu());
     g.pausemenuon = 0;
     g.InIntermission = 0;
     g.demoflag = 0;

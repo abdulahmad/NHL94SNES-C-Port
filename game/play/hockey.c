@@ -56,7 +56,7 @@ void TitleDelay(uint16_t x)
 }
 
 /* Reset the scouting report text scroll; a0 = TestList */
-uint32_t InitScoutDisplay(void)
+uint32_t InitScoutingDisplay(void)
 {
     g.VertLineScrolling = 0xFFFF;
     g.PlayerScrollCtr = 0xFFFF;
@@ -166,7 +166,7 @@ void updatecrowdf(void)
 
 /* The team of the controller that paused (a2: 0 home, 2 visitors); a negative pausepad is minus the side
  * whose first controller counts */
-uint16_t GetPadTeam(void)
+uint16_t seta2(void)
 {
     uint16_t x = g.pausepad;
     if (x & 0x8000) {
@@ -364,7 +364,7 @@ void ComparePlayerStats(uint16_t x, uint16_t y, uint16_t a2)
 }
 
 /* End the string built in mesarea: its length word = a1 - mesarea; a1 = mesarea */
-uint32_t MesAreaDone(uint32_t a1)
+uint32_t FinalizeTextBuffer(uint32_t a1)
 {
     g.mesarea[0] = (uint16_t)(a1 - RAM_OFF_mesarea);
     return (a1 & 0xFF0000) | RAM_OFF_mesarea;
@@ -550,7 +550,7 @@ uint32_t PlayerInitialName(uint16_t a2, uint16_t d0)
     w16(a1++, 0x002E);
     while ((m8(bank | p0++)) != 0x20) {}
     do w16(a1++, m16(bank | p0++)); while (p0 != end);
-    return MesAreaDone(a1);
+    return FinalizeTextBuffer(a1);
 }
 
 /* Copy team a2's lines ($38 bytes at its team data's offset +6) into its RAM lines, then without line
@@ -581,7 +581,7 @@ static void pmenu_value(uint16_t d0, uint16_t list, uint32_t flag, uint16_t on, 
 {
     uint32_t a3 = (SYM_PmenuValueItems & 0xFF0000) | (uint16_t)(SYM_PmenuValueItems + list + (uint16_t)(g.pmenulist << 1));
     if (m16(a3) != d0) return;
-    uint16_t a2 = GetPadTeam();
+    uint16_t a2 = seta2();
     PmenuAppend(SYM_GoalieOptionText + (r16(flag + a2) ? on : off), 1);
 }
 void PmenuGoalieValue(uint16_t d0) { pmenu_value(d0, 12, RAM_OFF_goaliemode1, 18, 0); }
@@ -802,7 +802,7 @@ void PrintPasswordHelp(void)
 }
 
 /* mesarea = the uniform number and name of roster player d0 of team a2; a1 = mesarea */
-uint32_t PlayerNumName(uint16_t a2, uint16_t d0)
+uint32_t getname(uint16_t a2, uint16_t d0)
 {
     uint32_t rec = GetPlayerRecord(a2, d0), bank = rec & 0xFF0000;
     w16(RAM_OFF_mesarea, 4);
@@ -815,7 +815,7 @@ uint32_t PlayerNumName(uint16_t a2, uint16_t d0)
 
 /* mesarea = the number, first initial and last name of roster player d0 of team a2 (a word written at a
  * time); a1 = mesarea */
-uint32_t PlayerShortName(uint16_t a2, uint16_t d0)
+uint32_t FormatPlayerNumInitial(uint16_t a2, uint16_t d0)
 {
     uint32_t a0 = GetPlayerRecord(a2, d0), bank = a0 & 0xFF0000;
     uint16_t p0 = (uint16_t)a0;
@@ -829,7 +829,7 @@ uint32_t PlayerShortName(uint16_t a2, uint16_t d0)
     w16(a1++, 0x0020);
     while ((m8(bank | p0++)) != 0x20) {}
     do w16(a1++, m16(bank | p0++)); while (p0 != end);
-    return MesAreaDone(a1);
+    return FinalizeTextBuffer(a1);
 }
 
 /* Print the password (PassWord's characters through PasstoText), unless it is hidden (bit 7) */
@@ -869,7 +869,7 @@ void DrawExitPrompt(void)
 void DecodePW(void) { PWtoBits(); ReadPassBits(); }
 
 /* Erase the scouting report name line of side a2 */
-void EraseScoutName(uint16_t a2)
+void ClearRosterName(uint16_t a2)
 {
     ScoutNamePos(a2);
     eraser(0x0B, 2, g.blankchar);
@@ -907,12 +907,12 @@ void PrintOtherScore(void)
     g.printy++;
 }
 
-/* Pmenu's goalie item: when item d0 is the menu's goalie item, the side's goalie's last name (or None) */
+/* SetupPauseScreen's goalie item: when item d0 is the menu's goalie item, the side's goalie's last name (or None) */
 static void pmenu_goalie(uint16_t d0)
 {
     uint32_t a3 = (SYM_PmenuValueItems & 0xFF0000) | (uint16_t)(SYM_PmenuValueItems + (uint16_t)(g.pmenulist << 1));
     if (m16(a3) != d0) return;
-    uint16_t a2 = GetPadTeam();
+    uint16_t a2 = seta2();
     uint16_t tmp0 = r16(RAM_OFF_tmgoalie + a2);
     if (tmp0 & 0x8000) { PmenuNone(); return; }
     uint32_t bank = SYM_TeamList & 0xFF0000;
@@ -929,7 +929,7 @@ static void pmenu_goalie(uint16_t d0)
 
 /* Draw the pause menu: five items of the current list from psfirst, the selected one (psitem)
  * highlighted, each with its value, centred on column $11 */
-void Pmenu(void)
+void SetupPauseScreen(void)
 {
     print(SYM_PmenuPos);
     uint16_t d0 = g.psfirst, off;
@@ -1628,7 +1628,7 @@ void ShowMP5Warning(void)
 {
     if (!g.mp5warning) return;
     do mp5_box(g.mp5warning); while (g.mp5warning);
-    Pmenu();
+    SetupPauseScreen();
 }
 
 /* Team d1 on the player select screen at printx: its palette (colours $70 for the home team, unless both
@@ -1881,7 +1881,7 @@ static void teamstat_value(uint16_t a2)
 
 /* The game stats page: each team stat's name (the list without penalties when they are off) and both
  * teams' numbers */
-void PrintTeamStatRows(void)
+void DisplayStats(void)
 {
     MemFill(statspage, 0x4D80, (uint16_t)(g.smallfontchars + g.printfontset));
     g.printy = 0;
@@ -2133,7 +2133,7 @@ void PrintCopyright(void)
 /* The short name of team a2's player in line slot y (a3) in small letter sprites centred on x, at printy */
 void PrintLineSlotName(uint16_t x, uint16_t y, uint32_t a3, uint16_t a2)
 {
-    uint32_t a1 = PlayerShortName(a2, (uint16_t)(m8(a3 + y) - 1));
+    uint32_t a1 = FormatPlayerNumInitial(a2, (uint16_t)(m8(a3 + y) - 1));
     uint16_t w = (uint16_t)((uint16_t)((uint16_t)(m16(a1) - 2) >> 1) << 2);
     PrintSmallLetterSprites((uint16_t)(x - w), g.printy, a1);
 }
@@ -2414,7 +2414,7 @@ void StartHL2(uint16_t a0, uint16_t d1)
         print(SYM_SaveRegsStartHL2Pos);
         Framer(0x16, 7);
         printscores1();
-        Pmenu();
+        SetupPauseScreen();
         FadeIn();
         ScreenOn();
         w16(RAM_OFF_gsper + a0, 4);
@@ -2531,7 +2531,7 @@ void SelectPauseController(uint16_t *d1, uint16_t *d3)
                 g.pausepad = x;
                 g.psitem = 0;
                 g.psfirst = 0;
-                Pmenu();
+                SetupPauseScreen();
                 SendTextMap();
                 PulseUntilRelease();
                 g.pausepadidle = 0x3C;
@@ -2582,7 +2582,7 @@ uint16_t PauseDefStore(void) { return PauseMenuPoll(); }
 uint16_t PauseDefControl(uint16_t d1)
 {
     if (d1 & 0x8380) {
-        uint16_t a2 = GetPadTeam();
+        uint16_t a2 = seta2();
         w16(RAM_OFF_defcontrol + a2, r16(RAM_OFF_defcontrol + a2) ^ 1);
     }
     return PauseDefStore();
@@ -2591,7 +2591,7 @@ uint16_t PauseDefControl(uint16_t d1)
 uint16_t PauseGoalieMode(uint16_t d1)
 {
     if (d1 & 0x8380) {
-        uint16_t a2 = GetPadTeam();
+        uint16_t a2 = seta2();
         w16(RAM_OFF_goaliemode1 + a2, r16(RAM_OFF_goaliemode1 + a2) ^ 1);
     }
     return PauseMenuPoll();
@@ -2600,8 +2600,8 @@ uint16_t PauseGoalieMode(uint16_t d1)
  * none, from none the last) */
 uint16_t PauseGoalie(uint16_t d1)
 {
-    uint16_t d0 = GoalieCount(GetPadTeam());
-    uint16_t a2 = GetPadTeam(), v;
+    uint16_t d0 = GoalieCount(seta2());
+    uint16_t a2 = seta2(), v;
     uint16_t gl = r16(RAM_OFF_tmgoalie + a2);
     if (d1 & 0x8180) {
         if (gl & 0x8000) v = 0;
@@ -2620,7 +2620,7 @@ uint16_t PauseGoalie(uint16_t d1)
 uint16_t PauseTimeout(uint16_t d1)
 {
     if (!(d1 & 0x8080)) return PauseDefStore();
-    uint16_t a2 = GetPadTeam();
+    uint16_t a2 = seta2();
     uint16_t v = (uint16_t)(r16(RAM_OFF_tmtimeouts + a2) - 1);
     if (!(v & 0x8000)) {
         w16(RAM_OFF_tmtimeouts + a2, v);
@@ -2700,7 +2700,7 @@ uint16_t PauseMenuPoll(void)
 {
     uint16_t d1 = 0, d3 = 0;
     for (;;) {
-        Pmenu();
+        SetupPauseScreen();
         SelectPauseController(&d1, &d3);
         if (d3 & 0x1000) return PauseResumeRtl();
         if (d1 & 0x8080) break;
@@ -2728,7 +2728,7 @@ uint16_t PauseMenuPoll(void)
 
 /* Pick the pause menu (a shootout: 4, or 3 before the game; the overtime period: 1; before the game: 2;
  * else ChoosePauseMenu's), a frame of sprites, both sides' colours white, then the menu */
-uint16_t PauseMenu(void)
+uint16_t Pausemode_menu(void)
 {
     g.pausemenuon = 0xFFFF;
     if (g.shootoutmode) {
@@ -2770,7 +2770,7 @@ void Pausemode(void)
         print(SYM_PausemodePos);
         Framer(0x16, 7);
         printscores1();
-    } while (PauseMenu());
+    } while (Pausemode_menu());
     g.pausemenuon = 0;
     g.pregamepause = 0;
     g.PauseUnused[0] = 0;
@@ -2986,7 +2986,7 @@ scrolled:
 
 /* The game stats screen: both teams' blocks and the team stats (6 rows of 16, 11 without penalties, at a
  * time) */
-void ShowGameStats(void)
+void StatsReport(void)
 {
     uint16_t a2 = r16(RAM_OFF_a2);   /* (as the caller left it) */
     g.setupvis = g.VisTeam[0];
@@ -3014,7 +3014,7 @@ void ShowGameStats(void)
     g.irqvscroll2 = 0x10;
     MenuScreenHDMA();
     ScreenOn();
-    PrintTeamStatRows();
+    DisplayStats();
     SendTextMap();
     gamestats_loop();
 }
@@ -3207,7 +3207,7 @@ static void otherscores_loop(void)
 }
 
 /* The other scores screen: the other games of the round (the user's skipped), five at a time */
-void ShowOtherScores(void)
+void ShowScores(void)
 {
     g.setupvis = 0x1C;
     g.setuphome = 0x1D;
@@ -3238,10 +3238,10 @@ static uint16_t pause_screen(uint16_t d1, void (*show)(void))
     ReloadRink();
     return PauseSubmenuDone();
 }
-uint16_t PauseGameStats(uint16_t d1) { return pause_screen(d1, ShowGameStats); }
+uint16_t PauseGameStats(uint16_t d1) { return pause_screen(d1, StatsReport); }
 uint16_t PausePenaltySummary(uint16_t d1) { return pause_screen(d1, ShowPenaltySummary); }
 uint16_t PauseScoringSummary(uint16_t d1) { return pause_screen(d1, ShowScoringSummary); }
-uint16_t PauseOtherScores(uint16_t d1) { return pause_screen(d1, ShowOtherScores); }
+uint16_t PauseOtherScores(uint16_t d1) { return pause_screen(d1, ShowScores); }
 uint16_t PauseTeamRoster(uint16_t d1) { return pause_screen(d1, TeamRoster); }
 
 
@@ -3300,7 +3300,7 @@ void DrawPeriodStats(void)
 }
 
 /* The period stats screen: Y switches goals / shots, Start leaves */
-void ShowPeriodStats(void)
+void PeriodStatsScreen(void)
 {
     g.setupvis = g.VisTeam[0];
     g.setuphome = g.HomeTeam;
@@ -3329,7 +3329,7 @@ void ShowPeriodStats(void)
 
 /* The player stats screen of the pausing team (Y the other team): up / down scroll the rows, left / right
  * the sorted column (column 0: the goalies), Start leaves */
-void ShowPlayerStats(void)
+void PlayerStatsScreen(void)
 {
     uint16_t a2 = GetPauseTeam();
     g.setupvis = r16(RAM_OFF_HomeTeam + a2);
@@ -3447,8 +3447,8 @@ void ShowPlayerStats(void)
     }
 }
 
-uint16_t PausePeriodStats(uint16_t d1) { return pause_screen(d1, ShowPeriodStats); }
-uint16_t PausePlayerStats(uint16_t d1) { return pause_screen(d1, ShowPlayerStats); }
+uint16_t PausePeriodStats(uint16_t d1) { return pause_screen(d1, PeriodStatsScreen); }
+uint16_t PausePlayerStats(uint16_t d1) { return pause_screen(d1, PlayerStatsScreen); }
 
 
 /* Add base to every word of the map unpacked at picboxmap (its width and height first, the words from +6) */
@@ -3536,7 +3536,7 @@ static uint32_t card_starters(uint16_t a2)
     uint16_t t = r16(RAM_OFF_tmdata + a2);
     return bank | (uint16_t)(t + m16((bank | t) + 0x0C));
 }
-/* (ShowPlayerCards: whether roster player p is one of the six starters at a3, whose cards come first) */
+/* (PlayerCards: whether roster player p is one of the six starters at a3, whose cards come first) */
 static int card_starter(uint32_t a3, uint16_t p)
 {
     for (uint16_t y = 0; y < 6; y++) if (m8(a3 + y) == p) return 1;
@@ -3545,7 +3545,7 @@ static int card_starter(uint32_t a3, uint16_t p)
 
 /* The player cards of the pausing team: right / left the next / previous card (the team card, the six line
  * slots, then the roster without the starters), Y the other team, Start leaves */
-void ShowPlayerCards(void)
+void PlayerCards(void)
 {
     uint16_t a2 = GetPauseTeam();
     g.FrameByNumber = 0;
@@ -3597,7 +3597,7 @@ void ShowPlayerCards(void)
     }
 }
 
-uint16_t PausePlayerCards(uint16_t d1) { return pause_screen(d1, ShowPlayerCards); }
+uint16_t PausePlayerCards(uint16_t d1) { return pause_screen(d1, PlayerCards); }
 
 /* The crowd meter's lit part: the first crowdmeterlit words of each row of map [p0] (width and height, then
  * the words from +6) plus a, into the map at [p1] (r7 words a row) at column x, row y */
@@ -3663,7 +3663,7 @@ static void crowdmeter_values(void)
 
 /* The crowd meter screen: the current, peak and average levels, up / down choose the one the meter shows,
  * Start leaves */
-void ShowCrowdMeter(void)
+void CrowdMeterScreen(void)
 {
     uint16_t a2 = r16(RAM_OFF_a2);   /* (as the caller left it) */
     g.setupvis = g.VisTeam[0];
@@ -3713,7 +3713,7 @@ void ShowCrowdMeter(void)
     }
 }
 
-uint16_t PauseCrowdLevel(uint16_t d1) { return pause_screen(d1, ShowCrowdMeter); }
+uint16_t PauseCrowdLevel(uint16_t d1) { return pause_screen(d1, CrowdMeterScreen); }
 
 
 /* The line editor's title: the background redrawn (drawlinesback, then the band IRQ line back), the label,
@@ -3772,7 +3772,7 @@ void PrintLinePlayers(uint16_t a2)
         g.printx = 5;
         a5 = print(a5);
         g.printx = 8;
-        print(PlayerNumName(a2, (uint16_t)(m8(a3) - 1)));
+        print(getname(a2, (uint16_t)(m8(a3) - 1)));
         a3 = (a3 & 0xFF0000) | (uint16_t)(a3 + 1);
         g.printy += 2;
     } while (!((d1 = (uint16_t)(d1 - 1)) & 0x8000));
@@ -3810,7 +3810,7 @@ void PrintLinePlayerList(uint16_t d4, uint16_t mask, uint16_t a2)
 
 /* The line editor's menu (Start): Return to game (A = $FFFF) or Restore default lines (team a2's lines
  * loaded again, A = 0) */
-uint16_t EditLinesMenu(uint16_t a2)
+uint16_t LineEditorExit(uint16_t a2)
 {
     ClearEditLinesMenu();
     print(SYM_ReturnToGameTxt);
@@ -3842,7 +3842,7 @@ uint16_t EditLinesMenu(uint16_t a2)
 
 /* The line editor of the pausing team: left / right the line (with line changes on; lines 6 and 7 have
  * four slots), up / down the slot, A / B pick a player for it, Start the menu */
-void EditLinesScreen(void)
+void LineEditor(void)
 {
     uint16_t a2 = GetPauseTeam();
     g.SelectedPlayerIdx = (uint16_t)(r16(RAM_OFF_tmline + a2) + 1);
@@ -3864,7 +3864,7 @@ void EditLinesScreen(void)
         Pad p = ReadPausePad();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
         if (d1 & 0x1000) {
-            if (EditLinesMenu(a2)) return;
+            if (LineEditorExit(a2)) return;
             PrintLineNames(a2);
             continue;
         }
@@ -3909,12 +3909,12 @@ void EditLinesScreen(void)
     }
 }
 
-/* Edit lines from the pause menu: A / B open the line editor (EditLinesScreen), then the rink is reloaded */
+/* Edit lines from the pause menu: A / B open the line editor (LineEditor), then the rink is reloaded */
 uint16_t PauseEditLines(uint16_t d1)
 {
     if (!(d1 & 0x8080)) return PauseMenuPoll();
     g.pausesubmenu = 1;
-    EditLinesScreen();
+    LineEditor();
     g.pausesubmenu = 0;
     ReloadRink();
     return PauseSubmenuDone();
@@ -3983,7 +3983,7 @@ type:
 
 /* (ScoutTypeText's .3: type the string at a1 as one word, a word more counted in PlayerScrollCtr;
  * returns the column d0 moved on by its length) */
-uint16_t ScoutTypeText_3(uint32_t a1, uint16_t d0)
+uint16_t ScoutHomeCity_3(uint32_t a1, uint16_t d0)
 {
     g.PlayerScrollCtr++;
     uint16_t n = m16(a1);
@@ -4002,7 +4002,7 @@ void ScoutTypeText(uint32_t a1, uint16_t d0)
         if (m8(a1 + y) == 0x20) {
             uint16_t n = m16(a1), d4 = (uint16_t)(y - 2);
             mset16(a1, y);
-            d0 = ScoutTypeText_3(a1, d0);
+            d0 = ScoutHomeCity_3(a1, d0);
             g.PlayerScrollCtr--;
             a1 = (a1 & 0xFF0000) | (uint16_t)(a1 + d4);
             mset16(a1, (uint16_t)(n - d4));
@@ -4011,7 +4011,7 @@ void ScoutTypeText(uint32_t a1, uint16_t d0)
         }
         y++;
     } while (SCOUT_NEG(y, m16(a1)));
-    ScoutTypeText_3(a1, d0);
+    ScoutHomeCity_3(a1, d0);
 }
 
 /* Type string a1 (copied to a fresh mesarea) from column d0 */

@@ -230,7 +230,7 @@ struct G {
     uint16_t WinBits; /* ReadPassBits/WritePassBits at the 93S WinBits slot (range $4000); ResolveGames sets the bits of the teams ... */
     uint16_t mp5readall; /* PlayerSelect sets $FFFF while it runs and clears it at the end; when nonzero Multi5Bios reads the multitap ... */
     int16_t puckc; /* object index of the puck carrier, negative = loose */
-    uint16_t timestep; /* Gameloop/SaveRegsStartHL2/ReplayMode/PauseReplay store d7 (frames elapsed) here (PauseMenu sets 2); ... */
+    uint16_t timestep; /* Gameloop/SaveRegsStartHL2/ReplayMode/PauseReplay store d7 (frames elapsed) here (Pausemode_menu sets 2); ... */
     uint16_t padinputdone[5]; /* updateplayers: 5 words (pad*2) cleared each frame, set to 1 when the pad's doinput has run; ... */
     uint8_t PadControlObj[14]; /* setpads stores SCnum of the player each marker slot follows (slot 0 puck carrier, 1-5 pads, 6 replay ... */
     uint16_t fopadfirst[2]; /* FaceoffPads: per team (home here, away +2) the first pad given a player (findpc) at the last faceoff; the ... */
@@ -346,7 +346,7 @@ struct G {
     uint16_t printa; /* attribute (palette / priority bits) for print characters */
     uint16_t printx; /* x cordinate for printing (text map column) */
     uint16_t printy; /* y cordinate for printing */
-    uint16_t psfirst; /* pause menu: first item shown (Pmenu shows five from here) */
+    uint16_t psfirst; /* pause menu: first item shown (SetupPauseScreen shows five from here) */
     uint16_t psitem; /* pause menu item */
     uint16_t puckcross[4]; /* 2 entries of (x, frames): where / when the puck crosses the top / bottom goal line */
     uint32_t ReplayBufferPtr; /* long pointer to the next replay frame record */
@@ -538,7 +538,7 @@ struct G {
     uint16_t cont5team[2]; /* Pad 5 (multitap) team word, the last of the five the loops over cont1team,x stop at ($0A); name extends ... */
     uint16_t goaliemode1; /* Home manual goalie flag, word per team indexed goaliemode1,y: StartGame copies the goalie option (OptGoalie) ... */
     uint16_t goaliemode2; /* Visitors manual goalie flag (goaliemode1+2), set with goaliemode1 by StartGame (94G goaliemode2) */
-    uint16_t defcontrol[2]; /* Defense control on/off per team (word, indexed by team 0/2): PauseDefControl toggles it, Pmenu prints ... */
+    uint16_t defcontrol[2]; /* Defense control on/off per team (word, indexed by team 0/2): PauseDefControl toggles it, SetupPauseScreen prints ... */
     uint16_t HomeTeam; /* home team number (TeamList index) */
     uint16_t VisTeam[33]; /* visiting team number */
     uint16_t tmdata[2]; /* team data address */
@@ -556,33 +556,33 @@ struct G {
     uint16_t shootoutround; /* shootout round, from 1 */
     uint16_t shootoutturnover; /* Shootout turn finished: cleared at each PlayShootout turn, incremented by puckfaceoff after shootoutstop; ... */
     uint16_t shootoutdecider; /* PlayShootout sets 0 before each round and 1 before the home team's turn from round 5 on; ShootoutWonBy ... */
-    uint16_t linecursor[2]; /* Line editor slot cursor row: EditLinesScreen starts it at 4 and moves it within 0..lineslots-1, ... */
+    uint16_t linecursor[2]; /* Line editor slot cursor row: LineEditor starts it at 4 and moves it within 0..lineslots-1, ... */
     uint16_t lineplayer[2]; /* SetLineSlot: the player being put in the cursor slot (A on entry), compared with the slots for the swap ... */
     uint16_t lineswap[2]; /* Temporary slot byte while SetLineSlot (.5) and SwapLineSlots swap two line slots */
-    uint16_t linemenuitem[2]; /* EditLinesMenu item: 0 Return to Game, 1 Restore default lines (down/up set it, the button acts on it, ... */
+    uint16_t linemenuitem[2]; /* LineEditorExit item: 0 Return to Game, 1 Restore default lines (down/up set it, the button acts on it, ... */
     uint16_t curplayer[2]; /* Roster index of the player being worked on: DrawPlayerCard/NextPlayerCard/PrevPlayerCard/DrawPlayerPicture ... */
-    uint16_t lineslots[2]; /* Rows (slots) of the line being edited: EditLinesScreen sets 5, drops it to 4 for lines 6-7 and back; ... */
+    uint16_t lineslots[2]; /* Rows (slots) of the line being edited: LineEditor sets 5, drops it to 4 for lines 6-7 and back; ... */
     uint16_t listcount[2]; /* Size of the current list: the defense/forward (SelectLinePlayer) or skater (ShooterSelectList) count of ... */
     uint16_t picktop[2]; /* Pick list (line editor, shootout shooters): roster index of the first player shown; ... */
     uint16_t pickfirst[2]; /* Pick list: roster index of the first player of the listed category (goalie count, + forwards for defense), ... */
     uint16_t pickrows[5]; /* Line editor pick list rows shown = min(9, listcount) (SelectLinePlayer), bound of the cursor, used by ... */
-    uint16_t curitem[2]; /* Current item of the screen up: exit prompt choice (AskExitGame, DrawExitPrompt), card (ShowPlayerCards, ... */
+    uint16_t curitem[2]; /* Current item of the screen up: exit prompt choice (AskExitGame, DrawExitPrompt), card (PlayerCards, ... */
     uint16_t listtop[2]; /* First row shown of a scrolled stats list (game stats, penalty/scoring summaries, other scores: ... */
     uint16_t listend[2]; /* End of the current list: penalty count (PenSumLength), goal count, other games + 1, last player card (players+6), ... */
     uint16_t listrows[2]; /* Rows of a scrolled stats list in the window / sent to VRAM (5 summaries, 6 game stats, 7 player stats; one ... */
     uint16_t statstemp[2]; /* Player stats scratch: ComparePlayerStats returns nonzero to swap and uses it as a temp, SortPlayerStats ... */
     uint16_t scrollirqdone[2]; /* IRQ_StatsScroll1 sets $FFFF each frame; the unused waits in ScrollGameStatsDown (.t1) and OtherScoresRtl ... */
-    uint16_t crowdmeterlit[12]; /* ShowCrowdMeter: lit columns of the crowd meter (level/4), the width the CrowdMeterLitMap paste loop uses */
+    uint16_t crowdmeterlit[12]; /* CrowdMeterScreen: lit columns of the crowd meter (level/4), the width the CrowdMeterLitMap paste loop uses */
     uint16_t otherskip[2]; /* Other scores: 1 when FillOtherScores skipped the user's game (gamenum), added into the row math of ... */
     uint16_t irqline1; /* Line of the first split IRQ: SetupScrollIRQ/SetupBandIRQ store A here and SetIRQ at it, IRQ_BandEnd ... */
     uint16_t irqline2; /* Line of the second split IRQ: SetupScrollIRQ/SetupBandIRQ store X, IRQ_StatsScroll1/IRQ_BandStart load ... */
     uint16_t irqline3; /* Line of the third split IRQ: SetupScrollIRQ stores Y, IRQ_StatsScroll2 loads VTIME from it */
     uint16_t irqvscroll1; /* BG1VOFS written by IRQ_StatsScroll1 (low byte, then $1DF4): the scroll routines step it by 2 per frame for ... */
-    uint16_t irqvscroll2; /* BG1VOFS of the second split, written by IRQ_StatsScroll2; ShowGameStats/ShowPlayerStats and the summary ... */
+    uint16_t irqvscroll2; /* BG1VOFS of the second split, written by IRQ_StatsScroll2; StatsReport/PlayerStatsScreen and the summary ... */
     uint8_t irqvscroll3[2]; /* BG1VOFS of the third split, written by IRQ_StatsScroll3; SetupScrollIRQ sets $FFFF */
-    uint16_t statcolumn; /* Player stats page column: 0 = goalies, 1-5 = skater sort column; left/right in ShowPlayerStats, ... */
+    uint16_t statcolumn; /* Player stats page column: 0 = goalies, 1-5 = skater sort column; left/right in PlayerStatsScreen, ... */
     uint8_t statsorder[26]; /* Player stats row order, a byte per roster player (InitStatsOrder fills 0,1,2..; ... */
-    uint16_t statpenrows; /* Game stats: $10 when penalties are on, 0 when off (ShowGameStats); PrintTeamStatRows ORs it with each ... */
+    uint16_t statpenrows; /* Game stats: $10 when penalties are on, 0 when off (StatsReport); DisplayStats ORs it with each ... */
     uint16_t letterx[2]; /* X of the next sprite letter: PrintLetterSprites, PrintSmallLetterSprites, PrintStringSprites, ... */
     uint16_t lettery[2]; /* Y of the sprite letters (Y on entry), passed to DrawSprite by the same routines */
     uint16_t otgoalscorer; /* ShowThreeStars: player (+$1A for visitors, $FFFF none) taken from a goal entry whose period field is 3 ... */
@@ -636,8 +636,8 @@ struct G {
     uint16_t lastperiod; /* Period just finished: PeriodOver copies gsp, StartGame clears it, DrawPeriodStats shows the periods up to it */
     uint16_t teamtaken[2]; /* InitializeGameStructures: nonzero when the random team's bit was already set (pick again) */
     uint16_t teambit[2]; /* InitializeGameStructures: 1 << (team & $F), tested and ORed into the used-team bit sets $B3 / d3 */
-    uint16_t pmenulist; /* Pause menu list shown (0-5): PauseMenu/ChoosePauseMenu pick it, Pmenu prints items and values by it, ... */
-    uint16_t pmenucount; /* Items in that pause menu list (PauseMenu/ChoosePauseMenu set it with pmenulist); bounds psitem and psfirst */
+    uint16_t pmenulist; /* Pause menu list shown (0-5): Pausemode_menu/ChoosePauseMenu pick it, SetupPauseScreen prints items and values by it, ... */
+    uint16_t pmenucount; /* Items in that pause menu list (Pausemode_menu/ChoosePauseMenu set it with pmenulist); bounds psitem and psfirst */
     uint16_t pregamepause; /* StartGame sets 1 when any pad has a team; StartPer then opens the pause menu at the start (startpause), ... */
     uint8_t RAMTag2[323]; /* Reset_Fast copies the 6 byte InitTag 'EACDSI' here (and to RAMTag and ReplayBufferEnd) after clearing RAM; ... */
     uint8_t HandleTable[1344]; /* handles of 4 bytes: address word, bank word (0,0 = free) */
@@ -691,14 +691,14 @@ struct G {
     uint16_t horblocks; /* Set while DrawHorTeams draws the blocks: DrawTeamBlocks skips the map when redrawblocks is 0, ... */
     uint16_t cardblock; /* Set while DrawPlayerCard draws its team block: DrawTeamBlocks moves the name sprites (x -8, +4 / +4). */
     uint16_t bigtextchar; /* RenderBigText: next letter tile (+2 per letter), used by the BigLetter hooks and by SendBigText / ... */
-    uint16_t drawlinesback; /* EditLinesScreen sets 1; DrawEditLinesTitle then draws DrawEditLinesBack first and clears it. */
-    uint16_t pausesubmenu; /* PauseEditLines / PauseShootoutSetup set it around EditLinesScreen / ShootoutShooters run from the pause ... */
+    uint16_t drawlinesback; /* LineEditor sets 1; DrawEditLinesTitle then draws DrawEditLinesBack first and clears it. */
+    uint16_t pausesubmenu; /* PauseEditLines / PauseShootoutSetup set it around LineEditor / ShootoutShooters run from the pause ... */
     uint16_t phototeams[2]; /* LoadMatchupPhotos: team (home +0, visitors +2) whose matchup photos are unpacked in the $7F photo buffer, ... */
     uint16_t homepicaddr; /* DrawPlayerPicture: bank $7F address of the home picture tiles ($6F00 or $5100+MatchupPhotoOffsets); ... */
     uint16_t vispicaddr; /* As homepicaddr for the visitors picture ($6900 or $2D00+MatchupPhotoOffsets). */
     uint16_t matchupphotos; /* ScoutingReport / setoptions set 1: DrawPlayerPicture takes the preloaded matchup photos ... */
-    uint16_t pausemenuon; /* PauseMenu sets $FFFF, Pausemode / Intermission clear it after; DrawHorTeams leaves the pulsing side ... */
-    uint16_t playerstatson; /* ShowPlayerStats sets 1 while it runs; DrawMatchupPictures then skips the picture DMA. */
+    uint16_t pausemenuon; /* Pausemode_menu sets $FFFF, Pausemode / Intermission clear it after; DrawHorTeams leaves the pulsing side ... */
+    uint16_t playerstatson; /* PlayerStatsScreen sets 1 while it runs; DrawMatchupPictures then skips the picture DMA. */
     uint16_t gamesstarted[33]; /* StartGame increments it right after clearing carriedy to playerstatson (count of games started; no reader found). */
     uint16_t OptPlayMode; /* Setup menu row 0 'Play Mode' (base of the 7-word option block setoptions edits; choices Regular Season .. ... */
     uint16_t OptTeam1; /* Setup row 1 'Home': setoptions copies it to HomeTeam; NewPO takes it as the user's team (93S OptTeam1). */
@@ -738,7 +738,7 @@ struct G {
     uint16_t ninetilechars; /* SetupScreen: first tile of FramerNineTileTiles (then +$1400 palette); FramerNineTile builds its box from it. */
     uint16_t outlinechars; /* SetupScreen / LoadScoutingScreen: first tile of FramerOutlineTiles (then +$1000); FramerOutline builds its ... */
     uint16_t ExtraChars; /* setupice: first tile after TeamBlocksTiles (the last set), as 93S setupice sta ExtraChars; no reader found. */
-    uint16_t nextfreechar; /* SetupScreen: running next free tile while it loads each set; ShowCrowdMeter puts CrowdMeterTiles there and ... */
+    uint16_t nextfreechar; /* SetupScreen: running next free tile while it loads each set; CrowdMeterScreen puts CrowdMeterTiles there and ... */
     uint16_t cupchars; /* PlayoffScreen: scorechars+$70, the StanleyCupTiles after the bracket tiles; StanleyCupMap is pasted with it. */
     uint16_t refcharshor; /* setupice: first tile of RefTilesHor; PushRef uses it on the horizontal rink, as 93S refcharshor. */
     uint16_t refchars[2]; /* setupice: first tile of RefTiles; PushRef uses it on the vertical rink, as 93S refchars. */
