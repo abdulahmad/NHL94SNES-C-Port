@@ -402,7 +402,7 @@ void SPCCmd06(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x21
 void SPCCmd0B(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x0B); io_w8(0x2140, 0); }
 void SPCCmd0C(uint8_t x, uint8_t y) { spc_wait(); io_w8(0x2142, y); io_w8(0x2141, x); spc_send(0x0C); io_w8(0x2140, 0); }
 /* Command $0E: the volume of voice x, a the left (APUIO2) and y the right (APUIO3) */
-void SPCCmd0E(uint8_t a, uint8_t x, uint8_t y)
+void SPCSetVolume(uint8_t a, uint8_t x, uint8_t y)
 {
     spc_wait();
     io_w8(0x2143, y); io_w8(0x2142, a); io_w8(0x2141, x);
@@ -412,7 +412,7 @@ void SPCCmd0E(uint8_t a, uint8_t x, uint8_t y)
 
 /* Command $02: the sample count (the result, a byte) and the free sound RAM pointer (*x, a
  * word: APUIO1 and APUIO2) */
-uint16_t SPCCmd02(uint16_t *x)
+uint16_t SPCStatus(uint16_t *x)
 {
     spc_wait();
     spc_send(0x02);
@@ -709,7 +709,7 @@ static void spc_ack(uint8_t cmd)
     while (io_r8(0x2140) != cmd) {}
 }
 /* Command $07: voice x's volume, sample and ADSR, 5 bytes from [p0] in two sends ($07, $81) */
-void SPCCmd07(uint8_t x, uint32_t p0)
+void SPCSetVoice(uint8_t x, uint32_t p0)
 {
     spc_wait();
     io_w8(0x2141, x);
@@ -733,7 +733,7 @@ static void spc_cmd5(uint8_t cmd, uint8_t cmd2, uint32_t p0)
 void SPCCmd08(uint32_t p0) { spc_cmd5(0x08, 0x82, p0); }
 void SPCCmd09(uint32_t p0) { spc_cmd5(0x09, 0x83, p0); }
 /* Command $0A: the 8 echo filter coefficients from [p0], in three sends ($0A, $84, $85) */
-void SPCCmd0A(uint32_t p0)
+void SPCSetFIR(uint32_t p0)
 {
     spc_wait();
     io_w8(0x2141, m8(p0)); io_w8(0x2142, m8(p0 + 1)); io_w8(0x2143, m8(p0 + 2));
@@ -1331,7 +1331,7 @@ uint16_t SPCStreamNext(void)
 /* Send the stream at [p0] through the sound CPU's boot loader: blocks of length, sound RAM address
  * and data, a length of 0 ending it with the start address (each block's kick value the last
  * index + 4, never 0) */
-void SPCIPLUpload(uint32_t p0)
+void SPCUpload(uint32_t p0)
 {
     uint16_t y = 0;
     while (io_r16(0x2140) != 0xBBAA) {}
@@ -3145,13 +3145,13 @@ uint16_t Decompress(uint32_t p0, uint32_t p1)
     return sz;
 }
 
-/* SPCUpload of the sample at [p0]: its loop point and length (big-endian words), then the BRR
+/* SPCSendSample of the sample at [p0]: its loop point and length (big-endian words), then the BRR
  * blocks from +4 (the sound locked meanwhile) */
 void SPCUploadBlock(uint32_t p0)
 {
     g.SoundLock[0]--;
     uint16_t lp = m16(p0), len = m16(p0 + 2);
-    SPCUpload((p0 & 0xFF0000) | (uint16_t)((uint16_t)p0 + 4), (uint16_t)(len << 8 | len >> 8), (uint16_t)(lp << 8 | lp >> 8));
+    SPCSendSample((p0 & 0xFF0000) | (uint16_t)((uint16_t)p0 + 4), (uint16_t)(len << 8 | len >> 8), (uint16_t)(lp << 8 | lp >> 8));
     g.SoundLock[0]++;
 }
 
@@ -3566,7 +3566,7 @@ void Reset_Fast(void)
     io_w8(0x4200, 0);
     io_w8(0x4201, 0xFF);
     for (x = 0x4207; x != 0x420C; x++) io_w8(x, 0);   /* ($4202-$4206 too: the multiplier, not hardware here) */
-    SPCIPLUpload(SYM_SoundDriver & 0xFFFF);
+    SPCUpload(SYM_SoundDriver & 0xFFFF);
     memset(&g, 0, sizeof g);
     for (int k = 5; k >= 0; k--) {
         uint8_t c = rom8(SYM_InitTag + k);

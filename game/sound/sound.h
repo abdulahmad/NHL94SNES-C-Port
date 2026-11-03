@@ -2,7 +2,7 @@
 #pragma once
 #include <stdint.h>
 
-void SPCUpload(uint32_t p0, uint16_t n, uint16_t y);
+void SPCSendSample(uint32_t p0, uint16_t n, uint16_t y);
 void FadeOutSound(void);
 void StreamSfx(uint16_t a);
 void SPCTitleToMenu(void);

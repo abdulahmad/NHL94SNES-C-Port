@@ -7,7 +7,7 @@
 
 /* Sound driver command 3: send the n (X) bytes of the sample at [p0] to the sound CPU, loop point
  * (the next sample slot) y, each byte through APUIO2 with its count on APUIO1 echoed back */
-void SPCUpload(uint32_t p0, uint16_t n, uint16_t y)
+void SPCSendSample(uint32_t p0, uint16_t n, uint16_t y)
 {
     while (io_r8(APUIO0)) {}
     io_w16(APUIO2, y);
@@ -341,7 +341,7 @@ static void stream_sfx(void)
             return;
         }
         uint16_t fr;
-        while (SPCCmd02(&fr) >= 0x0015) SPCCmd04();
+        while (SPCStatus(&fr) >= 0x0015) SPCCmd04();
         g.streamloaded = s;
         uint32_t t = SYM_UpdateStreamSfx_7 - 4 + (uint32_t)(uint16_t)(s << 2);
         w16(RAM_OFF_StreamSrc, rom16(t));
