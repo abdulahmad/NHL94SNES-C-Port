@@ -26,7 +26,7 @@ uint16_t PauseSubmenuDone(void)
 }
 
 /* The end of the player stats screen: player stats off */
-void ShowPlayerStats_exit(void) { g.playerstatson = 0; }
+void PlayerStatsScreen_exit(void) { g.playerstatson = 0; }
 
 /* Write the low byte of v to the line slot at a3 / read it */
 void WriteLineSlot(uint32_t a3, uint16_t v) { put8(a3, (uint8_t)v); }
@@ -3359,7 +3359,7 @@ void PlayerStatsScreen(void)
         Pad p = ReadPausePad();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held), d3 = p.held;
         if (d3 & 0x1000) {
-            ShowPlayerStats_exit();
+            PlayerStatsScreen_exit();
             return;
         }
         if (d3 & 0x0800) {

@@ -9,7 +9,7 @@ void TitleStub(void);
 void startpause(void);
 uint16_t PauseResumeRtl(void);
 uint16_t PauseSubmenuDone(void);
-void ShowPlayerStats_exit(void);
+void PlayerStatsScreen_exit(void);
 void WriteLineSlot(uint32_t a3, uint16_t v);
 uint16_t ReadLineSlot(uint32_t a3);
 void SetStatColumnPal(uint16_t column);
