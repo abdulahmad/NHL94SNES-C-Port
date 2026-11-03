@@ -2457,7 +2457,7 @@ uint16_t AskExitGame(void)
         SendTextMap();
         WaitFrame();
         ReadPads();
-        uint16_t d1 = ReadPausePad().press;
+        uint16_t d1 = getpzjoy().press;
         if (d1 & 0x1000) { g.curitem[0] = 0; break; }
         if (d1 & 0x8080) break;
         if (d1 & 0x0800) {
@@ -2938,7 +2938,7 @@ mark:
     WaitFrame();
     for (;;) {
         WaitFrame();
-        d3 = ReadPausePad().held;
+        d3 = getpzjoy().held;
         if (d3 & 0x1000) return;
         if (d3 & 0x0800) goto up;
         if (d3 & 0x0400) goto down;
@@ -2977,7 +2977,7 @@ scrolled:
     SendGameStatsPage();
     WaitFrame();
     g.irqvscroll1 = 0xFFFF;
-    d3 = ReadPausePad().held;
+    d3 = getpzjoy().held;
     if (d3 & 0x1000) return;
     if (d3 & 0x0800) goto up;
     if (!(d3 & 0x0400)) goto mark;
@@ -3042,7 +3042,7 @@ static void summary_page(uint32_t none, uint16_t empty, uint16_t y)
 static void summary_loop(uint32_t none, int repeat)
 {
     for (;;) {
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         if (repeat) ProcessInputWithRepeat(p.press, p.change, p.held);
         if (p.held & 0x1000) return;
         if (p.held & 0x0800) {
@@ -3124,8 +3124,8 @@ static void summary_screen(uint32_t label, uint16_t lx, uint32_t head, uint32_t 
 }
 
 /* The penalty summary and the scoring summary screens */
-void ShowPenaltySummary(void) { summary_screen(SYM_PenaltiesLabel, 0x58, SYM_PenaltySummaryHead, SYM_NoPenalties, 1); }
-void ShowScoringSummary(void) { summary_screen(SYM_ScoringLabel, 0x5E, SYM_ScoringSummaryHead, SYM_NoScoring, 0); }
+void PenaltySummaryScreen(void) { summary_screen(SYM_PenaltiesLabel, 0x58, SYM_PenaltySummaryHead, SYM_NoPenalties, 1); }
+void ScoringSummaryScreen(void) { summary_screen(SYM_ScoringLabel, 0x5E, SYM_ScoringSummaryHead, SYM_NoScoring, 0); }
 
 /* The other scores' rows shown to VRAM $0140, or "no other games" */
 void DrawOtherScoresPage(void) { summary_page(SYM_NoOtherGames, 1, 0x0140); }
@@ -3135,7 +3135,7 @@ void DrawOtherScoresPage(void) { summary_page(SYM_NoOtherGames, 1, 0x0140); }
 static void otherscores_loop(void)
 {
     for (;;) {
-        uint16_t d3 = ReadPausePad().held;
+        uint16_t d3 = getpzjoy().held;
         if (d3 & 0x1000) return;
         if (d3 & 0x0800) {
             ClearOtherScoreBraces();
@@ -3239,8 +3239,8 @@ static uint16_t pause_screen(uint16_t d1, void (*show)(void))
     return PauseSubmenuDone();
 }
 uint16_t PauseGameStats(uint16_t d1) { return pause_screen(d1, StatsReport); }
-uint16_t PausePenaltySummary(uint16_t d1) { return pause_screen(d1, ShowPenaltySummary); }
-uint16_t PauseScoringSummary(uint16_t d1) { return pause_screen(d1, ShowScoringSummary); }
+uint16_t PausePenaltySummary(uint16_t d1) { return pause_screen(d1, PenaltySummaryScreen); }
+uint16_t PauseScoringSummary(uint16_t d1) { return pause_screen(d1, ScoringSummaryScreen); }
 uint16_t PauseOtherScores(uint16_t d1) { return pause_screen(d1, ShowScores); }
 uint16_t PauseTeamRoster(uint16_t d1) { return pause_screen(d1, TeamRosterScreen); }
 
@@ -3317,7 +3317,7 @@ void PeriodStatsScreen(void)
         SendTextMap();
         WaitFrame();
         ReadPads();
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
         if (d1 & 0x1000) return;
         if (d1 & 0x4000) {
@@ -3356,7 +3356,7 @@ void PlayerStatsScreen(void)
     ScreenOn();
     for (;;) {
         ReadPads();
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held), d3 = p.held;
         if (d3 & 0x1000) {
             PlayerStatsScreen_exit();
@@ -3558,7 +3558,7 @@ void PlayerCards(void)
     for (;;) {
         WaitFrame();
         ReadPads();
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
         if (d1 & 0x1000) return;
         if (d1 & 0x0100) {
@@ -3694,7 +3694,7 @@ void CrowdMeterScreen(void)
             SendTextMap();
             WaitFrame();
             ReadPads();
-            Pad p = ReadPausePad();
+            Pad p = getpzjoy();
             uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
             if (d1 & 0x1000) return;
             if (d1 & 0x0800) {
@@ -3826,7 +3826,7 @@ uint16_t LineEditorExit(uint16_t a2)
         SendTextMap();
         WaitFrame();
         ReadPads();
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
         if (d1 & 0x9080) {
             if (!g.linemenuitem[0]) return 0xFFFF;
@@ -3861,7 +3861,7 @@ void LineEditor(void)
         SendTextMap();
         WaitFrame();
         ReadPads();
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
         if (d1 & 0x1000) {
             if (LineEditorExit(a2)) return;

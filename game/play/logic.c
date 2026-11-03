@@ -338,8 +338,8 @@ static void dumpin_lob(int o, int a3)
 {
     uint16_t d4 = (uint16_t)((uint16_t)(0xF - g.passacc[o]) << 1);
     uint16_t y = g.dumpintarget;
-    uint16_t d0 = (uint16_t)(randomd0s((uint16_t)(rom16(SYM_assdumpin_6 + y) + d4)) + rom16(SYM_assdumpin_8 + y) - g.Xpos[14]);
-    uint16_t d1 = (uint16_t)(randomd0s((uint16_t)(rom16(SYM_assdumpin_7 + y) + d4)) + rom16(SYM_assdumpin_ytab + y) - g.pucky[0]);
+    uint16_t d0 = (uint16_t)(randomas((uint16_t)(rom16(SYM_assdumpin_6 + y) + d4)) + rom16(SYM_assdumpin_8 + y) - g.Xpos[14]);
+    uint16_t d1 = (uint16_t)(randomas((uint16_t)(rom16(SYM_assdumpin_7 + y) + d4)) + rom16(SYM_assdumpin_ytab + y) - g.pucky[0]);
     uint16_t d2 = ApproxLength(d1, d0);
     uint16_t a = DivX8U((uint16_t)(d2 << 4), 0x78);
     if (a >= 0x60) a = 0x60;
@@ -2193,8 +2193,8 @@ static void off_spot(int o, uint32_t tab, uint16_t d2, uint16_t seed)
 {
     if (d2 == (uint16_t)g.temp5[o] && seed >= 0x200) return;
     g.temp5[o] = (int16_t)d2;
-    g.temp3[o] = (int16_t)(randomd0s(m16(tab + d2 + 2)) + m16(tab + d2));
-    g.temp4[o] = (int16_t)(randomd0s(m16(tab + d2 + 6)) + m16(tab + d2 + 4));
+    g.temp3[o] = (int16_t)(randomas(m16(tab + d2 + 2)) + m16(tab + d2));
+    g.temp4[o] = (int16_t)(randomas(m16(tab + d2 + 6)) + m16(tab + d2 + 4));
 }
 
 /* (asswingo / asscentero: d2 = the zone of puck y d0 (lead d3) seen from the player's goal: 0 back,
@@ -3740,7 +3740,7 @@ static void pass_launch(uint16_t a0, uint16_t a2, uint16_t d2, uint16_t d3, uint
 {
     g.passspeed = d5;
     int x = g.curobj >> 1;
-    d5 = (uint16_t)(randomd0s((uint16_t)(0x10 - g.passacc[x])) + d5);
+    d5 = (uint16_t)(randomas((uint16_t)(0x10 - g.passacc[x])) + d5);
     g.puckvx[0] = (int16_t)(Div32S(Mul16x8XS(d2, d5), d4) << 8);
     g.puckvy[0] = (int16_t)(Div32S(Mul16x8XS(d3, d5), d4) << 8);
     g.passtargetx = (uint16_t)(d2 + g.Xpos[14]);
@@ -3901,11 +3901,11 @@ void doshot(int o, int a3)
             if (d3 < 0xFB) d0 >>= 1;
             if (d0 >= sideline) d0 = sideline;
             uint16_t spread = d0;
-            ax = (uint16_t)(randomd0s(d0) + ax);
+            ax = (uint16_t)(randomas(d0) + ax);
             d0 = spread;
             if (d0 >= 0x3D) { d0 = 0x3C; spread = 0x3C; }
             if (ay & 0x8000) d0 >>= 1;
-            ay = (uint16_t)(ay + randomd0sd0(d0));
+            ay = (uint16_t)(ay + randomd0s(d0));
             height = (uint16_t)(randomd0A(spread >> 1) + height);
         }
         g.puckvx[0] = (int16_t)(Div32S(Mul16S(Mul8XS(0x44, g.passspeed), ax), d3) << 1);

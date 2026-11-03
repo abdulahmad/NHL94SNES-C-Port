@@ -222,7 +222,7 @@ void ShooterSelectList(uint16_t a2)
         SendTextMap2();
         WaitFrame();
         ReadPads();
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
         if (d1 & 0x1000) break;
         if (d1 & 0x0800) {
@@ -291,7 +291,7 @@ void ShootoutShooters(void)
             SendTextMap();
             WaitFrame();
             ReadPads();
-            Pad p = ReadPausePad();
+            Pad p = getpzjoy();
             uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
             if (d1 & 0x0800) {
                 if (g.curitem[0]) {

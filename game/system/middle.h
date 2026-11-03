@@ -4,7 +4,7 @@
 
 uint16_t randomd0A(uint16_t limit);
 uint16_t Mod100(uint16_t d0);
-uint16_t randomd0sd0(uint16_t d0);
+uint16_t randomd0s(uint16_t d0);
 uint32_t ConvertByteToDigits(uint16_t d0, uint32_t a1);
 uint32_t PushNumberWidth(uint16_t d0, uint16_t d1, uint16_t *a);
 uint32_t PushNumberWrap(uint16_t d0, uint16_t d1, uint16_t *a);
@@ -14,7 +14,7 @@ void FramerOutline(uint16_t d0, uint16_t d1);
 void ReadPads(void);
 
 uint16_t randomd0(uint16_t n);
-uint16_t randomd0s(uint16_t n);
+uint16_t randomas(uint16_t n);
 void marktexthi(uint16_t a);
 void marktextlo(uint16_t a);
 void updatescroll(void);

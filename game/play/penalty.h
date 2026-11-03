@@ -2,7 +2,7 @@
 #pragma once
 #include <stdint.h>
 
-uint16_t Intermission_tick_done(void);
+uint16_t IntermissionTick_done(void);
 void nullrtl89(void);
 uint32_t AdvanceStringPtr(uint32_t a1, uint16_t n);
 uint16_t loadTeamStruct(int o);
@@ -61,8 +61,8 @@ void PenaltyManager(void);
 void NewTicker2(void);
 void NewTicker3(uint16_t d3);
 void NewTicker(void);
-void InitTicker(void);
-void TickerNext(void);
+void Intermission_ticker(void);
+void NewTicker2_next(void);
 void DoHiLights(void);
 uint16_t Intermission_tick(void);
 void Intermission(void);

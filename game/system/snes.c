@@ -75,13 +75,13 @@ void spc_send(uint8_t cmd)
     while (io_r8(0x2140) != cmd) {}
 }
 static void spc_cmd(uint8_t cmd) { spc_wait(); spc_send(cmd); io_w8(0x2140, 0); }
-void SPCCmd01(void) { spc_cmd(0x01); }
-void SPCCmd04(void) { spc_cmd(0x04); }
-void SPCCmd0D(void) { spc_cmd(0x0D); }
-void SPCCmd05(uint8_t x) { spc_wait(); io_w8(0x2141, x); spc_send(0x05); io_w8(0x2140, 0); }
-void SPCCmd06(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x06); io_w8(0x2140, 0); }
-void SPCCmd0B(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x0B); io_w8(0x2140, 0); }
-void SPCCmd0C(uint8_t x, uint8_t y) { spc_wait(); io_w8(0x2142, y); io_w8(0x2141, x); spc_send(0x0C); io_w8(0x2140, 0); }
+void SPCReset(void) { spc_cmd(0x01); }
+void SPCUnload(void) { spc_cmd(0x04); }
+void SPCKeyOffAll(void) { spc_cmd(0x0D); }
+void SPCKeyOff(uint8_t x) { spc_wait(); io_w8(0x2141, x); spc_send(0x05); io_w8(0x2140, 0); }
+void SPCKeyOn(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x06); io_w8(0x2140, 0); }
+void SPCSetPitch(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x0B); io_w8(0x2140, 0); }
+void SPCSetGain(uint8_t x, uint8_t y) { spc_wait(); io_w8(0x2142, y); io_w8(0x2141, x); spc_send(0x0C); io_w8(0x2140, 0); }
 
 /* Sequencer: command $0C (the GAIN DSPGain of voice y); then $0B (the pitch SendPitch of voice y) */
 static void seq_cmd0c(uint8_t y) { spc_wait(); io_w8(0x2142, g.DSPGain); io_w8(0x2141, y); spc_send(0x0C); io_w8(0x2140, 0); }
@@ -91,7 +91,7 @@ void SeqCmd0C0B(uint8_t y) { seq_cmd0c(y); SeqCmd0B(y); }   /* (its own copy of 
 /* Handles: 64 entries of an address word and a bank word at $2000-$20FF (0, 0 = free) */
 
 /* ReadjoyA for the controller that owns the pause menu */
-Pad ReadPausePad(void) { return ReadjoyA(g.pausepad >> 1); }
+Pad getpzjoy(void) { return ReadjoyA(g.pausepad >> 1); }
 
 void WaitFrames_Inc(uint16_t x, uint16_t y) { WaitFrames(x, (uint16_t)(y + 1)); }
 
@@ -112,7 +112,7 @@ void spc_ack(uint8_t cmd)
     io_w8(0x2140, cmd);
     while (io_r8(0x2140) != cmd) {}
 }
-/* (SPCCmd08 and SPCCmd09: 5 bytes from [p0] in two sends, cmd with the first three, cmd2 with the
+/* (SPCSetMaster and SPCSetEcho: 5 bytes from [p0] in two sends, cmd with the first three, cmd2 with the
  * last two) */
 static void spc_cmd5(uint8_t cmd, uint8_t cmd2, uint32_t p0)
 {
@@ -123,8 +123,8 @@ static void spc_cmd5(uint8_t cmd, uint8_t cmd2, uint32_t p0)
     spc_ack(cmd2);
     io_w8(0x2140, 0);
 }
-void SPCCmd08(uint32_t p0) { spc_cmd5(0x08, 0x82, p0); }
-void SPCCmd09(uint32_t p0) { spc_cmd5(0x09, 0x83, p0); }
+void SPCSetMaster(uint32_t p0) { spc_cmd5(0x08, 0x82, p0); }
+void SPCSetEcho(uint32_t p0) { spc_cmd5(0x09, 0x83, p0); }
 
 /* Fill the text map with the blank tile (textmap2 with charofs2; from row 12 down) */
 void ClearTextMap(void) { MemFill(0x7E0000 + RAM_OFF_textmap, 0x0800, (uint16_t)(g.blankchar + g.charofs)); }

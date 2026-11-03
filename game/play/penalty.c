@@ -2,7 +2,7 @@
 #include "game.h"
 
 /* The intermission ticker's nothing to report: A = 0 */
-uint16_t Intermission_tick_done(void) { return 0; }
+uint16_t IntermissionTick_done(void) { return 0; }
 
 /* Does nothing */
 void nullrtl89(void) {}
@@ -1246,8 +1246,8 @@ static void ticker_start(void)
     }
     NewTicker2();
 }
-void InitTicker(void) { ticker_start(); }
-void TickerNext(void) { ticker_start(); }
+void Intermission_ticker(void) { ticker_start(); }
+void NewTicker2_next(void) { ticker_start(); }
 
 /* Playoffs: the highlight of each game of the round still pending (and not played out) */
 void DoHiLights(void)
@@ -1271,14 +1271,14 @@ void DoHiLights(void)
 uint16_t Intermission_tick(void)
 {
     while (g.demoflag && (uint16_t)(g.vcount[0] - g.tickervc) >= 0x150) {
-        TickerNext();
+        NewTicker2_next();
         if (g.tickerstart[0] == g.TickerNum) {
             DoHiLights();
             g.sflags3[0] &= (uint16_t)~0x0008;
             break;
         }
     }
-    return Intermission_tick_done();
+    return IntermissionTick_done();
 }
 
 /* Between periods: both teams set up, the ticker started, the pause controller the first pad with a team
@@ -1293,7 +1293,7 @@ void Intermission(void)
     g.pausetimer = 0x0708;
     g.demoflag = 1;
     g.tickervc = (uint16_t)(g.vcount[0] - 0x150);
-    InitTicker();
+    Intermission_ticker();
     g.tickerstart[0] = g.TickerNum;
     g.psfirst = 0;
     g.psitem = 0;

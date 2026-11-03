@@ -665,7 +665,7 @@ struct G {
     uint16_t fofdata[2]; /* Frame / attribute of the faceoff ref: updatefaceoff stores the drop frame here (93S sta fofdata); ... */
     uint16_t fox; /* Faceoff spot x: limitfo clamps it, puckfaceoff2 puts it in puckx, StartPer clears it, StartPenaltyShot ... */
     uint16_t foy; /* Faceoff spot y: limitfo compares / sets it against the blue line (93S foy), puckfaceoff2 puts it in pucky, ... */
-    uint16_t ScoreSumbytes[301]; /* Goal adds 6 per goal (capped at $258) and writes the goal at ScoreSum+it; ShowScoringSummary loops on it; ... */
+    uint16_t ScoreSumbytes[301]; /* Goal adds 6 per goal (capped at $258) and writes the goal at ScoreSum+it; ScoringSummaryScreen loops on it; ... */
     uint16_t hatx[10]; /* UpdateHatTrick: x (12.4 fixed) of each of the ten hats, plus hatvx each step, >>4 for the DrawSprite x. */
     uint16_t haty[10]; /* UpdateHatTrick: y of each hat (12.4), plus hatvy each step, used for the hat and its shadow. */
     uint16_t hatz[10]; /* UpdateHatTrick: height of each hat, lowered by hatvz until 0 (landed); subtracted from y for the hat sprite. */

@@ -47,9 +47,9 @@ void StreamSfx(uint16_t a)
 void SPCTitleToMenu(void)
 {
     g.cursong = 0;
-    SPCCmd04();
-    SPCCmd04();
-    SPCCmd04();
+    SPCUnload();
+    SPCUnload();
+    SPCUnload();
     SPCUploadBlock(SYM_SampleTimp);
     SPCUploadBlock(SYM_SampleDist);
     SPCUploadBlock(SYM_SamplePlayoffOrgan);
@@ -341,7 +341,7 @@ static void stream_sfx(void)
             return;
         }
         uint16_t fr;
-        while (SPCStatus(&fr) >= 0x0015) SPCCmd04();
+        while (SPCStatus(&fr) >= 0x0015) SPCUnload();
         g.streamloaded = s;
         uint32_t t = SYM_UpdateStreamSfx_7 - 4 + (uint32_t)(uint16_t)(s << 2);
         w16(RAM_OFF_StreamSrc, rom16(t));
@@ -378,7 +378,7 @@ static void sample_upload(uint16_t bank, uint32_t table, uint32_t list, uint16_t
     forceblack();
     g.sndbank[0] = bank;
     g.SoundLock[0]--;
-    SPCCmd01();
+    SPCReset();
     g.SoundLock[0]++;
     g.SoundTable = table;
     SoundInit();
@@ -454,7 +454,7 @@ void SeqCmd0B(uint8_t y)
  * (the volume and pitch modulation) and $82 (noise and echo voices) */
 void SeqCmd08Init(void)
 {
-    SPCCmd0D();
+    SPCKeyOffAll();
     g.PitchModVoices = g.NoiseVoices = g.EchoVoices = g.EchoDelay = g.EchoVolume = g.EchoFeedback = 0;
     SeqCmd08Init_send();
 }

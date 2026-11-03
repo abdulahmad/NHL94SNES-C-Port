@@ -415,7 +415,7 @@ uint16_t SelectLinePlayer(uint16_t a2, uint16_t r7)
         SendTextMap2();
         WaitFrame();
         ReadPads();
-        Pad pd = ReadPausePad();
+        Pad pd = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(pd.press, pd.change, pd.held);
         if (d1 & 0x1000) return 0xFFFF;
         if (d1 & 0x8080) return (uint16_t)(g.picktop[0] + g.pickrows[0] - g.curplayer[0]);
@@ -481,7 +481,7 @@ redraw:
         SendTextMap();
         WaitFrame();
         ReadPads();
-        Pad pd = ReadPausePad();
+        Pad pd = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(pd.press, pd.change, pd.held);
         if (d1 & 0x1000) return;
         if (d1 & 0x4000) {

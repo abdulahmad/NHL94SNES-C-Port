@@ -16,8 +16,8 @@ uint16_t Mod100(uint16_t d0)
     return d0;
 }
 
-/* randomd0s with the range in d0: a random number from -d0 to d0-1 (clears the carry) */
-uint16_t randomd0sd0(uint16_t d0)
+/* randomas with the range in d0: a random number from -d0 to d0-1 (clears the carry) */
+uint16_t randomd0s(uint16_t d0)
 {
     uint16_t v = (uint16_t)(randomd0A((uint16_t)(d0 << 1)) - d0);
     cf = 0;
@@ -133,7 +133,7 @@ static uint16_t asl(uint16_t a, unsigned *c) { *c = a >> 15; return (uint16_t)(a
 uint16_t randomd0(uint16_t n) { return randomd0A(n); }
 
 /* A random number from -n to n-1 */
-uint16_t randomd0s(uint16_t n) { return (uint16_t)(randomd0A((uint16_t)(n << 1)) - n); }
+uint16_t randomas(uint16_t n) { return (uint16_t)(randomd0A((uint16_t)(n << 1)) - n); }
 
 /* Raise the high end of the changed text map area to a */
 void marktexthi(uint16_t a) { if (a >= g.textdirtyhi) g.textdirtyhi = a; }

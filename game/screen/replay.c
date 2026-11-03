@@ -308,7 +308,7 @@ view:
 frame:
     WaitFrames_Inc(g.d7 ? g.d7 : 1, 0);
     ReadPads();
-    pd = ReadPausePad();
+    pd = getpzjoy();
     g.d7 = 1;
     if (!(pd.dir & 8)) {
         uint16_t d5 = pd.dir, d4 = 0xFFFF, best = 0xFFFF;
@@ -335,7 +335,7 @@ frame:
             g.sflags &= (uint16_t)~0x20;
             goto view;
         }
-        pd = ReadPausePad();
+        pd = getpzjoy();
         g.replaylock = 0xFFFE;
         g.sflags |= 0x20;
         uint16_t c = pd.dir >> 14 & 1, y = (uint16_t)(pd.dir << 2);   /* (the second asl's carry, into the adc) */
