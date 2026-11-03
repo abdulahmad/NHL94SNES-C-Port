@@ -68,7 +68,7 @@ uint32_t AttribEnergy(uint16_t d0, uint16_t a2)
 }
 
 /* Roster column: left or right handed (string 1 - bit 0 of d0 of HandedTextTbl); returns a1 past it */
-uint32_t AttribHanded(uint16_t d0) { return PrintStringFromList((d0 & 1) ^ 1, SYM_HandedTextTbl); }
+uint32_t AttribHanded(uint16_t d0) { return Fprint((d0 & 1) ^ 1, SYM_HandedTextTbl); }
 
 /* Roster column: player d0 of team a2's status from tmpdst: a negative word a state (StatusTextTbl
  * 0-3, larger ones 1), bit 12 state 3, otherwise a penalty time and string 4 (5 with bit 14) */
@@ -84,7 +84,7 @@ uint32_t AttribStatus(uint16_t d0, uint16_t a2)
         print(PushTime(s & 0x0FFF));
         s = s & 0x4000 ? 5 : 4;
     }
-    return PrintStringFromList(s, SYM_StatusTextTbl);
+    return Fprint(s, SYM_StatusTextTbl);
 }
 
 /* Print player d0 of team a2's number and name, then at column $19 ($1A out of the pause menu) the

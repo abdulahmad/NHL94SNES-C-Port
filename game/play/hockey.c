@@ -1286,7 +1286,7 @@ void ShowThreeStars(void)
             d3 = 1;
             a2 = 2;
         }
-        printteamname(d3);
+        printscores1_ps_name(d3);
         g.printy = (uint16_t)(5 + k);
         g.printx = 0x11;
         print(PlayerInitialName(a2, *stars[k]));
@@ -2507,7 +2507,7 @@ void SelectPauseController(uint16_t *d1, uint16_t *d3)
     for (;;) {
         ShowMP5Warning();
         PulsePauseSide();
-        if (IntermissionTick()) goto timeout;
+        if (Intermission_tick()) goto timeout;
         SpriteFrameStart();
         setvideo();
         WaitFrame();

@@ -2130,9 +2130,9 @@ void puckfaceoff2(int o, int a3)
         if (!(g.gmode & gmdir)) { l0 = g.tmline[1]; l1 = g.tmline[0]; }
         g.printx++;
         g.printy -= 2;
-        PrintStringFromList(l0, SYM_linelist);
+        Fprint(l0, SYM_linelist);
         g.printx += 4;
-        PrintStringFromList(l1, SYM_linelist);
+        Fprint(l1, SYM_linelist);
     }
     {
         uint16_t r = RandomWord();

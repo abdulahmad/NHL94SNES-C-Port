@@ -457,7 +457,7 @@ uint16_t SetLCmode2(uint16_t a2)
         w16(RAM_OFF_mesarea, 4);
         w16(RAM_OFF_mesarea + 2, (uint16_t)((m16(SYM_LineChangeButtons + d4) & 0xFF) | 0x2000));
         print(RAM_OFF_mesarea);
-        PrintStringFromList(d0, SYM_linelist);
+        Fprint(d0, SYM_linelist);
         d0 = linebar(a2, d0);
         g.printy--;
     }

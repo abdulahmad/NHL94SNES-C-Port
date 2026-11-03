@@ -471,7 +471,7 @@ struct G {
     uint16_t tmPenalties[2]; /* penalties */
     uint16_t tmPenmin[2]; /* penalty minutes */
     uint16_t tmATOP[2]; /* attack zone time (chkatop) */
-    uint16_t tmPwrPlayTime[2]; /* power play time (CountPowerPlayTime) */
+    uint16_t tmPwrPlayTime[2]; /* power play time (updatePPTeamTime) */
     uint16_t tmPPShots[2]; /* power play shots (ChkShotStat) */
     uint16_t tmSHShots[2]; /* shorthanded shots (ChkShotStat; not on the stats screen) */
     uint16_t tmSHGoals[2]; /* shorthanded goals */
@@ -749,7 +749,7 @@ struct G {
     uint16_t gamenum; /* FigureJoy stores -1 or the user's game index and InitScores skips that game, as 93S gamenum. */
     uint16_t vcountfrac; /* NMI_Tick: fraction accumulator; its carry adds an extra vcount tick. */
     uint16_t vcountstep; /* CheckPAL: 0 on NTSC, $3333 on PAL; NMI_Tick adds it to vcountfrac each frame (60 / 50 time step). */
-    uint16_t tickerstart[2]; /* Intermission saves TickerNum here; IntermissionTick plays DoHiLights when the ticker comes round to it, as ... */
+    uint16_t tickerstart[2]; /* Intermission saves TickerNum here; Intermission_tick plays DoHiLights when the ticker comes round to it, as ... */
     uint16_t Crowdlevel; /* crowd noise level: raised by the play, fades every frame */
     uint16_t SPCStreamLeft[2]; /* bytes of the sound stream still to send */
     uint16_t streamsfx; /* the streamed sound effect asked for (1-6, StreamSfx), 0 none */

@@ -61,7 +61,7 @@ void setoptions_10(uint16_t *a2)
         if (!t) continue;
         if (t & 0x8000) a1 = SYM_PlayoffSetupNames;
         g.printx = 3;
-        PrintStringFromList(x >> 1, a1);
+        Fprint(x >> 1, a1);
         g.printx = 0x11;
         g.d7 = x;
         setoptions_7(0, a2);
