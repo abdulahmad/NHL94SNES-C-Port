@@ -29,3 +29,4 @@
 #include "sound/sound.h"
 #include "menus/stats.h"
 #include "system/middle.h"
+#include "system/decompress.h"

@@ -149,9 +149,6 @@ void UpdateVoices(void);
 void PlayTeamSong(uint16_t a);
 uint16_t HeapAllocBlock(uint32_t bank, uint16_t y, uint16_t want, uint16_t flags);
 uint16_t FillVRAMSplit(uint16_t a, uint16_t x, uint16_t y);
-void DecompressRLE(uint8_t db, uint16_t y);
-void DecompressLZ(uint32_t p0, uint32_t p1);
-void DecompressPairs(uint8_t db, uint16_t y);
 uint16_t LoadFrameTiles(uint32_t p0, uint16_t x);
 uint16_t FindCachedFrame(uint32_t p0, uint16_t x, uint16_t y);
 uint16_t GetFrameTiles(uint32_t p0, uint16_t x);
@@ -189,8 +186,6 @@ void Mode7MapToVRAM_t1(uint32_t p0, uint32_t p1, uint16_t a, uint16_t x, uint16_
 void Multi5ConnectCheck(void);
 void Multi5Init(void);
 void Multi5Bios(uint8_t b);
-void DecompressHuffman(uint8_t db, uint32_t p0, uint32_t p1);
-uint16_t Decompress(uint32_t p0, uint32_t p1);
 void SPCUploadBlock(uint32_t p0);
 void IRQ(void);
 void NMI(void);
