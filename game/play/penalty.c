@@ -927,7 +927,7 @@ void SetHor(void)
     g.Oldrow = 0x2E;
     g.vramrow[0] = 0;
     SprSort();
-    StatsReport();
+    SetHor_rink();
 }
 
 /* Start the referee animation of penalty d0 and its message (the goal box for a goal), the message time

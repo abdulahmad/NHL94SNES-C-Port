@@ -51,7 +51,7 @@
 #define PWrange 0x001E  /* characters in PasstoText */
 #define ReplayBufferStart 0x7E577E  /* first replay frame record */
 #define replaysize 0x007A  /* bytes per replay frame record */
-#define rinkmapbuf 0x7FC800  /* BuildRinkMap unpacks IceRinkMap here and pastes the centre ice logo at +$10B6; ReplayMode and StatsReport send parts of it to VRAM */
+#define rinkmapbuf 0x7FC800  /* BuildRinkMap unpacks IceRinkMap here and pastes the centre ice logo at +$10B6; ReplayMode and SetHor_rink send parts of it to VRAM */
 #define rosterNone 0xFFFC  /* no roster slot (beside TMPDOUT in bench checks) */
 #define ScoreSum 0x7E313C  /* Extra, not in the list (only as an immediate): the goal log Goal writes 6 bytes per goal into (93S ... */
 #define sf2drec 0x0400  /* disable replay record */

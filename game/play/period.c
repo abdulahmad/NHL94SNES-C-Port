@@ -14,7 +14,7 @@ uint16_t GetTeamRating(uint16_t a2)
 /* Clear the text screen and draw the horizontal rink's scoreboard background: the screen erased
  * between its two print positions, the two halves of the rink map (rinkmapbuf, columns 0 and $10
  * of row $55, 32 by 28) to the screen maps at $0400 and $0800, then USBoard. */
-void StatsReport(void)
+void SetHor_rink(void)
 {
     print(SYM_StatsReportPos);
     eraser(0x20, 0x1D, g.blankchar);

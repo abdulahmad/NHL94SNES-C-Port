@@ -8929,7 +8929,7 @@
 #define SYM_InitScores_4 0x9FC873u
 #define SYM_InitScores_5 0x9FC87Bu
 #define SYM_InitScoutDisplay 0x9FC87Cu
-#define SYM_StatsReport 0x9FC896u
+#define SYM_SetHor_rink 0x9FC896u
 #define SYM_GetPlayerCount 0x9FC93Du
 #define SYM_GetPlayerCount_count 0x9FC95Bu
 #define SYM_addteamstat 0x9FC975u
