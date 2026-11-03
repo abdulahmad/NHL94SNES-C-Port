@@ -1,5 +1,7 @@
 # NHL '94 in C (SNES)
 
+> **Credits:** built on [NHL94SNES](https://github.com/abdulahmad/NHL94SNES) by abdulahmad, with chaos, StaticEck, McMarkis (Mhopkinsinc) and Drezz, and special thanks to smozoma and kingraph. See [Credits](#credits).
+
 The whole of NHL '94 for the SNES as C code: about 21,000 lines, one
 file per module of the original assembly and one function per routine, each named after its
 original label. It plays as the cartridge does, at the cartridge's speed (Game Speed Original, the
@@ -98,3 +100,14 @@ chip is a port of [ares](https://github.com/ares-emulator/ares)'s (ISC licence,
 `runtime/LICENSE-ares`); the controller setup screen, its font and the settings file are
 [pulseman](https://github.com/1nputs/pulseman)'s (MIT, `platform/LICENSE`). The rest is iDNi
 Studios' (MIT, `LICENSE`).
+
+## Credits
+
+This port is built on the community's byte-matching disassembly **NHL94SNES** by
+**abdulahmad** (https://github.com/abdulahmad/NHL94SNES): every routine, RAM and file name here comes from it. Thanks to
+**chaos**, **StaticEck**, **McMarkis (Mhopkinsinc)** and **Drezz** for their help with that
+disassembly, with special thanks to **smozoma** and **kingraph**. The C is **iDNi Studios**' (INDIO), from its earlier ninety-four-snes; the controller setup, its font and the settings file are from **1nput**'s [pulseman](https://github.com/1nputs/pulseman).
+
+Anyone building on this repository (a mod, hack, port, fork or release) must carry this credit,
+near the top of their README and in the notes of every release and any text file shipped in a
+release archive. See AGENTS.md.
