@@ -14,6 +14,10 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 
 * `test/golden.c` crashed every run on Linux (glibc declares `strtok_r` only for POSIX builds; MinGW always). Fixed with
   `_POSIX_C_SOURCE`. Then `bash test/check.sh ROM`: 7 of 7 identical (Linux, GCC 13).
+* Renames: 92 routines renamed to the NHL94SNES labels (`tools/rename_routines.py --module M`, one asm module a
+  commit), `test/check.sh` 7 of 7 after each and the clock's routine table unchanged (851). The names gate now treats
+  an asm local `Parent.x` as the C `Parent_x`. Status: ok 397 (was 334), other module 299, renamed 6 (parked, see
+  docs/RULES.md), missing 4.
 
 ## Next, in order
 
@@ -22,8 +26,8 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 2. Otherwise build them (plan S2): a libretro SNES core with a CPU hook, recorded sessions, a lockstep player in
    `test/oracle/`, resyncing at lag frames as 1nput's Genesis player does.
 3. Coverage report (plan S3), and the cost model measured against the oracle (plan S4).
-4. Renames (99 functions, `python3 tools/check_names.py --list renamed`), then the re-cut to the NHL94SNES folders
-   (`--list other_module`), one asm module per unit. The names gate and `test/check.sh` must stay green.
+4. ~~Renames~~ (done but 6 parked). Next: the re-cut to the NHL94SNES folders (`--list other_module`, 299), one asm
+   module per unit. The names gate, `test/check.sh` and the clock table's size must stay the same.
 
 ## Needs
 
