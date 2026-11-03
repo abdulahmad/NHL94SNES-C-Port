@@ -30,3 +30,4 @@
 #include "menus/stats.h"
 #include "system/middle.h"
 #include "system/decompress.h"
+#include "system/main.h"
