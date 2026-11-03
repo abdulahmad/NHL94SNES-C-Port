@@ -24,7 +24,7 @@ def main():
     subprocess.run(['python3', 'tools/move_functions.py', src, dst, '--module', module], cwd=ROOT, check=True)
     for _ in range(30):
         rc, out = build()
-        implicit = sorted(set(re.findall(r"implicit declaration of function '(\w+)'", out)))
+        implicit = sorted(set(re.findall(r"implicit declaration of function ['\u2018](\w+)['\u2019]", out)))
         if rc == 0 and not implicit:
             print('builds, no warnings' if 'warning:' not in out else 'builds, with warnings:\n' + '\n'.join(l for l in out.splitlines() if 'warning:' in l))
             return 0

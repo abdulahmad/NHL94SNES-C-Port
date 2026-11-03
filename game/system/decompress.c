@@ -444,13 +444,3 @@ uint16_t Decompress(uint32_t p0, uint32_t p1)
     }
     return sz;
 }
-
-/* SPCSendSample of the sample at [p0]: its loop point and length (big-endian words), then the BRR
- * blocks from +4 (the sound locked meanwhile) */
-void SPCUploadBlock(uint32_t p0)
-{
-    g.SoundLock[0]--;
-    uint16_t lp = m16(p0), len = m16(p0 + 2);
-    SPCSendSample((p0 & 0xFF0000) | (uint16_t)((uint16_t)p0 + 4), (uint16_t)(len << 8 | len >> 8), (uint16_t)(lp << 8 | lp >> 8));
-    g.SoundLock[0]++;
-}
