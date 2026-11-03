@@ -417,7 +417,7 @@ void pplpen(uint16_t a2, uint16_t d0)
     } while (!((d0 = (uint16_t)(d0 - 1)) & 0x8000));
     a1 = (uint16_t)(a1 - 8);
     uint16_t px = g.printx;
-    PutDigits2(m8(bank | a1), RAM_OFF_mesarea + 2);
+    ConvertByteToDigits(m8(bank | a1), RAM_OFF_mesarea + 2);
     w16(RAM_OFF_mesarea, 4);
     print(RAM_OFF_mesarea);
     uint32_t tm = PushTime(d2);

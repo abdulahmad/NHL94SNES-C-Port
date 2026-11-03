@@ -1207,7 +1207,7 @@ void puckstick(int x, int a2, int a3, uint16_t d0, uint16_t a0)
         if (g.position[a2]) {
             if (!r16(RAM_OFF_position + a0)) return;
             c = makepde(r16(RAM_OFF_stickhand + a0), a0 >> 1);
-            if (randoma((uint16_t)(c - makepde(g.stickhand[a2], a2) + 0x24)) >= 3) return;
+            if (randomd0A((uint16_t)(c - makepde(g.stickhand[a2], a2) + 0x24)) >= 3) return;
         }
         c = makepde(r16(RAM_OFF_stickhand + a0), a0 >> 1);
         w16(RAM_OFF_nopuck + a0, (uint16_t)(c + 0x14 + cf));   /* (adc: makepde's carry) */
@@ -1269,7 +1269,7 @@ void puckgoalie(int x, int a2, int a3, uint16_t d0, uint16_t d1)
         uint16_t pc = (uint16_t)g.puckc;
         if (!(pc & 0x8000)) pc >>= 1;
         if ((pc & 0x8000) || 2 * x == g.puckc) {
-            d0 = (uint16_t)(randoma((uint16_t)((uint16_t)((2 + r16(RAM_OFF_shotspd + y)) << 8) << 1)) + 0x2000);
+            d0 = (uint16_t)(randomd0A((uint16_t)((uint16_t)((2 + r16(RAM_OFF_shotspd + y)) << 8) << 1)) + 0x2000);
             if (!NEG(d0, g.puckvx[0]) && !NEG(d0, g.puckvy[0])) {
                 d0 = (uint16_t)-d0;
                 if (NEG(d0, g.puckvx[0]) && NEG(d0, g.puckvy[0]) && !(g.pflags[a2] & 0x1000)) {

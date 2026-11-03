@@ -119,7 +119,7 @@ void setupice_reset(void)
     g.Hpos = 0;
     g.Vpos = 0;
     g.vcountmark[1] = (uint16_t)(g.vcount[1] - 2);
-    InitSortObjects();
+    defaultsprites_0();
     nullrtl();
     if (g.gmode & gmdir)
         for (int o = 11; o >= 0; o--) g.pfgoal[o] ^= 1;
@@ -194,8 +194,8 @@ void setupice(void)
     uint32_t s = (uint32_t)t + g.smallfontchars + c;
     g.Framercset = (uint16_t)s;
     g.BigFontChars = (uint16_t)(g.Framercset + 4 + (s >> 16));
-    RemapTiles(unpackbuf, SYM_PixelRemap83, t);
-    RemapTiles(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    remap(unpackbuf, SYM_PixelRemap83, t);
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     n = unpack(SYM_BigFontTiles, &t, &c);
     g.scorechars = (uint16_t)(t + g.BigFontChars + c);
     send_tiles(n);
@@ -339,7 +339,7 @@ void PlayoffScreen(void)
     n = Decompress(SYM_SmallFontTiles, unpackbuf);
     uint16_t d0 = n >> 5;
     g.BigFontChars = (uint16_t)(d0 + g.smallfontchars + (n >> 4 & 1));   /* (the last lsr's carry) */
-    RemapTiles(unpackbuf, SYM_PixelRemap8F, d0);
+    remap(unpackbuf, SYM_PixelRemap8F, d0);
     n = Decompress(SYM_SmallFontTiles, unpackbuf);
     g.scorechars = (uint16_t)((n >> 5) + g.BigFontChars + (n >> 4 & 1));
     p0 = unpackbuf;

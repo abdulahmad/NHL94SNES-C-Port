@@ -545,7 +545,7 @@ int chk4shot(int o)
         }
     }
 roll:
-    if (randoma(d4) >= 9) return 0;
+    if (randomd0A(d4) >= 9) return 0;
     uint16_t d0 = (uint16_t)g.pucky[0];
     if (!g.pfgoal[x]) d0 = (uint16_t)-d0;
     if ((d0 & 0x8000) || ((uint16_t)(0x108 - d0) & 0x8000)) return 0;
@@ -613,7 +613,7 @@ void check4check(int o, int a3)
 {
     uint16_t d0 = (uint16_t)(0x14 - g.checking[o]);
     if (g.OptPen) d0 = (uint16_t)(d0 << 1);
-    if (randoma(d0) >= 4 && randoma(d0) >= 4) return;
+    if (randomd0A(d0) >= 4 && randomd0A(d0) >= 4) return;
     uint16_t hold2 = (uint16_t)SYM_SPAHold2;
     uint16_t y = 2 * o >= 0xC ? 0 : 0xC;
     for (int d2 = 5; d2 >= 0; d2--, y += 2) {

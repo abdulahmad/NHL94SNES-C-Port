@@ -348,7 +348,7 @@ static void dumpin_lob(int o, int a3)
     uint16_t d3 = a;
     g.puckvx[0] = (int16_t)(Div32S(Mul16x8XS(d0, d3), d2) << 8);
     g.puckvy[0] = (int16_t)(Div32S(Mul16x8XS(d1, d3), d2) << 8);
-    g.puckvz = (int16_t)(randoma((uint16_t)(0x3C0 - d4)) + 0x10E0);
+    g.puckvz = (int16_t)(randomd0A((uint16_t)(0x3C0 - d4)) + 0x10E0);
     puckflip(d0);
     int x = g.curobj >> 1;
     g.dumpinplayer = 0xFFFF;

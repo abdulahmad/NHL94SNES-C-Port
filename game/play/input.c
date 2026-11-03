@@ -371,7 +371,7 @@ void doshot(int o, int a3)
             if (d0 >= 0x3D) { d0 = 0x3C; spread = 0x3C; }
             if (ay & 0x8000) d0 >>= 1;
             ay = (uint16_t)(ay + randomd0sd0(d0));
-            height = (uint16_t)(randoma(spread >> 1) + height);
+            height = (uint16_t)(randomd0A(spread >> 1) + height);
         }
         g.puckvx[0] = (int16_t)(Div32S(Mul16S(Mul8XS(0x44, g.passspeed), ax), d3) << 1);
         g.puckvy[0] = (int16_t)(Div32S(Mul16S(Mul8XS(0x44, g.passspeed), ay), d3) << 1);

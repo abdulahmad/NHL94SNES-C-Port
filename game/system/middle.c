@@ -2,7 +2,7 @@
 #include "game.h"
 
 /* A random number from 0 to limit-1 */
-uint16_t randoma(uint16_t limit)
+uint16_t randomd0A(uint16_t limit)
 {
     if (limit < 0x100) return randoma8_go(limit);
     uint16_t r = RandomWord();
@@ -19,14 +19,14 @@ uint16_t Mod100(uint16_t d0)
 /* randomd0s with the range in d0: a random number from -d0 to d0-1 (clears the carry) */
 uint16_t randomd0sd0(uint16_t d0)
 {
-    uint16_t v = (uint16_t)(randoma((uint16_t)(d0 << 1)) - d0);
+    uint16_t v = (uint16_t)(randomd0A((uint16_t)(d0 << 1)) - d0);
     cf = 0;
     return v;
 }
 
 /* The two digit (BCD) number d0 as two characters at [a1], a blank for a leading zero; returns a1
  * past them */
-uint32_t PutDigits2(uint16_t d0, uint32_t a1)
+uint32_t ConvertByteToDigits(uint16_t d0, uint32_t a1)
 {
     uint16_t lo = 0x20;
     if ((d0 & 0xFF) >= 10) lo = (uint16_t)(((d0 & 0xFF) >> 4) + 0x30);

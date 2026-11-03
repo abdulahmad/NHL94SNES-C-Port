@@ -70,7 +70,7 @@ void setffo(void)
         uint16_t r0 = rom16(SYM_setffo_7 + a2);
         uint16_t x = (uint16_t)(obj << 1);
         uint16_t d0 = r16(RAM_OFF_Xpos + x), d1 = r16(RAM_OFF_Ypos + x);
-        projxy(&d0, &d1, 0);
+        find3d(&d0, &d1, 0);
         if (d1 == 0x4E20) continue;
         if (r16(RAM_OFF_position + x) & 0x8000) continue;
         DrawSprite(0x2000, d0, d1, r0, SYM_SpriteFrames);
@@ -166,7 +166,7 @@ void setsortcords(void)
             if (g.frame[o] == SPFPen + 7 || g.frame[o] == SPFPen + 8) g.frame[o] = g.sfhormode ? SPFPen + 7 : SPFPen + 8;
         }
         uint16_t d0 = (uint16_t)g.Xpos[o], d1 = r16(RAM_OFF_Ypos + x);
-        projxy(&d0, &d1, d2);
+        find3d(&d0, &d1, d2);
         if (d1 == 0x4E20) continue;
         g.spry = d1;
         g.sprx = d0;
@@ -319,7 +319,7 @@ void setvideo_t3(void)
  * rows, on the horizontal rink the team blocks) and queue the changed text */
 void setvideo(void)
 {
-    show_rink();
+    updatescroll();
     checkfo();
     setvideo_t3();
     setsortcords();
@@ -328,7 +328,7 @@ void setvideo(void)
     showzam(cf);
     showcrowd();
     showref();
-    ShowRinkRows();
+    updatescroll_rows();
     if (g.sfhormode) DrawHorTeams();
     QueueTextDMA();
 }

@@ -164,7 +164,7 @@ uint16_t RandomWord(void)
     return (uint16_t)(g.seed[1] + g.seed[0]);
 }
 
-/* A random number from 0 to limit-1, for a limit below 256 (randoma8_go: randoma's way in) */
+/* A random number from 0 to limit-1, for a limit below 256 (randoma8_go: randomd0A's way in) */
 uint16_t randoma8_go(uint16_t limit) { return Mul8U(limit, RandomWord() & 0xFF) >> 8; }
 uint16_t randoma8(uint16_t limit) { return randoma8_go(limit); }
 

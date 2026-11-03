@@ -151,8 +151,8 @@ struct G {
     uint16_t IRQHTime; /* NMI_HookReturn writes it to HTIMEL every frame; set by SetupBandIRQ/SetupScrollIRQ/TitleScreen */
     uint16_t BG1HScroll; /* NMI_HookReturn writes the 6 words BG1HScroll..$07E1 to BG1HOFS..BG3VOFS (x = 0..$0B, $07D7 = BG1HScroll+1); ... */
     uint16_t BG1VScroll; /* 2nd word of the NMI_HookReturn scroll list (BG1VOFS); ResetPPURegs sets $FFFF */
-    uint16_t BG2HScroll; /* ShowRinkRows stores Hscroll+$C0 here, as 93S writes BG2HOFS = Hscroll+$C0 */
-    uint16_t BG2VScroll; /* ShowRinkRows stores vramrow*8 + (Vscroll&7), the 93S BG2VOFS value */
+    uint16_t BG2HScroll; /* updatescroll_rows stores Hscroll+$C0 here, as 93S writes BG2HOFS = Hscroll+$C0 */
+    uint16_t BG2VScroll; /* updatescroll_rows stores vramrow*8 + (Vscroll&7), the 93S BG2VOFS value */
     uint8_t BG3HScroll[2]; /* 5th word of the NMI_HookReturn scroll list (BG3HOFS); ResetPPURegs/PlayoffScreen/TitleScreen */
     uint16_t BG3VScroll; /* 6th word (BG3VOFS); IRQ_BG1Scroll also writes BG3VScroll/$07E1 to BG1VOFS for the lower band */
     uint8_t Mode7InUse; /* TitleScreen/IntroSequence set $FF, ResetPPURegs clears; MulFrac8 bit Mode7InUse / MulFrac16 bit $07E1 (16-bit: ... */
@@ -210,7 +210,7 @@ struct G {
     uint16_t VoiceVibSpeed[8]; /* Vibrato step: instrument $1E, ramped by $22/$24; added to / subtracted from VoiceVibOfs */
     uint16_t VoiceVibSpeedFrac[8]; /* Fraction of VoiceVibSpeed */
     uint16_t VoiceVibDir[8]; /* 0 = vibrato offset rising, $FFFF = falling (bit VoiceVibDir,x; dec/inc to flip at the limit by instrument $2D ... */
-    uint8_t RemapOut[32]; /* sixteen words: the tile RemapTiles is building */
+    uint8_t RemapOut[32]; /* sixteen words: the tile remap is building */
     uint16_t mesarea[16]; /* string being built: a length word, then the bytes */
     uint16_t PWCharStr[34]; /* PasswordScreen: a one-character print string (length word 3, then the PasstoText character) printed ... */
     uint16_t PushWidthBuf[5]; /* PushNumberWrap/PushNumberWidth: length word (digits + 2), then 8 characters ($0A90-$0A97) set to spaces ... */
@@ -405,7 +405,7 @@ struct G {
     int16_t temp4[16];
     int16_t temp5[16];
     int16_t temp2b[16];
-    int16_t radiusx[16]; /* collision width (InitSortObjects) */
+    int16_t radiusx[16]; /* collision width (defaultsprites_0) */
     int16_t radiusy[16]; /* collision height */
     uint16_t Wallcos[16]; /* per object: cos of the angle of the last wall collision */
     uint16_t Wallsin[16]; /* per object: sin of that angle */
@@ -510,7 +510,7 @@ struct G {
     uint8_t ppenmin[52]; /* penalty minutes */
     uint16_t CwdExciteLvl; /* crowd excitement: raised by hits and goals, set per playoff stage at a period start */
     uint16_t CrowdLoud; /* 1 at 110 dB or more; cleared under 105 dB (CheckCrowdMeter) */
-    uint16_t CurCrowdMeter; /* the crowd meter in dB: sroot(CwdExciteLvl * 4) + 65, at most 128 */
+    uint16_t CurCrowdMeter; /* the crowd meter in dB: Sroot(CwdExciteLvl * 4) + 65, at most 128 */
     uint16_t CrowdPeak; /* the highest CurCrowdMeter of the game */
     uint16_t CrowdAvg; /* the game's average meter (CrowdMeterSum / CrowdMeterCount) */
     uint16_t CrowdMeterCount; /* meter samples taken */

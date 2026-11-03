@@ -213,7 +213,7 @@ void setoptions(void)
     ReadAnyPad();
     g.sprpriority = 0;
     print(SYM_setoptionsPos);
-    InitSortObjects();
+    defaultsprites_0();
     g.OldXpos[0] = 0x28;                                   /* (rosxoff) */
     g.OldXpos[6] = 0x28;
     g.notdemo = 0xFFFF;
@@ -254,7 +254,7 @@ void setoptions(void)
             ReadPads();
             g.lastframevc = g.vcount[0];
             g.oldvcount = g.vcount[0];
-            ReadJoy1(&d0, &d1, &d2, &d3);
+            Readjoy1(&d0, &d1, &d2, &d3);
             g.repeatdelay--;
             d1 = ProcessInputWithRepeat(d1, d2, d3) & 0xFFF0;
             if (d1) goto pressed;

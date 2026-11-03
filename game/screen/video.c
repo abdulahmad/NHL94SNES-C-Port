@@ -12,10 +12,10 @@ static uint16_t adc(uint16_t a, uint16_t b, unsigned *c) { uint32_t s = (uint32_
 static uint16_t asl(uint16_t a, unsigned *c) { *c = a >> 15; return (uint16_t)(a << 1); }
 
 /* A random number from 0 to n-1 (d0) */
-uint16_t randomd0(uint16_t n) { return randoma(n); }
+uint16_t randomd0(uint16_t n) { return randomd0A(n); }
 
 /* A random number from -n to n-1 */
-uint16_t randomd0s(uint16_t n) { return (uint16_t)(randoma((uint16_t)(n << 1)) - n); }
+uint16_t randomd0s(uint16_t n) { return (uint16_t)(randomd0A((uint16_t)(n << 1)) - n); }
 
 /* Raise the high end of the changed text map area to a */
 void marktexthi(uint16_t a) { if (a >= g.textdirtyhi) g.textdirtyhi = a; }
@@ -24,7 +24,7 @@ void marktexthi(uint16_t a) { if (a >= g.textdirtyhi) g.textdirtyhi = a; }
 void marktextlo(uint16_t a) { if (a < g.textdirtylo) g.textdirtylo = a; }
 
 /* Set the rink scroll from the camera position (horizontal mode has its own) */
-void show_rink(void)
+void updatescroll(void)
 {
     if (g.sfhormode) return;
     g.Hscroll = (int16_t)(g.Hpos - 0x80);
@@ -54,7 +54,7 @@ void appstring(uint32_t a1, uint32_t a3)
 }
 
 /* Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held */
-void ReadJoy1(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3)
+void Readjoy1(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3)
 {
     *d3 = g.JoyPad[0];
     *d2 = g.padchange[0];
@@ -88,7 +88,7 @@ uint16_t WeightedRandomSelect(uint16_t d0)
 }
 
 /* Project rink position d0 / d1 (height d2) to the screen: d0 = x, d1 = y ($4E20 off the screen) */
-void projxy(uint16_t *d0, uint16_t *d1, uint16_t d2)
+void find3d(uint16_t *d0, uint16_t *d1, uint16_t d2)
 {
     uint16_t x = *d0, y = *d1;
     if (g.sfhormode) { uint16_t t = x; x = (uint16_t)-y; y = (uint16_t)(t - 0xC5); }
@@ -152,7 +152,7 @@ uint32_t PushTime(uint16_t d0)
 
 /* Send d0 tiles from [a0] to video memory, each pixel's colour remapped through the table [a1];
  * returns a0 advanced past them */
-uint32_t RemapTiles(uint32_t a0, uint32_t a1, uint16_t d0)
+uint32_t remap(uint32_t a0, uint32_t a1, uint16_t d0)
 {
     do {
         for (int row = 14; row >= 0; row -= 2) {
@@ -179,7 +179,7 @@ uint32_t RemapTiles(uint32_t a0, uint32_t a1, uint16_t d0)
 }
 
 /* The square root of the 32-bit d0 (a binary search, the range narrowed first) */
-uint16_t sroot(uint32_t d0)
+uint16_t Sroot(uint32_t d0)
 {
     uint16_t hi = (uint16_t)(d0 >> 16), p0, p1;
     if (!hi) {
@@ -346,12 +346,12 @@ void Framer(uint16_t d0, uint16_t d1)
 /* Clear the objects ($76E bytes from Xpos) and set the 16 sort objects up from their start table
  * (9 words each: x, y, height, frame, attribute, collision width and height, assignment, flags),
  * the sort lists in order; then sort them */
-void InitSortObjects(void)
+void defaultsprites_0(void)
 {
     for (int x = 0; x < 0x76E; x += 2) w16(RAM_OFF_Xpos + x, 0);
     g.puckz = 0;
     for (int o = 0; o < 16; o++) {
-        uint32_t t = SYM_InitSortObjects_3 + (uint32_t)o * 18;
+        uint32_t t = SYM_defaultsprites_0_3 + (uint32_t)o * 18;
         uint16_t y = (uint16_t)(o * 2);
         w16(RAM_OFF_SCnum + y, (uint16_t)o);
         w16(RAM_OFF_oldframe + y, 0xFFFF);
@@ -402,7 +402,7 @@ void QueueTextDMA(void)
 
 /* Queue the rink map rows that the vertical scroll brought on screen (at most $1D: the whole
  * screen) into the BG2 ring of rows, and set BG2's scroll */
-void ShowRinkRows(void)
+void updatescroll_rows(void)
 {
     if (g.sfhormode) return;
     uint16_t x = (uint16_t)((uint16_t)(g.Vscroll + 0x170) >> 3);

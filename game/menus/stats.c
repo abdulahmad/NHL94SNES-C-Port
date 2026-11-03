@@ -267,10 +267,10 @@ void SetupScreen(void)
     uint16_t d0 = Decompress(SYM_SmallFontTiles, unpackbuf) >> 5;
     g.nextfreechar = (uint16_t)(g.nextfreechar + d0);
     g.Framercset = g.nextfreechar;
-    RemapTiles(unpackbuf, SYM_PixelRemap8F, d0);
+    remap(unpackbuf, SYM_PixelRemap8F, d0);
     g.nextfreechar = (uint16_t)(g.nextfreechar + 4);
     g.scorechars = g.nextfreechar;
-    RemapTiles(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     uint16_t n = Decompress(SYM_TeamBlocksTiles, unpackbuf);
     g.nextfreechar = (uint16_t)(g.nextfreechar + (n >> 5));
     g.ninetilechars = g.nextfreechar;

@@ -770,7 +770,7 @@ void PrintSelectLeft(uint16_t d4)
 /* The crowd meter (d0): sqrt(CwdExciteLvl * 4) + 65, at most 128; the peak and the running average */
 uint16_t UpdateCrowdMeter(void)
 {
-    uint16_t d0 = (uint16_t)(sroot((uint16_t)(g.CwdExciteLvl << 2)) + 0x41);
+    uint16_t d0 = (uint16_t)(Sroot((uint16_t)(g.CwdExciteLvl << 2)) + 0x41);
     if (d0 >= 0x80) d0 = 0x80;
     if (!((uint16_t)(d0 - g.CrowdPeak) & 0x8000)) g.CrowdPeak = d0;
     uint32_t sum = (g.CrowdMeterSum[0] | (uint32_t)g.CrowdMeterSum[1] << 16) + d0;
@@ -807,7 +807,7 @@ uint32_t getname(uint16_t a2, uint16_t d0)
     uint32_t rec = GetPlayerRecord(a2, d0), bank = rec & 0xFF0000;
     w16(RAM_OFF_mesarea, 4);
     uint16_t a0 = (uint16_t)(rec + m16(rec));
-    PutDigits2(m8(bank | a0), RAM_OFF_mesarea + 2);
+    ConvertByteToDigits(m8(bank | a0), RAM_OFF_mesarea + 2);
     appstring(SYM_PlayerNumNamePos, RAM_OFF_mesarea);
     appstring(rec, RAM_OFF_mesarea);
     return RAM_OFF_mesarea;
@@ -820,7 +820,7 @@ uint32_t FormatPlayerNumInitial(uint16_t a2, uint16_t d0)
     uint32_t a0 = GetPlayerRecord(a2, d0), bank = a0 & 0xFF0000;
     uint16_t p0 = (uint16_t)a0;
     w16(RAM_OFF_mesarea, 2);
-    uint16_t a1 = (uint16_t)PutDigits2(m8(bank | (uint16_t)(p0 + m16(a0))), RAM_OFF_mesarea + 2);
+    uint16_t a1 = (uint16_t)ConvertByteToDigits(m8(bank | (uint16_t)(p0 + m16(a0))), RAM_OFF_mesarea + 2);
     w16(a1++, 0x0020);
     uint16_t end = (uint16_t)(m16(a0) + p0);
     p0 += 2;
@@ -2353,7 +2353,7 @@ void StartHL2(uint16_t a0, uint16_t d1)
             w16(RAM_OFF_Xvel + x, 0);
             w16(RAM_OFF_Yvel + x, 0);
         }
-        if (g.puckc < 0) g.puckc = (int16_t)(randoma(0x0C) << 1);
+        if (g.puckc < 0) g.puckc = (int16_t)(randomd0A(0x0C) << 1);
         uint16_t x = (uint16_t)g.puckc;
         if (!r16(RAM_OFF_position + x)) g.puckc = (int16_t)(x - 2);
         SprSort();
@@ -2486,7 +2486,7 @@ static void demo_read(void)
     }
     if (any) return;
     uint16_t d0, d1, d2, d3;
-    ReadJoy1(&d0, &d1, &d2, &d3);
+    Readjoy1(&d0, &d1, &d2, &d3);
     if (d1 & 0x1000) { startpause1(); return; }
     if (!d1) return;
     g.fadestep = 0;
@@ -2893,8 +2893,8 @@ void ReloadRink(void)
     }
     n = Decompress(SYM_SmallFontTiles, unpackbuf);
     io_w16(0x2116, (uint16_t)((uint16_t)(g.smallfontchars << 4) + 0x1000 + (g.smallfontchars >> 12 & 1)));
-    RemapTiles(unpackbuf, SYM_PixelRemap83, (uint16_t)(n >> 5));
-    RemapTiles(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    remap(unpackbuf, SYM_PixelRemap83, (uint16_t)(n >> 5));
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     n = Decompress(SYM_BigFontTiles, unpackbuf);
     g.scorechars = (uint16_t)((n >> 5) + g.BigFontChars + (n >> 4 & 1));   /* (lsr's carry) */
     p0 = unpackbuf;
@@ -3488,8 +3488,8 @@ void LoadPlayerCardScreen(void)
     ClearTextMap2();
     io_w16(0x2116, (uint16_t)((uint16_t)(g.smallfontchars << 4) + 0x1000 + (g.smallfontchars >> 12 & 1)));   /* (asl's carry) */
     uint16_t n = Decompress(SYM_SmallFontTiles, unpackbuf);
-    RemapTiles(unpackbuf, SYM_PixelRemap8F, (uint16_t)(n >> 5));
-    RemapTiles(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    remap(unpackbuf, SYM_PixelRemap8F, (uint16_t)(n >> 5));
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     n = Decompress(SYM_TeamBlocksTiles, unpackbuf);
     g.picchars = (uint16_t)((n >> 5) + g.scorechars + (n >> 4 & 1) - 0x100);   /* (lsr's carry) */
     uint32_t p0 = unpackbuf;
@@ -4200,10 +4200,10 @@ void LoadScoutingScreen(void)
     uint16_t d0 = n >> 5;
     g.outlinechars = (uint16_t)(g.outlinechars + d0);
     g.Framercset = (uint16_t)(d0 + g.smallfontchars);
-    RemapTiles(unpackbuf, SYM_PixelRemap8F, d0);
+    remap(unpackbuf, SYM_PixelRemap8F, d0);
     g.outlinechars = (uint16_t)(g.outlinechars + 4);
     g.scorechars = (uint16_t)(g.Framercset + 4);
-    RemapTiles(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     n = Decompress(SYM_TeamBlocksTiles, unpackbuf);
     g.outlinechars = (uint16_t)(g.outlinechars + (n >> 5));
     uint32_t p0 = unpackbuf;
@@ -4516,7 +4516,7 @@ int BadPasswordPrompt(void)
     for (;;) {
         uint16_t d0, d1, d2, d3;
         ReadPads();
-        ReadJoy1(&d0, &d1, &d2, &d3);
+        Readjoy1(&d0, &d1, &d2, &d3);
         if (!d3) continue;
         if (d3 & 0x4000) {
             g.OptPlayMode = 2;
@@ -4556,7 +4556,7 @@ uint16_t PasswordRedraw(uint16_t d4, uint16_t d5)
         do {
             WaitFrame();
             ReadPads();
-            ReadJoy1(&d0, &d1, &d2, &d3);
+            Readjoy1(&d0, &d1, &d2, &d3);
             d1 = ProcessInputWithRepeat(d1, d2, d3);
         } while (!d1);
         if (d1 & 0x1000) {
