@@ -125,3 +125,7 @@ void lcfound_close(uint16_t a2);
 void lcfound(uint16_t a2, int a3, uint16_t d2);
 void lineinput(int o, uint16_t d1, uint16_t d0, int a3);
 void doinput(int o, uint16_t d0, uint16_t d1, uint16_t d2, uint16_t d3, uint16_t d4, int a3);
+void freezewindow(void);
+void checkwindow(void);
+void updateanim(int o);
+void updateplayers(void);

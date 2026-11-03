@@ -4147,3 +4147,365 @@ void doinput(int o, uint16_t d0, uint16_t d1, uint16_t d2, uint16_t d3, uint16_t
     if (d1 & 0x0080) { burst(o, a3); return; }
     doplayeracc(o, d0, a3);
 }
+
+/* arithmetic shift right by 4, at least 1 away from 0 (checkwindow's step toward the target) */
+static uint16_t view_step(uint16_t a)
+{
+    a = (uint16_t)(a >> 4 | (a & 0x8000 ? 0xF000 : 0));
+    return a ? a : 1;
+}
+
+/* a - step, at least 0 (the count downs by timestep and impactstep) */
+static uint16_t count_down(uint16_t a, uint16_t step)
+{
+    a = (uint16_t)(a - step);
+    return a & 0x8000 ? 0 : a;
+}
+
+/* (the jsl jmlvector of updateplayers: assignment addr, an asstab entry, for object o of team a2;
+ * a3 = o) */
+static void run_assignment(uint32_t addr, int o, uint16_t a2)
+{
+    switch (addr) {
+    case SYM_rtss: rtss(); break;
+    case SYM_assdefo: assdefo(o, a2, o); break;
+    case SYM_assdefd: assdefd(o, a2, o); break;
+    case SYM_asswingd: asswingd(o, a2, o); break;
+    case SYM_asswingo: asswingo(o, a2, o); break;
+    case SYM_asscenterd: asscenterd(o, o); break;
+    case SYM_asscentero: asscentero(o, a2, o); break;
+    case SYM_assgoalie: assgoalie(o, a2, o); break;
+    case SYM_assscore: assscore(o, a2, o); break;
+    case SYM_assstanley: assstanley(o); break;
+    case SYM_asseben: asseben(o); break;
+    case SYM_assepen: assepen(o, a2); break;
+    case SYM_assbench: assbench(o, o); break;
+    case SYM_asspenalty: asspenalty(o, a2, o); break;
+    case SYM_assdopen: assdopen(o); break;
+    case SYM_assgoalietopuck: assgoalietopuck(o, o); break;
+    case SYM_assbreakaway: assbreakaway(o, o); break;
+    case SYM_asspuckc: asspuckc(o, o); break;
+    case SYM_assnearest: assnearest(o, a2, o); break;
+    case SYM_assshoot: assshoot(o, o); break;
+    case SYM_assdumpin: assdumpin(o, o); break;
+    case SYM_asspassrec: asspassrec(o, a2, o); break;
+    case SYM_assfaceoff: assfaceoff(o); break;
+    case SYM_assfaceoffpl: assfaceoffpl(o); break;
+    case SYM_pucknorm: pucknorm(o, o, r16(RAM_OFF_d0), r16(RAM_OFF_a0)); break;   /* (d0, a0: the direct page's) */
+    case SYM_puckshadow: puckshadow(o); break;
+    case SYM_pucknothing: pucknothing(); break;
+    case SYM_puckfaceoff: puckfaceoff(o, o, r16(RAM_OFF_d0), r16(RAM_OFF_a0)); break;   /* (d0, a0: the direct page's) */
+    case SYM_puckfaceoff2: puckfaceoff2(o, o); break;
+    }
+}
+
+/* Lock the view at its current position */
+void freezewindow(void)
+{
+    g.yc1 = g.Vpos;
+    g.xc1 = g.Hpos;
+    g.sflags |= sfslock;
+}
+
+/* Move the view so the screen follows the puck (or the lock position yc1 / xc1): the puck's y
+ * plus its lead (yleader, toward the goal it is heading for), a sixteenth of the way a frame once
+ * past a dead zone, within the rink's limits */
+void checkwindow(void)
+{
+    uint16_t d2 = (uint16_t)g.yc1, d3 = (uint16_t)g.xc1;
+    if (!(g.sflags & sfslock)) {
+        uint16_t x = 0x1C;
+        if (!(g.puckc & 0x8000)) {
+            x = (uint16_t)g.puckc;
+            if (r16(RAM_OFF_pfgoal + x)) {
+                g.yleader = (uint16_t)(g.yleader + g.impactstep + cf);
+                if (!((uint16_t)(g.yleader - 0x32) & 0x8000)) g.yleader = 0x32;
+            } else {
+                g.yleader = (uint16_t)(g.yleader - g.impactstep);
+                if ((uint16_t)(g.yleader - 0xFFCF) & 0x8000) g.yleader = 0xFFCE;
+            }
+        }
+        uint16_t v = r16(RAM_OFF_Yvel + x);
+        v = (uint16_t)(v >> 7 | (v & 0x8000 ? 0xFE00 : 0));
+        d2 = (uint16_t)(v + r16(RAM_OFF_Ypos + x) + g.yleader);
+        g.yc1 = (int16_t)d2;
+        d3 = r16(RAM_OFF_Xpos + x);
+        g.xc1 = (int16_t)d3;
+    }
+    uint16_t d0 = (uint16_t)(d2 - g.Vpos), d1;
+    int move = 1;
+    if ((uint16_t)(d0 - 0xFFF7) & 0x8000) {
+        d1 = (uint16_t)(d2 - 0xFFF6);
+        if ((uint16_t)(d1 - 0xFF39) & 0x8000) d1 = 0xFF39;
+    } else if ((uint16_t)(d0 - 0xB) & 0x8000) move = 0;
+    else {
+        d1 = (uint16_t)(d2 - 0xA);
+        if (!((uint16_t)(d1 - 0x100) & 0x8000)) d1 = 0x100;
+    }
+    if (move) {
+        uint16_t a = (uint16_t)(d1 - g.Vpos);
+        if (a) g.Vpos = (int16_t)(view_step(a) + g.Vpos);
+    }
+    d0 = (uint16_t)(d3 - g.Hpos);
+    move = 1;
+    if ((uint16_t)(d0 - 0xFFD8) & 0x8000) {
+        d1 = (uint16_t)(d3 - 0xFFD8);
+        if ((uint16_t)(d1 - 0xFFC4) & 0x8000) d1 = 0xFFC4;
+    } else if ((uint16_t)(d0 - 0x29) & 0x8000) move = 0;
+    else {
+        d1 = (uint16_t)(d3 - 0x28);
+        if (!((uint16_t)(d1 - 0x3D) & 0x8000)) d1 = 0x3C;
+    }
+    if (move) {
+        uint16_t a = (uint16_t)(d1 - g.Hpos);
+        if (a) g.Hpos = (int16_t)(view_step(a) + g.Hpos);
+    }
+}
+
+/* Step object o's sprite animation, looping or ending it: the frame list for its facing direction
+ * (mirrored for flipped players, turned for the horizontal rink), the next frame when its count
+ * runs out; at the end the animation is cleared (unless it loops, word $10) and the bench
+ * animations take the player to the door */
+void updateanim(int o)
+{
+    uint16_t spa = g.SPA[o];
+    if (!spa) {
+        g.pf2aip[o] = 0;
+        g.pfalock[o] = 0;
+        return;
+    }
+    uint32_t a0 = (SYM_SPAlist & 0xFF0000) | spa;
+    uint16_t d1 = m16(a0 + 0x10), dir;
+    if (g.sfhormode && o < 12)
+        dir = g.attribute[o] & 0x0800 ? (uint16_t)(2 - g.facedir[o]) : (uint16_t)(g.facedir[o] - 2);
+    else if (spa < (uint16_t)SYM_SPAbenchcheckr && (g.attribute[o] & 0x0800))
+        dir = (uint16_t)-g.facedir[o];
+    else
+        dir = g.facedir[o];
+    a0 = (a0 & 0xFF0000) | m16(a0 + (uint16_t)((dir & 7) << 1));
+    uint16_t d0 = g.SPAnum[o];
+    uint16_t d2 = m16(a0 + d0);
+    if (!(g.SPAcnt[o] & 0x8000)) {
+        g.SPAcnt[o] = (uint16_t)(g.SPAcnt[o] - g.timestep);
+        if (!(g.SPAcnt[o] & 0x8000)) { g.frame[o] = d2; return; }
+        uint16_t y = (uint16_t)(d0 + 2);
+        g.SPAnum[o] = (uint16_t)(g.SPAnum[o] + 4);
+        d0 = g.SPAnum[o];
+        if (m16(a0 + y) & 0x8000) {
+            d0 = 0;
+            g.SPAnum[o] = 0;
+            g.pf2aip[o] = 0;
+            g.pfalock[o] = 0;
+            if (spa < (uint16_t)SYM_SPAunused1 && spa >= (uint16_t)SYM_SPAbenchcheckr) {
+                g.Xpos[o] = (int16_t)0xFF78;
+                g.facedir[o] = 2;
+                g.pfalock[o] = 2;
+                SetSPAUpdate(o, (uint16_t)SYM_SPAwallright);
+                return;
+            }
+            if (!d1) g.SPA[o] = 0;
+        }
+    }
+    uint16_t c = m16(a0 + (uint16_t)(d0 + 2));
+    if (c & 0x8000) c = (uint16_t)-c;
+    g.SPAcnt[o] = c;
+    g.frame[o] = d2;
+}
+
+/* Every object's frame: first (from the last object) the animation, the counts, the velocity decay
+ * and the move by it (the puck's height with gravity and its bounce sound), the distance and
+ * direction to the puck, the nearest player of each team, the icing waved off; the nets kept in
+ * their ends; then (from the first) each player's pad input and assignment, goalies kept out of the
+ * goal posts, collisions (players crossing the goal line beside the net put back) and the impact
+ * decay (an absent object's impact = its position); the puck kept within the boards */
+void updateplayers(void)
+{
+    g.topgoalie = 0xFFFF;
+    g.botgoalie = 0xFFFF;
+    g.tmnear[0] = g.tmnear[1] = 0xFFFF;
+    g.tmnearpl[0] = g.tmnearpl[1] = 0xFFFF;
+    g.puckoldz = g.puckz;
+    for (uint16_t x = 0x1E; !(x & 0x8000); x = (uint16_t)(x - 2)) {
+        int o = x >> 1;
+        g.curobj = x;
+        g.OldXpos[o] = g.Xpos[o];
+        g.OldXfrac[o] = g.Xfrac[o];
+        g.OldYpos[o] = (int16_t)r16(RAM_OFF_Ypos + x);
+        g.OldYfrac[o] = g.Yfrac[o];
+        if (x == netobj1 || x == netobj2) goto decay;
+        if (g.position[o] & 0x8000) goto dist;
+        if (!g.position[o]) {
+            if (r16(RAM_OFF_Ypos + x) & 0x8000) g.botgoalie = x;
+            else g.topgoalie = x;
+        }
+        updateanim(o);
+        g.nopuck[o] = count_down(g.nopuck[o], g.timestep);
+        g.nopuckb[o] = count_down(g.nopuckb[o], g.timestep);
+        if (g.sflags3[0] & 0x0020) {
+            uint16_t d0 = g.pnum[o] & 0xFF;
+            if (d0 >= 0x80) d0 |= 0xFF00;
+            if (!(d0 & 0x8000)) loadTeamStruct(o);
+        }
+        if (g.goaliedivewait[o]) g.goaliedivewait[o] = count_down(g.goaliedivewait[o], g.timestep);
+        if (x == g.passReceiverPlayerNum && g.onetimer) goto move;
+        if (g.SPA[o] == (uint16_t)SYM_SPAinjury1 || g.SPA[o] >= (uint16_t)SYM_SPAboardfront) goto dist;
+        if (x == puckobj && g.puckz) goto move;
+    decay:
+        hal_cost_mark(SYM_updateplayers_9);
+        uint16_t d2 = rom8(SYM_updateplayers_20 + g.timestep);
+        if (g.pflags[o] & 1) d2 = rom8(SYM_updateplayers_22 - 1 + g.timestep);
+        w16(RAM_OFF_Xvel + x, Mul16x8HiXS(r16(RAM_OFF_Xvel + x), d2));
+        w16(RAM_OFF_Yvel + x, Mul16x8HiXS(r16(RAM_OFF_Yvel + x), d2));
+    move:
+        hal_cost_mark(SYM_updateplayers_10);
+        uint16_t v = r16(RAM_OFF_Xvel + x);
+        if (v) {
+            uint32_t r2 = Mul16x8XS(v, g.velstep), s = (uint32_t)(uint16_t)r2 + g.Xfrac[o];
+            g.Xfrac[o] = (uint16_t)s;
+            g.Xpos[o] = (int16_t)(uint16_t)((r2 >> 16) + (uint16_t)g.Xpos[o] + (s >> 16));
+        }
+        hal_cost_mark(SYM_updateplayers_1xxx);
+        v = r16(RAM_OFF_Yvel + x);
+        if (v) {
+            uint32_t r2 = Mul16x8XS(v, g.velstep), s = (uint32_t)(uint16_t)r2 + g.Yfrac[o];
+            g.Yfrac[o] = (uint16_t)s;
+            w16(RAM_OFF_Ypos + x, (uint16_t)((r2 >> 16) + r16(RAM_OFF_Ypos + x) + (s >> 16)));
+        }
+        hal_cost_mark(SYM_updateplayers_2xx);
+        if (x == puckobj && !(g.puckz & 0x8000) && (g.puckz || g.puckvz)) {
+            hal_cost_mark(SYM_updateplayers_3x);
+            g.puckvz = (int16_t)(g.puckvz - g.gravstep);
+            uint32_t r2 = Mul16x8XS((uint16_t)g.puckvz, g.velstep), s = (uint32_t)(uint16_t)r2 + g.puckzfrac;
+            g.puckzfrac = (uint16_t)s;
+            g.puckz = (int16_t)(uint16_t)((r2 >> 16) + (uint16_t)g.puckz + (s >> 16));
+            if (g.puckz & 0x8000) {
+                g.puckz = 0;
+                g.puckzfrac = 0;
+                uint16_t vz = (uint16_t)((uint16_t)-g.puckvz >> 1);
+                g.puckvz = (int16_t)vz;
+                if (!((uint16_t)(vz - 0x200) & 0x8000)) sfx(7, (uint16_t)(vz << 2), 0);
+            }
+        }
+    dist:
+        hal_cost_mark(SYM_updateplayers_11);
+        uint16_t d0 = (uint16_t)(g.Xpos[14] - g.Xpos[o]), ax = abs16(d0);
+        g.puckdist2[o] = Mul8U(ax >> 2, ax >> 2);
+        uint16_t d1 = (uint16_t)(g.pucky[0] - r16(RAM_OFF_Ypos + x)), ay = abs16(d1);
+        uint16_t sq = (uint16_t)(Mul8U(ay >> 2, ay >> 2) + g.puckdist2[o]);
+        g.puckdist2[o] = sq;
+        if (x < 0x18 && !(g.position[o] & 0x8000) && g.position[o] && !((g.pflags[o] & 0x1000) | g.pfalock[o])) {
+            int t = x >= 0xC;
+            if (sq < g.tmnear[t]) {
+                g.tmnear[t] = sq;
+                g.tmnearpl[t] = x;
+            }
+        }
+        uint16_t len = ApproxLength_abs(ay, ax);
+        g.puckdist[o] = len;
+        if (x < 0x18 && len < 0x1E && (g.iflags & 4) && !(g.iflags & 1)
+            && ((g.iflags & 2) ? !g.pfgoal[o] : g.pfgoal[o])
+            && (uint16_t)g.puckz < 0xD && (uint16_t)g.puckvy[0] < 0x2400 && !((uint16_t)(g.puckvy[0] - 0xDC00) & 0x8000))
+            g.iflags &= (uint16_t)~5;
+        g.puckdir[o] = vtoa(d0, d1);
+    }
+    uint16_t y = r16(RAM_OFF_Ypos + netobj1);
+    if (!((uint16_t)(y - 0x11F) & 0x8000)) y = 0x11F;
+    w16(RAM_OFF_Ypos + netobj1, y);
+    y = r16(RAM_OFF_Ypos + netobj2);
+    if ((uint16_t)(y - 0xFED2) & 0x8000) y = 0xFED2;
+    w16(RAM_OFF_Ypos + netobj2, y);
+    for (int k = 0xC; k >= 0; k -= 2) w16(RAM_OFF_PadControlObj + k, 0xF);
+    for (int k = 0; k < 5; k++) g.padinputdone[k] = 0;
+    g.curobjteam = 0;
+    g.curobjopp[0] = 2;
+    for (uint16_t x = 0; x != 0x20; x += 2) {
+        int o = x >> 1;
+        g.curobj = x;
+        if (x == 0xC) {
+            g.curobjteam = 2;
+            g.curobjopp[0] = 0;
+        }
+        g.PlayersUnused[0] = 0xFFFF;
+        if (g.position[o] & 0x8000) {
+            g.impact[o] = g.position[o];
+            continue;
+        }
+        if (x == (uint16_t)g.puckc && !g.sfhormode) setpads(o, 0);
+        if (x < 0x18 && !(g.playerpad[o] & 0x8000)) {
+            uint16_t p = g.playerpad[o];
+            if (!r16(RAM_OFF_padinputdone + p)) {
+                w16(RAM_OFF_padinputdone + p, 1);
+                doinput(o, r16(RAM_OFF_paddir + p), r16(RAM_OFF_padnew + p), r16(RAM_OFF_padchange + p), r16(RAM_OFF_JoyPad + p), (uint16_t)(p + 2), o);
+            }
+        }
+        if (!g.pfalock[o]) {
+            uint32_t t = SYM_asstab + (uint16_t)(g.asscur[o] << 2);
+            w16(RAM_OFF_jmlvector + 1, rom16(t));
+            w16(RAM_OFF_jmlvector + 2, rom16(t + 1));
+            run_assignment(rom24(t), o, loadTeamStruct(o));
+        }
+        if (!((uint16_t)g.position[o] | g.gmclock) && x < 0x18 && x != (uint16_t)g.puckc && !(g.goalieflags[o] & 1)) {
+            uint16_t a = (uint16_t)g.Xpos[o];
+            if (!((uint16_t)(a - 0xFFD5) & 0x8000)) {
+                if (!((uint16_t)(a - 0x2C) & 0x8000) && ((uint16_t)(a - 0x31) & 0x8000)) { a = 0x2B; w16(RAM_OFF_Xvel + x, 0); }
+            } else if (!((uint16_t)(a - 0xFFCF) & 0x8000)) { a = 0xFFD5; w16(RAM_OFF_Xvel + x, 0); }
+            g.Xpos[o] = (int16_t)a;
+            a = r16(RAM_OFF_Ypos + x);
+            if (!(a & 0x8000)) {
+                if (((uint16_t)(a - 0xE5) & 0x8000) && !((uint16_t)(a - 0xE0) & 0x8000)) { w16(RAM_OFF_Ypos + x, 0xE5); w16(RAM_OFF_Yvel + x, 0); }
+            } else if (!((uint16_t)(a - 0xFF1C) & 0x8000) && ((uint16_t)(a - 0xFF21) & 0x8000)) { w16(RAM_OFF_Ypos + x, 0xFF1B); w16(RAM_OFF_Yvel + x, 0); }
+        }
+        g.Wallcos[o] = 0;
+        g.Wallsin[o] = 0;
+        uint16_t d3 = r16(RAM_OFF_Ypos + x), d2 = (uint16_t)g.Xpos[o];
+        if (d2 != (uint16_t)g.OldXpos[o] || d3 != (uint16_t)g.OldYpos[o]) {
+            checkcoll(o, d2, d3, o);
+            uint16_t xp = (uint16_t)g.Xpos[o];
+            if (x < 0x18 && g.position[o] && !((g.pflags[o] & 0x8000) | g.sfhormode)
+                && !((uint16_t)(xp - 0xFFE7) & 0x8000) && ((uint16_t)(xp - 0x19) & 0x8000)) {
+                uint16_t ay = abs16(r16(RAM_OFF_Ypos + x)), r0 = (uint16_t)(ay - 0x10D);
+                if ((((uint16_t)(abs16((uint16_t)g.OldYpos[o]) - 0x10D) ^ r0) & 0x8000) || (ay >= 0x103 && ay < 0x117)) {
+                    g.Xpos[o] = g.OldXpos[o];
+                    w16(RAM_OFF_Ypos + x, (uint16_t)g.OldYpos[o]);
+                }
+            }
+        }
+        g.impact[o] = (int16_t)count_down((uint16_t)g.impact[o], g.impactstep);
+    }
+    cf = 1;   /* (the carry of the last compare, which checkwindow adds) */
+    if ((uint16_t)g.puckz < 0x18) {
+        cf = (uint16_t)g.Xpos[14] >= 0xFF78;
+        if ((uint16_t)(g.Xpos[14] - 0xFF78) & 0x8000) {
+            g.Xpos[14] = (int16_t)0xFF78;
+            cf = (uint16_t)g.frame[14] >= SPFpuck;
+            if (g.frame[14] == SPFpuck) g.Xpos[15] = (int16_t)0xFF78;
+        }
+        cf = (uint16_t)g.Xpos[14] >= sideline;
+        if (!((uint16_t)(g.Xpos[14] - sideline) & 0x8000)) {
+            g.Xpos[14] = sideline;
+            cf = (uint16_t)g.frame[14] >= SPFpuck;
+            if (g.frame[14] == SPFpuck) g.Xpos[15] = sideline;
+        }
+    }
+    if (!g.puckz) {
+        uint16_t py = (uint16_t)g.pucky[0];
+        cf = py >= 0xFEC2;
+        if (!((uint16_t)(py - 0xFEC2) & 0x8000)) {
+            cf = py >= 0x13E;
+            if ((uint16_t)(py - 0x13E) & 0x8000) {
+                cf = py >= 0xFEDB;
+                if ((uint16_t)(py - 0xFEDB) & 0x8000) {
+                    g.pucky[0] = (int16_t)0xFEDB;
+                    g.pucky[1] = (int16_t)0xFEDB;
+                }
+                py = (uint16_t)g.pucky[0];
+                cf = py >= 0x12A;
+                if (!((uint16_t)(py - 0x12A) & 0x8000)) {
+                    g.pucky[0] = 0x12A;
+                    g.pucky[1] = 0x12A;
+                }
+            }
+        }
+    }
+    if (!(g.puckc & 0x8000)) g.carriedy = (uint16_t)g.pucky[0];
+}
