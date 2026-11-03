@@ -1,12 +1,19 @@
 # Handoff
 
 Where the C-port work stands in this repository. Plan: `alignment-plan/c_ports_plan.md` in the project files.
+Project-wide handoff (always current, read it first): `alignment-plan/c_ports_HANDOFF.md` in the project files; how the project is run: `alignment-plan/HARNESS.md`.
+
 Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md).
 
 ## Done
 
 * Phase 0: credit in the README, AGENTS.md, CLAUDE.md, docs/RULES.md, docs/VANILLA.md, this file.
 * Phase 1 (part): the names gate `tools/check_names.py` and its baseline `tools/names_baseline.json`; the vanilla gate `tools/check_vanilla.sh`.
+
+## Results (2026-11-03)
+
+* `test/golden.c` crashed every run on Linux (glibc declares `strtok_r` only for POSIX builds; MinGW always). Fixed with
+  `_POSIX_C_SOURCE`. Then `bash test/check.sh ROM`: 7 of 7 identical (Linux, GCC 13).
 
 ## Next, in order
 
