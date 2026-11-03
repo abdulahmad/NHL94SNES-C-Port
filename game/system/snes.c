@@ -2193,7 +2193,7 @@ void FreeFrameTiles(uint32_t p0)
 
 /* (unused entries) FreeFrameTiles for frame a of the sprite set at [p1]; the sum of the free
  * block run lengths, walking from index SpriteBlockTiles */
-void FreeFrameTiles_freeframe(uint16_t a, uint32_t p1)
+void FreeFrameTiles_t1(uint16_t a, uint32_t p1)
 {
     g.DrawFrameNum = a;
     uint32_t s = p1 & 0xFFFFFF;
@@ -2204,7 +2204,7 @@ void FreeFrameTiles_freeframe(uint16_t a, uint32_t p1)
 }
 /* (unused entry) The sum of the free block run lengths, walking BlockRuns from SpriteBlockTiles
  * (after a free run the step is the sum so far, as the original) */
-uint16_t FreeCacheEntry_go_countfree(void)
+uint16_t FreeFrameTiles_t2(void)
 {
     uint16_t sum = 0, x = g.SpriteBlockTiles;
     for (;;) {

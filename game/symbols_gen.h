@@ -786,7 +786,7 @@
 #define SYM_LoadFrameTiles_t2x 0x80B687u
 #define SYM_LoadFrameTiles_1xxxx 0x80B6AEu
 #define SYM_FreeFrameTiles 0x80B719u
-#define SYM_FreeFrameTiles_freeframe 0x80B724u
+#define SYM_FreeFrameTiles_t1 0x80B724u
 #define SYM_FreeFrameTiles_1 0x80B741u
 #define SYM_FreeFrameTiles_2 0x80B753u
 #define SYM_FreeFrameTiles_3 0x80B757u
@@ -804,7 +804,7 @@
 #define SYM_FreeCacheEntry_go_3 0x80B863u
 #define SYM_FreeCacheEntry_go_1xxx 0x80B87Au
 #define SYM_FreeCacheEntry_go_t1xx 0x80B89Au
-#define SYM_FreeCacheEntry_go_countfree 0x80B8AEu
+#define SYM_FreeFrameTiles_t2 0x80B8AEu
 #define SYM_FreeCacheEntry_go_loop 0x80B8B9u
 #define SYM_FreeCacheEntry_go_1xxxx 0x80B8CCu
 #define SYM_FreeCacheEntry_go_t1xxx 0x80B8D7u
