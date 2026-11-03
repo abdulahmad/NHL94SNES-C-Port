@@ -587,7 +587,7 @@ struct G {
     uint16_t lettery[2]; /* Y of the sprite letters (Y on entry), passed to DrawSprite by the same routines */
     uint16_t otgoalscorer; /* ShowThreeStars: player (+$1A for visitors, $FFFF none) taken from a goal entry whose period field is 3 ... */
     uint16_t starplayerend; /* ShowThreeStars: end of the team's player indexes in the scan (GetPlayerCount, +$1A for visitors) */
-    uint16_t stargoalieend; /* ShowThreeStars: end of the team's goalie indexes (GoalieCount, +$1A for visitors); below it the goalie scoring ... */
+    uint16_t stargoalieend; /* ShowThreeStars: end of the team's goalie indexes (GetGoalieCount, +$1A for visitors); below it the goalie scoring ... */
     uint16_t starswapplayer; /* ShowThreeStars: player pushed down a place while inserting into the three stars */
     uint16_t starswapscore[2]; /* ShowThreeStars: 32-bit star score (low word, high word at +2) of the player pushed down while inserting */
     uint16_t star1; /* ShowThreeStars: first star (player index, +$1A for visitors until printing) */

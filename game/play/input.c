@@ -70,7 +70,7 @@ uint16_t getlchoice(uint16_t a2, uint16_t d0)
  * distance + 16 * facing difference (folded to 0-4) is a0 (none: -1), and Acheck hooks or holds.
  * (A goalie or an empty spot scores the last distance, d4 as it came for the first; an empty
  * spot's position shifts in too.) */
-void Holdplayer(int o, uint16_t d4)
+void holdplayer(int o, uint16_t d4)
 {
     if (g.position[o] == 0) return;
     if (g.pfalock[o] && g.SPA[o] == (uint16_t)SYM_SPAburst) return;
@@ -483,7 +483,7 @@ void SetLCmode(int o)
 
 /* Close team a2's line change box: its area erased (but over the faceoff box; sf3llcs cleared in
  * the lower half), then the scoreboard. */
-void lcfound2(uint16_t a2)
+void lcfound_close(uint16_t a2)
 {
     uint16_t d1, d0 = setlccords(a2, &d1);
     if (!NEG(g.printy, 0xF)) g.sflags3[0] &= 0xFFFE;
@@ -493,7 +493,7 @@ void lcfound2(uint16_t a2)
 
 /* Team a2 changes to the line of row d2 (remembered; none there: nothing): player a3 is done with
  * the box (pflags bit 3), his team's box closes (tmflags bit 3, no pad), its line set and put on
- * the ice (setpersonel), lcfound2. */
+ * the ice (setpersonel), lcfound_close. */
 void lcfound(uint16_t a2, int a3, uint16_t d2)
 {
     w16(RAM_OFF_tmlcchoice + a2, d2);
@@ -505,7 +505,7 @@ void lcfound(uint16_t a2, int a3, uint16_t d2)
     w16(RAM_OFF_tmline + a2, d0);
     w16(RAM_OFF_lcpad + a2, 0xFFFF);
     setpersonel(a2);
-    lcfound2(a2);
+    lcfound_close(a2);
 }
 
 /* Pad input of player o while his team's line change box is open (d1 the new presses, d0 the
@@ -518,7 +518,7 @@ void lineinput(int o, uint16_t d1, uint16_t d0, int a3)
     if (r16(RAM_OFF_tmflags + a2) & 1) {
         w16(RAM_OFF_tmflags + a2, r16(RAM_OFF_tmflags + a2) & 0xFFFE);
         w16(RAM_OFF_lcpad + a2, 0xFFFF);
-        lcfound2(a2);
+        lcfound_close(a2);
         d0 = SetLCmode2(a2);
     }
     if (d1 & 0x4000) { lcfound(a2, a3, 0); return; }
@@ -529,7 +529,7 @@ void lineinput(int o, uint16_t d1, uint16_t d0, int a3)
         a2 = loadTeamStruct(o);
         w16(RAM_OFF_tmflags + a2, r16(RAM_OFF_tmflags + a2) & 0xFFF7);
         w16(RAM_OFF_lcpad + a2, 0xFFFF);
-        lcfound2(a2);
+        lcfound_close(a2);
         return;
     }
     if ((g.pflags[o] & 8) && !g.pfalock[o]) doplayeracc(o, d0, a3);
@@ -601,7 +601,7 @@ void doinput(int o, uint16_t d0, uint16_t d1, uint16_t d2, uint16_t d3, uint16_t
         doplayeracc(o, d0, a3);
         return;
     }
-    if (d1 & 0x4000) { Holdplayer(o, d4); return; }
+    if (d1 & 0x4000) { holdplayer(o, d4); return; }
     if (g.pfalock[o]) { locked_input(o, d1, d4, a3); return; }
     if (d1 & 0x0040) { take_goalie(o, d4); return; }
     if (d1 & 0x8000) { findpc(o, d4, a3); return; }

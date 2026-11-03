@@ -89,7 +89,7 @@ int check4bench(int o)
 }
 
 /* A computer player stands still (doplayeracc with no direction); a human is left alone. */
-void assnothing(int o, int a3)
+void donothing(int o, int a3)
 {
     if (!(g.playerpad[o] & 0x8000)) return;
     doplayeracc(o, 8, a3);
@@ -97,14 +97,14 @@ void assnothing(int o, int a3)
 
 /* (assdefo / asswingd / assdefd's start, as asswingo's: on offense the carrier gets asspuckc ($11)
  * on top and the other team's puck makes it assignment def, on defense his own team's does; the
- * clock stopped: assnothing; check4bench; a human is left alone; the first time, the timers reset.
+ * clock stopped: donothing; check4bench; a human is left alone; the first time, the timers reset.
  * Nonzero: go on.) */
 static int ass_start(int o, int a3, uint8_t def, int offense)
 {
     uint16_t pc = (uint16_t)g.puckc;
     if (offense && 2 * o == g.puckc) { assinsert(o, 0x11); return 0; }
     if (!(pc & 0x8000) && (g.pfteam[o] == r16(RAM_OFF_pfteam + pc)) != offense) { assreplace(o, def); return 0; }
-    if (g.gmclock) { assnothing(o, a3); return 0; }
+    if (g.gmclock) { donothing(o, a3); return 0; }
     if (check4bench(o)) return 0;
     if (!(g.playerpad[o] & 0x8000)) return 0;
     if (g.pflags[o] & pfna) {

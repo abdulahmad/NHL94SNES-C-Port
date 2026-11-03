@@ -7,7 +7,7 @@ void assdopen(int o);
 void assfaceoffpl(int o);
 void assstanley(int o);
 int check4bench(int o);
-void assnothing(int o, int a3);
+void donothing(int o, int a3);
 void assdefo(int o, uint16_t a2, int a3);
 void asswingd(int o, uint16_t a2, int a3);
 void assdefd(int o, uint16_t a2, int a3);

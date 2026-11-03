@@ -3325,9 +3325,9 @@ void SetPlayerStatsRange(uint16_t a2)
 {
     if (!g.statcolumn) {
         g.listtop[0] = 0;
-        g.listend[0] = GoalieCount(a2);
+        g.listend[0] = GetGoalieCount(a2);
     } else {
-        g.listtop[0] = GoalieCount(a2);
+        g.listtop[0] = GetGoalieCount(a2);
         g.listend[0] = GetPlayerCount(a2);
     }
     g.listend[0]--;

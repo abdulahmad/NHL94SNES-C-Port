@@ -431,8 +431,8 @@ void ShowGoalBox(void)
 {
     g.lcpad[0] = 0xFFFF;
     g.lcpad[1] = 0xFFFF;
-    lcfound2(0);
-    lcfound2(2);
+    lcfound_close(0);
+    lcfound_close(2);
     uint32_t a4 = (ScoreSum & 0xFF0000) | (uint16_t)((uint16_t)ScoreSum - 6 + g.ScoreSumbytes[0]);
     print(SYM_ShowGoalBoxPos);
     uint16_t d1 = 5, v = m16(a4 + 4);
@@ -445,7 +445,7 @@ void ShowGoalBox(void)
     uint32_t a1 = SYM_GoalBoxText;
     uint16_t y = m8(a4 + 3);
     if (a2) y = (uint16_t)(y + 0x1A);
-    if (r8(RAM_OFF_tmgoals + y) == 3 && !((uint16_t)(m8(a4 + 3) - GoalieCount(a2)) & 0x8000)) {
+    if (r8(RAM_OFF_tmgoals + y) == 3 && !((uint16_t)(m8(a4 + 3) - GetGoalieCount(a2)) & 0x8000)) {
         a1 = (a1 & 0xFF0000) | (uint16_t)((uint16_t)a1 + m16(a1));
         if (!a2) {
             StartHatTrick();

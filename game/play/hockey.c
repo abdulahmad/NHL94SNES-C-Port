@@ -1222,7 +1222,7 @@ static void choose_stars(void)
         if (m8(a1 + 2) & 0xF0) g.otgoalscorer = (uint16_t)(g.otgoalscorer + 0x1A);
     }
     g.starplayerend = GetPlayerCount(0);
-    g.stargoalieend = GoalieCount(0);
+    g.stargoalieend = GetGoalieCount(0);
     uint16_t x = 0;
     do {
         if ((uint16_t)(x - g.starplayerend) & 0x8000) {
@@ -1261,7 +1261,7 @@ static void choose_stars(void)
         x++;
         if ((uint16_t)(g.starplayerend - 0x1A) & 0x8000 && !((uint16_t)(x - 0x1A) & 0x8000)) {
             g.starplayerend = (uint16_t)(GetPlayerCount(2) + 0x1A);
-            g.stargoalieend = (uint16_t)(GoalieCount(2) + 0x1A);
+            g.stargoalieend = (uint16_t)(GetGoalieCount(2) + 0x1A);
         }
     } while ((uint16_t)(x - 0x34) & 0x8000);
 }
@@ -2600,7 +2600,7 @@ uint16_t PauseGoalieMode(uint16_t d1)
  * none, from none the last) */
 uint16_t PauseGoalie(uint16_t d1)
 {
-    uint16_t d0 = GoalieCount(seta2());
+    uint16_t d0 = GetGoalieCount(seta2());
     uint16_t a2 = seta2(), v;
     uint16_t gl = r16(RAM_OFF_tmgoalie + a2);
     if (d1 & 0x8180) {
@@ -3753,7 +3753,7 @@ void PrintLinePlayers(uint16_t a2)
     print(SYM_PrintLinePlayersPos);
     eraser(0x20, 0x13, g.blankchar);
     print(SYM_PrintLinePlayersPos2);
-    uint16_t d1 = (uint16_t)(GoalieCount(a2) - 1);
+    uint16_t d1 = (uint16_t)(GetGoalieCount(a2) - 1);
     uint32_t a5 = SYM_LineGoalieMarks, a3 = SYM_PrintLinePlayers_4;
     uint16_t d0 = (uint16_t)(g.SelectedPlayerIdx - 1);
     if (!(d0 & 0x8000)) {
@@ -3800,7 +3800,7 @@ void PrintLinePlayerList(uint16_t d4, uint16_t mask, uint16_t a2)
         if ((uint8_t)d1 == (uint8_t)g.curplayer[0]) g.printa = 0x2000;
         g.printx = 2;
         uint16_t r1 = (uint16_t)((a3 & 0xFF) - 1), r2 = 0;
-        if ((uint16_t)(r1 - GoalieCount(a2)) & 0x8000) r2 = 0x10;
+        if ((uint16_t)(r1 - GetGoalieCount(a2)) & 0x8000) r2 = 0x10;
         GetNameandAttrib(r1, d4, mask, a2, r2);
         a3++;
         g.printy++;

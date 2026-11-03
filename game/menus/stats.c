@@ -119,7 +119,7 @@ static uint16_t player_rating(uint16_t d1, uint16_t a2, uint16_t hotcold)
 {
     uint32_t a1 = SYM_AttribMenuSkater;
     uint16_t r2 = 0;
-    if ((uint16_t)(g.curplayer[0] - GoalieCount(a2)) & 0x8000) {
+    if ((uint16_t)(g.curplayer[0] - GetGoalieCount(a2)) & 0x8000) {
         a1 = SYM_AttribMenuGoalie;
         r2 = 0x10;
     }
@@ -215,7 +215,7 @@ void ShowRosterLine(uint16_t a2)
     print(SYM_ShowRosterLinePos2);
     eraser(0x20, 0x13, g.blankchar);
     print(SYM_YSwitchTeamsTxt2);
-    uint16_t d1 = (uint16_t)(GoalieCount(a2) - 1);
+    uint16_t d1 = (uint16_t)(GetGoalieCount(a2) - 1);
     uint32_t a5 = SYM_RosterGoalieMarks, a3 = SYM_RosterGoalieList;
     uint16_t d0 = (uint16_t)(g.SelectedPlayerIdx - 1);
     if (!(d0 & 0x8000)) {
@@ -231,7 +231,7 @@ void ShowRosterLine(uint16_t a2)
         g.printx = 4;
         uint16_t r1 = (uint16_t)(m8(a3) - 1);
         a3 = (a3 & 0xFF0000) | (uint16_t)(a3 + 1);
-        uint16_t r2 = (uint16_t)(r1 - GoalieCount(a2)) & 0x8000 ? 0x10 : 0;
+        uint16_t r2 = (uint16_t)(r1 - GetGoalieCount(a2)) & 0x8000 ? 0x10 : 0;
         GetNameandAttrib(r1, d4, mask, a2, r2);
         g.printy += 2;
     } while (!(--d1 & 0x8000));
@@ -390,11 +390,11 @@ uint16_t SelectLinePlayer(uint16_t a2, uint16_t r7)
     g.irqline2 = 7;
     if ((uint16_t)(g.lineslots[0] - g.linecursor[0] - 3) & 0x8000) {
         g.listcount[0] = GetDefenseCount(a2);
-        g.pickfirst[0] = GoalieCount(a2);
+        g.pickfirst[0] = GetGoalieCount(a2);
         g.pickfirst[0] = (uint16_t)(g.pickfirst[0] + GetForwardCount(a2));
     } else {
         g.listcount[0] = GetForwardCount(a2);
-        g.pickfirst[0] = GoalieCount(a2);
+        g.pickfirst[0] = GetGoalieCount(a2);
     }
     g.picktop[0] = g.pickfirst[0];
     g.pickrows[0] = 9;

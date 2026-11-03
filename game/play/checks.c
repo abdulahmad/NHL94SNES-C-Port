@@ -154,7 +154,7 @@ void ChkOffsides_rtl(void) {}
 void rtss(void) {}
 
 /* Flip direction dir when player o skates backwards, then accelerate toward it. */
-void revplayeracc(int o, uint16_t dir)
+void noturn(int o, uint16_t dir)
 {
     if (g.pfrev[o]) dir ^= 4;
     playeracc(dir);
@@ -172,7 +172,7 @@ void skatetopuckinit(uint16_t *d0, uint16_t *d1)
 }
 
 /* Icing: once armed and not yet called, the loose puck past the far goal line calls it. */
-void PuckIChk(void)
+void puckIChk(void)
 {
     if (!(g.iflags & 4) || (g.iflags & 1) || !(g.puckc & 0x8000)) return;
     if (g.iflags & 2) {
@@ -233,7 +233,7 @@ uint16_t EvadePC(int o, uint16_t d0)
 
 /* Slow player o down without changing his animation: a human goalie (not carrying the puck) loses
  * half his speed, everybody else ($70 + legstr) * timestep per axis, down to zero. */
-void StopNA(int o)
+void stopna(int o)
 {
     if (g.position[o] == 0 && !(g.playerpad[o] & 0x8000) && 2 * o != g.puckc) {
         g.Xvel[o] = (int16_t)(g.Xvel[o] >> 1);           /* (cmp #$8000, ror: the sign kept) */
@@ -562,7 +562,7 @@ void goalieacc(int o, uint16_t d0)
     d0 &= 0xF;
     if (d0 >= 8) {
         if ((g.playerpad[o] & 0x8000) && d0 != 9) goto ready;
-        if (g.Xvel[o] | g.Yvel[o]) { StopNA(o); return; }
+        if (g.Xvel[o] | g.Yvel[o]) { stopna(o); return; }
 ready:
         if (g.pf2aip[o]) return;
         SetSPA(o, (uint16_t)SYM_SPAgready);
@@ -573,7 +573,7 @@ ready:
         if (ay & 0x8000) ay = (uint16_t)-ay;
         if (ay >= 0x98) {
             if (!(g.playerpad[o] & 0x8000) && g.SPA[o] >= (uint16_t)SYM_SPAgdive && g.SPA[o] < (uint16_t)SYM_SPAinjury1) {
-                StopNA(o);
+                stopna(o);
                 return;
             }
             if (d0 == g.facedir[o]) goto wait;
@@ -688,11 +688,11 @@ l10:
 
 
 /* Player o stops: a fast one (over $1000 on an axis) glides (backwards) or plays the stop (the
- * puck carrier with the skate stop sound $11), then slows down (StopNA). */
+ * puck carrier with the skate stop sound $11), then slows down (stopna). */
 void dostop(int o)
 {
     uint16_t vx = (uint16_t)g.Xvel[o], vy = (uint16_t)g.Yvel[o];
-    if (!NEG(vx, 0xEFFF) && NEG(vx, 0x1001) && !NEG(vy, 0xEFFF) && NEG(vy, 0x1001)) { StopNA(o); return; }
+    if (!NEG(vx, 0xEFFF) && NEG(vx, 0x1001) && !NEG(vy, 0xEFFF) && NEG(vy, 0x1001)) { stopna(o); return; }
     uint16_t anim = (uint16_t)SYM_SPAglide;
     if (!g.pfrev[o]) {
         if (2 * o == g.puckc) sfx(0x11, vx, vy);
@@ -700,7 +700,7 @@ void dostop(int o)
         g.pf2aip[o] = anim;
     }
     SetSPAFromA(o, anim);
-    StopNA(o);
+    stopna(o);
 }
 
 /* Player o's wanted direction needs no turn (d0 = wanted - facing, * 2; d2 the direction to skate):
@@ -730,7 +730,7 @@ void noturn0(int o, uint16_t d0, uint16_t d2)
         g.pf2aip[o] = y;
         SetSPA(o, anim);
     }
-    revplayeracc(o, d2);
+    noturn(o, d2);
 }
 
 /* Player o skates toward direction d0 (low nibble: 0-7, 8 none, 9 stop): goalies by goalieacc;
@@ -801,7 +801,7 @@ turn:
         SetSPA(a3, d1);
         g.pf2aip[a3] = 1;
     }
-    if (d3 >= 3) revplayeracc(a3, d2);
+    if (d3 >= 3) noturn(a3, d2);
 }
 
 static uint16_t asspuckc_chkdir(int o, uint16_t d0);
@@ -928,7 +928,7 @@ static uint16_t off_zone(uint16_t a2, uint16_t d0, uint16_t d3)
 
 /* (asswingo / asscentero / asscenterd's start: on offense the carrier gets asspuckc ($11) on top
  * and the other team's puck makes it assignment def, on defense his own team's does; the clock
- * stopped: assnothing; then check4bench; a human is left alone; the first time, the timers (and
+ * stopped: donothing; then check4bench; a human is left alone; the first time, the timers (and
  * with spots the last spot row) reset.
  * Nonzero: go on.) */
 static int ass_start(int o, int a3, uint8_t def, int carrier, int spots)
@@ -936,7 +936,7 @@ static int ass_start(int o, int a3, uint8_t def, int carrier, int spots)
     uint16_t pc = (uint16_t)g.puckc;
     if (carrier && 2 * o == g.puckc) { assinsert(o, 0x11); return 0; }
     if (!(pc & 0x8000) && (g.pfteam[o] == r16(RAM_OFF_pfteam + pc)) != carrier) { assreplace(o, def); return 0; }
-    if (g.gmclock) { assnothing(o, a3); return 0; }
+    if (g.gmclock) { donothing(o, a3); return 0; }
     if (check4bench(o)) return 0;
     if (!(g.playerpad[o] & 0x8000)) return 0;
     if (g.pflags[o] & pfna) {
@@ -1397,7 +1397,7 @@ void assbreakaway(int o, int a3)
     if (g.gmclock) {
         GlideBack(o);
         g.nopuck[o] = 0x3C;
-        assnothing(o, a3);
+        donothing(o, a3);
         return;
     }
     uint16_t d0 = (uint16_t)g.Ypos[o];
@@ -1549,7 +1549,7 @@ l3:
     if (randomd0(d0) < 2) g.temp3[o] = 0xF0;
 l9:
     if (!(g.playerpad[o] & 0x8000)) return;
-    if (g.gmclock) { GlideBack(o); assnothing(o, a3); return; }
+    if (g.gmclock) { GlideBack(o); donothing(o, a3); return; }
     if (!(r16(RAM_OFF_tmflags + a2) & 2)) {
         if (g.puckc & 0x8000) goto l5;
         g.temp3[o] = (int16_t)(g.temp3[o] - g.d7);
@@ -1737,7 +1737,7 @@ void pucknorm_move(int x, int a3, uint16_t d0, uint16_t a0)
         g.puckvx[0] = (int16_t)r16(RAM_OFF_Xvel + a2);
         g.puckvy[0] = (int16_t)r16(RAM_OFF_Yvel + a2);
     }
-    PuckIChk();
+    puckIChk();
     ChkOffsides(d0);
     if (g.gmclock) goto l13;
     if (!(g.puckc & 0x8000)) { g.pspuckback = 0; goto l12; }
@@ -1831,7 +1831,7 @@ static uint16_t asspuckc_chkdir(int o, uint16_t d0)
 void asspuckc(int o, int a3)
 {
     if (2 * o != g.puckc || !(g.playerpad[o] & 0x8000)) { assexit(o); return; }
-    if (g.gmclock) { GlideBack(o); assnothing(o, a3); return; }
+    if (g.gmclock) { GlideBack(o); donothing(o, a3); return; }
     if (g.pflags[o] & pfna) {
         g.pflags[o] &= 0xFFFD;
         g.temp1[o] = 0;

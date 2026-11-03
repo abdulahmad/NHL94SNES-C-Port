@@ -30,7 +30,7 @@ void pucknothing(void)
 
 /* The number of goalies of team a2: the nibbles of its goalie odds word (byte-swapped) until the
  * rest is zero. */
-uint16_t GoalieCount(uint16_t a2)
+uint16_t GetGoalieCount(uint16_t a2)
 {
     uint32_t bank = SYM_TeamList >> 16;
     uint16_t t = r16(RAM_OFF_tmdata + a2);
@@ -512,7 +512,7 @@ l12:
         skateto(o, px & 0x8000 ? 0xFFFC : 4, g.pfgoal[o] ? 0xFF07 : 0xF9, SYM_rtss, a3);
         return;
     }
-    if (r16(RAM_OFF_paddir + g.playerpad[o]) == 8) StopNA(o);
+    if (r16(RAM_OFF_paddir + g.playerpad[o]) == 8) stopna(o);
 l13:
     if (!g.pf2aip[o]) SetSPAFromA(o, (uint16_t)SYM_SPAgready);
     if (g.gmclock) return;
@@ -765,7 +765,7 @@ l45:
     if (!(g.playerpad[o] & 0x8000)) return;
     d2 = (uint16_t)g.temp2b[o];
     if ((uint16_t)(d2 - 7) == 0 || ((uint16_t)(d2 - 7) & 0x8000)) playeracc(d2);
-    else StopNA(o);
+    else stopna(o);
     return;
 l48:
     if (!(g.puckc & 0x8000) || (g.iflags & 4)) goto l44;
