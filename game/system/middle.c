@@ -1,4 +1,11 @@
-/* middle: frame drawing, digits, the pads and random numbers (src/routines/middle). */
+/* middle: arithmetic, random numbers, the heap and its handles, the pads and the multitap, frame
+ * drawing and digits (src/routines/middle).
+ *
+ * The multiplies and divides use the console's multiplier and divider; here they are the same
+ * arithmetic in C, each with the original's operand widths (an "8-bit" operand is the low byte
+ * of the register), signs and odd results (Div32U's $7FFF when the quotient would not fit its
+ * test, which is stricter than fitting). cf is the 65816's carry where a routine's caller goes on
+ * using it (an adc with no clc after the call): the multiplies set it as the original leaves it. */
 #include "game.h"
 
 /* A random number from 0 to limit-1 */
@@ -1091,6 +1098,8 @@ void PrintLetterSprites(uint32_t a1, uint16_t x, uint16_t y)
 
 /* ---- the heap: handles, blocks (a header of words: size, flags, next, previous) ---- */
 
+/* Handles: 64 entries of an address word and a bank word at $2000-$20FF (0, 0 = free) */
+
 static uint16_t hr(uint32_t bank, uint16_t y) { return m16(bank + y); }
 static void hw(uint32_t bank, uint16_t y, uint16_t v) { mset16(bank + y, v); }
 /* (block y's link words: next at +4, previous at +6) */
@@ -1426,3 +1435,37 @@ void PrintScrollArrows(void)
     print((uint16_t)(g.listtop[0] - 1) & 0x8000 ? SYM_PrintScrollArrowsPos2 : SYM_LeftArrowTxt2);
     QueueTextDMA();
 }
+
+/* 8 x 8 bits into 16 (A): unsigned; X signed; both signed */
+uint16_t Mul8U(uint16_t a, uint16_t x) { return (uint16_t)((a & 0xFF) * (x & 0xFF)); }
+
+/* X x A (low byte) / 256 into A (and $09): unsigned; X signed (the magnitude's, negated); both
+ * signed (the carry as for Mul16x8U, never set by the negation) */
+uint16_t Mul16x8HiU(uint16_t x, uint16_t a) { return (uint16_t)(Mul16x8U(x, a) >> 8); }
+
+/* r2 (16 bits) / r1 into r0: unsigned ($7FFF for 0); signed */
+uint16_t Div16U(uint16_t n, uint16_t d) { return d ? (uint16_t)(n / d) : 0x7FFF; }
+
+/* r2 (16 bits) / r1 (low byte) into r0, $7FFF for 0 */
+uint16_t Div16x8U(uint16_t n, uint16_t d) { return d & 0xFF ? (uint16_t)(n / (d & 0xFF)) : 0x7FFF; }
+
+/* X / A (low byte) into A, the divider's own (x / 0 = $FFFF): unsigned; X signed */
+uint16_t DivX8U(uint16_t x, uint16_t a) { return a & 0xFF ? (uint16_t)(x / (a & 0xFF)) : 0xFFFF; }
+
+/* A random number from 0 to limit-1, for a limit below 256 (randoma8_go: randomd0A's way in) */
+uint16_t randoma8_go(uint16_t limit) { return Mul8U(limit, RandomWord() & 0xFF) >> 8; }
+
+uint16_t randoma8(uint16_t limit) { return randoma8_go(limit); }
+
+/* d1 = the buttons that changed on any pad */
+uint16_t ReadAnyPad(void) { return g.padchangeany; }
+
+/* 2 * JoyDirTable[the d-pad bits of a] (JoyDirIndex_Hi: of a's high byte) */
+uint16_t JoyDirIndex(uint16_t a) { return (uint16_t)(rom8(SYM_JoyDirTable + (a & 0xF)) << 1); }
+
+uint16_t JoyDirIndex_Hi(uint16_t a) { return JoyDirIndex((uint16_t)(a >> 8 | a << 8)); }
+
+uint16_t Cos(uint16_t a) { return Sin((uint16_t)(a + 0x0100)); }
+
+/* HeapInit at the same starts */
+void HeapReset(void) { HeapInit(g.HeapStart7E, g.HeapStart7F); }

@@ -278,3 +278,4 @@ uint16_t IntroSequence_4(IntroDP *s);
 void IntroSequence_framehook(void);
 void IntroSequence(void);
 uint16_t GetPauseTeam(void);
+Pad getpzjoy(void);

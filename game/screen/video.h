@@ -1,4 +1,4 @@
-/* video.c: the score and clock displays (src/routines/video). */
+/* video.c: VRAM, sprites, the interrupts and hooks, and the score and clock (src/routines/video). */
 #pragma once
 #include <stdint.h>
 
@@ -73,3 +73,22 @@ void NMI_HookReturn(void);
 void NMI_SendOAM(uint16_t x);
 void NMI_Tick(void);
 void NMI_FrameHookReturn(uint8_t b);
+void NullHook(void);
+void IRQHook_Off(void);
+void WaitFrames_Inc(uint16_t x, uint16_t y);
+void FadeIn(void);
+void FadeOut(void);
+void ClearFrameHook(void);
+void ClearTextMap(void);
+void ClearTextMap2(void);
+void ClearTextMapBottom(void);
+void SendTextMap(void);
+void SendTextMap2(void);
+void SendTextMapRows(void);
+void SendTextMap2Rows(void);
+void FreeCacheEntryA(uint16_t a, uint16_t y);
+void SendColours(void);
+void IRQ(void);
+void GetFrameTiles_drawat(uint32_t p0, uint16_t a, uint16_t x, uint16_t y);
+uint16_t DrawSpritePieces_cacheat(uint32_t p0, uint16_t x);
+uint16_t DrawSpritePieces_cacheframe(uint16_t a, uint32_t p1, uint16_t x);

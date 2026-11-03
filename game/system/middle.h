@@ -1,4 +1,4 @@
-/* middle.c: frames, digits, the pads and random numbers (src/routines/middle). */
+/* middle.c: arithmetic, random numbers, the heap, the pads, frames and digits (src/routines/middle). */
 #pragma once
 #include <stdint.h>
 
@@ -87,3 +87,15 @@ void Multi5ConnectCheck(void);
 void Multi5Init(void);
 void Multi5Bios(uint8_t b);
 void PrintScrollArrows(void);
+uint16_t Mul8U(uint16_t a, uint16_t x);
+uint16_t Mul16x8HiU(uint16_t x, uint16_t a);
+uint16_t Div16U(uint16_t n, uint16_t d);
+uint16_t Div16x8U(uint16_t n, uint16_t d);
+uint16_t DivX8U(uint16_t x, uint16_t a);
+uint16_t randoma8_go(uint16_t limit);
+uint16_t randoma8(uint16_t limit);
+uint16_t ReadAnyPad(void);
+uint16_t JoyDirIndex(uint16_t a);
+uint16_t JoyDirIndex_Hi(uint16_t a);
+uint16_t Cos(uint16_t a);
+void HeapReset(void);

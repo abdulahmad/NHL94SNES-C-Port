@@ -1,4 +1,5 @@
-/* sound: the sound CPU's uploads and the sound effects (src/routines/sound). */
+/* sound: the sound driver's commands and uploads, the sequencer and the sound effects
+ * (src/routines/sound). */
 #include "game.h"
 
 #define APUIO0 0x2140
@@ -416,6 +417,25 @@ void SPCMenuUpload(void)
     g.cursong = 0;
     if (g.sndbank[0] != SoundBankMenu) sample_upload(SoundBankMenu, SYM_MenuSfxTable, SYM_MenuSampleList, 0x0040);
     g.streamloaded = 0;
+}
+
+/* The sound driver's commands: wait for APUIO0 to be 0, send the arguments and the command, wait
+ * for the driver to echo it, clear APUIO0 */
+static void spc_wait(void) { while (io_r8(0x2140)) {} }
+/* (the SPCCmd routines' send: cmd to APUIO0, then wait for the driver to echo it back) */
+static void spc_send(uint8_t cmd)
+{
+    io_w8(0x2140, cmd);
+    while (io_r8(0x2140) != cmd) {}
+}
+
+/* Sound driver commands $07 (voice x: volume, sample, ADSR from [p0]), $08 (main volume, pitch
+ * modulation, noise, echo, FLG), $09 (echo), $0A (the echo filter: 8 bytes), each in two or three
+ * sends */
+static void spc_ack(uint8_t cmd)
+{
+    io_w8(0x2140, cmd);
+    while (io_r8(0x2140) != cmd) {}
 }
 
 /* Command $0E: the volume of voice x, a the left (APUIO2) and y the right (APUIO3) */
@@ -1099,3 +1119,45 @@ void SPCUploadBlock(uint32_t p0)
     SPCSendSample((p0 & 0xFF0000) | (uint16_t)((uint16_t)p0 + 4), (uint16_t)(len << 8 | len >> 8), (uint16_t)(lp << 8 | lp >> 8));
     g.SoundLock[0]++;
 }
+
+/* SoundFadeSpeed = a, the amount SoundUpdate takes off SoundVolume each frame */
+void SetSoundFade(uint16_t a) { g.SoundFadeSpeed = a; }
+
+static void spc_cmd(uint8_t cmd) { spc_wait(); spc_send(cmd); io_w8(0x2140, 0); }
+
+void SPCReset(void) { spc_cmd(0x01); }
+
+void SPCUnload(void) { spc_cmd(0x04); }
+
+void SPCKeyOffAll(void) { spc_cmd(0x0D); }
+
+void SPCKeyOff(uint8_t x) { spc_wait(); io_w8(0x2141, x); spc_send(0x05); io_w8(0x2140, 0); }
+
+void SPCKeyOn(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x06); io_w8(0x2140, 0); }
+
+void SPCSetPitch(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x0B); io_w8(0x2140, 0); }
+
+void SPCSetGain(uint8_t x, uint8_t y) { spc_wait(); io_w8(0x2142, y); io_w8(0x2141, x); spc_send(0x0C); io_w8(0x2140, 0); }
+
+/* Sequencer: command $0C (the GAIN DSPGain of voice y); then $0B (the pitch SendPitch of voice y) */
+static void seq_cmd0c(uint8_t y) { spc_wait(); io_w8(0x2142, g.DSPGain); io_w8(0x2141, y); spc_send(0x0C); io_w8(0x2140, 0); }
+
+void SeqCmd0C(uint8_t y) { seq_cmd0c(y); }
+
+void SeqCmd0C0B(uint8_t y) { seq_cmd0c(y); SeqCmd0B(y); }   /* (its own copy of $0C, then into SeqCmd0B) */
+
+/* (SPCSetMaster and SPCSetEcho: 5 bytes from [p0] in two sends, cmd with the first three, cmd2 with the
+ * last two) */
+static void spc_cmd5(uint8_t cmd, uint8_t cmd2, uint32_t p0)
+{
+    spc_wait();
+    io_w8(0x2141, m8(p0)); io_w8(0x2142, m8(p0 + 1)); io_w8(0x2143, m8(p0 + 2));
+    spc_ack(cmd);
+    io_w8(0x2141, m8(p0 + 3)); io_w8(0x2142, m8(p0 + 4));
+    spc_ack(cmd2);
+    io_w8(0x2140, 0);
+}
+
+void SPCSetMaster(uint32_t p0) { spc_cmd5(0x08, 0x82, p0); }
+
+void SPCSetEcho(uint32_t p0) { spc_cmd5(0x09, 0x83, p0); }

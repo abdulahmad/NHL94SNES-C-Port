@@ -1,4 +1,6 @@
-/* video: the score, clock, crowd and sort coordinates (src/routines/video). */
+/* video: the DMA queue, VRAM and colours, text maps, the sprite tile cache and the OAM, the IRQ,
+ * NMI and frame hooks, fades, and the score, clock, crowd and sort coordinates
+ * (src/routines/video). */
 #include "game.h"
 
 /* Referee graphics: only clears the referee flag here */
@@ -1689,4 +1691,73 @@ void NMI_FrameHookReturn(uint8_t b)
     SoundUpdate();
     UpdateStreamSfx();
     g.NMISkip = 0;
+}
+
+/* Empty hooks and the reset stub */
+void NullHook(void) {}
+
+void IRQHook_Off(void) {}
+
+void WaitFrames_Inc(uint16_t x, uint16_t y) { WaitFrames(x, (uint16_t)(y + 1)); }
+
+/* Fade the screen in after a 5-frame delay, or out: BrightnessHook as the frame hook */
+void FadeIn(void) { g.fadestep = 5; SetFrameHook(SYM_BrightnessHook); }
+
+void FadeOut(void) { g.fadestep = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
+
+/* Set the frame hook back to the empty routine */
+void ClearFrameHook(void) { SetFrameHook(SYM_NullHook); }
+
+/* Fill the text map with the blank tile (textmap2 with charofs2; from row 12 down) */
+void ClearTextMap(void) { MemFill(0x7E0000 + RAM_OFF_textmap, 0x0800, (uint16_t)(g.blankchar + g.charofs)); }
+
+void ClearTextMap2(void) { MemFill(0x7E0000 + RAM_OFF_textmap2, 0x0800, (uint16_t)(g.blankchar + g.charofs2)); }
+
+void ClearTextMapBottom(void) { MemFill(0x7E0000 + RAM_OFF_textmap + 0x300, 0x0500, (uint16_t)(g.blankchar + g.charofs)); }
+
+/* Send the text map (all, or rows 1-12) or the second text map to video memory */
+static void send_map(uint32_t off, uint16_t x, uint16_t y) { uint32_t p0 = 0x7E0000 + off; DMAToVRAM(&p0, x, y, 0); }
+
+void SendTextMap(void) { send_map(RAM_OFF_textmap, 0x0800, 0x0000); }
+
+void SendTextMap2(void) { send_map(RAM_OFF_textmap2, 0x0800, 0x0400); }
+
+void SendTextMapRows(void) { send_map(RAM_OFF_textmap + 0x40, 0x0300, 0x0020); }
+
+void SendTextMap2Rows(void) { send_map(RAM_OFF_textmap2 + 0x40, 0x0300, 0x0420); }
+
+void FreeCacheEntryA(uint16_t a, uint16_t y) { FreeCacheEntry((uint16_t)((a >> 8 & 0xFF) << 1), y); }
+
+/* Send the 256 colours of the colour buffer */
+void SendColours(void) { DMAToCGRAM(0x7E0000 + RAM_OFF_colourbuf, 0x0100, 0); }
+
+/* The IRQ and NMI vectors */
+void IRQ(void) { IRQ_Fast(); }
+
+/* (unused entries) DrawSprite with the frame at [p0]; the tile cache entry of the frame at [p0] or
+ * of frame a of the sprite set at [p1], loading it when needed */
+void GetFrameTiles_drawat(uint32_t p0, uint16_t a, uint16_t x, uint16_t y) { DrawSprite_draw(p0, a, x, y, x); }
+
+/* (unused entry) The tile cache entry * 2 of the frame at [p0], found by its number with
+ * FrameByNumber, else by its address; LoadFrameTiles when it is not cached */
+uint16_t DrawSpritePieces_cacheat(uint32_t p0, uint16_t x)
+{
+    uint16_t y = g.FrameCacheCount;
+    if (!y) return LoadFrameTiles(p0, x);
+    if (!g.FrameByNumber) return FindCachedFrame(p0, 0, y);
+    x = g.DrawFrameNum;
+    uint16_t a = r16(RAM_OFF_FrameCacheOf + x);
+    if (a & 0x8000) return LoadFrameTiles(p0, x);
+    return (uint16_t)((a >> 8) << 1);
+}
+
+/* (unused entry) DrawSpritePieces_cacheat for frame a of the sprite set at [p1] (DrawFrameNum = a) */
+uint16_t DrawSpritePieces_cacheframe(uint16_t a, uint32_t p1, uint16_t x)
+{
+    g.DrawFrameNum = a;
+    uint32_t s = p1 & 0xFFFFFF;
+    uint16_t k = (uint16_t)(a << 2);
+    uint32_t lo = (uint32_t)m16(s + k) + (uint16_t)p1;
+    uint16_t hi = (uint16_t)(m16(s + (uint16_t)(k + 2)) + (uint16_t)(p1 >> 16) + (lo >> 16));
+    return DrawSpritePieces_cacheat((uint16_t)lo | (uint32_t)hi << 16, x);
 }

@@ -32,11 +32,12 @@ def take(text, name):
     if start is None:
         return None
     end = start
-    if not (lines[start].rstrip().endswith('}') and '{' in lines[start]):
+    head = lines[start].split('/*')[0]                   # a one-line body: braces balanced on the head's line
+    if not ('{' in head and head.count('{') == head.count('}')):
         while end < len(lines) and lines[end] != '}':
             end += 1
     first = start                                         # the comment block right above
-    while first > 0 and (lines[first - 1].startswith(('/*', ' *', '*/')) or lines[first - 1].rstrip().endswith('*/')):
+    while first > 0 and (lines[first - 1].startswith(('/*', ' *', '*/'))):
         first -= 1
         if lines[first].startswith('/*'):
             break

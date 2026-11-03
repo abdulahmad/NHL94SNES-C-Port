@@ -5450,3 +5450,6 @@ uint16_t GetPauseTeam(void)
 {
     return r16(RAM_OFF_cont1team + g.pausepad) == 2 ? 2 : 0;
 }
+
+/* ReadjoyA for the controller that owns the pause menu */
+Pad getpzjoy(void) { return ReadjoyA(g.pausepad >> 1); }

@@ -1,4 +1,4 @@
-/* main: power on and the PAL check (src/routines/main). */
+/* main: the reset, power on and the PAL check (src/routines/main). */
 #include "game.h"
 
 /* The frame time step for a 50 Hz console (STAT78 bit 4; the 16-bit read takes APUIO0 too) */
@@ -58,3 +58,8 @@ void Reset_Fast(void)
     forceblack();
     Opening();
 }
+
+void ResetStub(void) {}
+
+/* The reset vector (native mode, the stack at $1FFF, the direct page 0: the machine's) */
+void Reset(void) { Reset_Fast(); }
