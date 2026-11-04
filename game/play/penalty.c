@@ -19,7 +19,7 @@ uint32_t AdvanceStringPtr(uint32_t a1, uint16_t n)
 uint16_t loadTeamStruct(int o) { return g.pfteam[o] ? 2 : 0; }
 
 /* Add amount to the team stat whose home word is at stat (the visitors' is the next word), for player o's team */
-void addteamstat(int o, uint16_t stat, uint16_t amount)
+void ChkShotStat_add(int o, uint16_t stat, uint16_t amount)
 {
     uint16_t y = (uint16_t)(stat + (g.pfteam[o] ? 2 : 0));
     w16(y, (uint16_t)(r16(y) + amount));
@@ -44,7 +44,7 @@ void ClearPenaltyBuffer(void)
 }
 
 /* The team with more players on the ice gets one more tick of power play time */
-void CountPowerPlayTime(void)
+void updatePPTeamTime(void)
 {
     uint16_t d = (uint16_t)(g.tmap[0] - g.tmap[1]);
     if (!d) return;
@@ -86,7 +86,7 @@ void chkatop(void)
 
 /* Count team a2's players kept off the ice by penalties (the penalty flag $2000 cleared on the way) to set
  * how many it has on the ice (at least 4) */
-void coinsearch(uint16_t a2)
+void InProgress_ap(uint16_t a2)
 {
     uint16_t d1 = 6;
     for (int d0 = 0x32; d0 >= 0; d0 -= 2) {
@@ -271,8 +271,8 @@ void AddPenalty(int o, uint16_t d0)
 void InProgress_coin(void)
 {
     if (g.penshot) return;
-    coinsearch(0);
-    coinsearch(2);
+    InProgress_ap(0);
+    InProgress_ap(2);
 }
 
 /* A word through the data bank (the game's code bank, $9F: only its low 8 KB is WRAM) */
@@ -334,14 +334,14 @@ void InProgress_exit(void)
 }
 
 /* Print string d0 of the string list a1 (each string starts with its length word); returns a1 past it */
-uint32_t PrintStringFromList(uint16_t d0, uint32_t a1)
+uint32_t Fprint(uint16_t d0, uint32_t a1)
 {
     for (; d0; d0--) a1 = (a1 & 0xFF0000) | (uint16_t)(a1 + m16(a1));
     return print(a1);
 }
 
 /* One ticker line at column px (NewTicker3's, on the stack): team d0's name, its score d1 at px + $17 */
-uint32_t TickerTeam(uint16_t d0, uint16_t d1, uint16_t px)
+uint32_t PrintGameInfo(uint16_t d0, uint16_t d1, uint16_t px)
 {
     g.printx = px;
     g.printy++;
@@ -351,7 +351,7 @@ uint32_t TickerTeam(uint16_t d0, uint16_t d1, uint16_t px)
 }
 
 /* Print the label of the current period (overtime's one column to the left) */
-uint32_t PrintPerLabel(void)
+uint32_t printscores1_per(void)
 {
     uint16_t d0 = g.gsp;
     if (d0 == 4) { g.printx--; d0++; }
@@ -364,7 +364,7 @@ uint32_t PrintPerLabel(void)
 }
 
 /* Print team d3's name (0 home), then move down two rows */
-void printteamname(uint16_t d3)
+void printscores1_ps_name(uint16_t d3)
 {
     uint16_t px = g.printx;
     uint32_t bank = SYM_TeamList & 0xFF0000;
@@ -417,7 +417,7 @@ void pplpen(uint16_t a2, uint16_t d0)
     } while (!((d0 = (uint16_t)(d0 - 1)) & 0x8000));
     a1 = (uint16_t)(a1 - 8);
     uint16_t px = g.printx;
-    PutDigits2(m8(bank | a1), RAM_OFF_mesarea + 2);
+    ConvertByteToDigits(m8(bank | a1), RAM_OFF_mesarea + 2);
     w16(RAM_OFF_mesarea, 4);
     print(RAM_OFF_mesarea);
     uint32_t tm = PushTime(d2);
@@ -428,9 +428,9 @@ void pplpen(uint16_t a2, uint16_t d0)
 }
 
 /* Print team a2's (d3's for the name) name, then its score mod 100 as two characters */
-uint32_t PrintTeamNameAndScore(uint16_t a2, uint16_t d3)
+uint32_t printscores1_ps(uint16_t a2, uint16_t d3)
 {
-    printteamname(d3);
+    printscores1_ps_name(d3);
     uint16_t d0 = Mod100(r16(RAM_OFF_tmscore + a2));
     w16(RAM_OFF_mesarea, 4);
     w16(RAM_OFF_mesarea + 2, 0x0020);
@@ -829,7 +829,7 @@ void updatepentime(void)
     g.pentimer = (uint16_t)(v + 0x18 + (t >= g.d7));   /* (sbc's carry) */
     g.sflags3[0] |= 0x0020;
     chkatop();
-    CountPowerPlayTime();
+    updatePPTeamTime();
     pentime_team(0);
     pentime_team(2);
 }
@@ -841,7 +841,7 @@ void printscores1(void)
 {
     if (g.sfhormode) {
         print(SYM_printscores1Pos8);
-        PrintPerLabel();
+        printscores1_per();
         print(SYM_printscores1Pos9);
         uint32_t a1 = PushNumber(Mod100(g.tmscore[0]));
         AlignBigNumber(a1);
@@ -858,7 +858,7 @@ void printscores1(void)
         print(SYM_printscores1Pos2);
         uint16_t d0 = g.gsp;
         if (d0 == 4) { g.printx--; d0++; }
-        PrintStringFromList(d0, SYM_PerLabels);
+        Fprint(d0, SYM_PerLabels);
         EASNLogo();
         updatepwrplay();
     } else {
@@ -871,9 +871,9 @@ void printscores1(void)
     print(SYM_printscores1Pos3);
     Framer(9, 5);
     print(SYM_printscores1Pos4);
-    PrintTeamNameAndScore(0, 0);
+    printscores1_ps(0, 0);
     print(SYM_printscores1Pos5);
-    PrintTeamNameAndScore(2, 1);
+    printscores1_ps(2, 1);
     print(SYM_printscores1Pos6);
     nullrtl89();
     print(SYM_printscores1Pos7);
@@ -927,7 +927,7 @@ void SetHor(void)
     g.Oldrow = 0x2E;
     g.vramrow[0] = 0;
     SprSort();
-    StatsReport();
+    SetHor_rink();
 }
 
 /* Start the referee animation of penalty d0 and its message (the goal box for a goal), the message time
@@ -1200,12 +1200,12 @@ static int ticker_box(uint16_t d3)
     g.printa = 0x2400;
     print(SYM_NewTicker3Pos3);
     g.printx = px;
-    PrintStringFromList(g.OptPlayMode ? (uint16_t)(g.playoffRoundIdx + 1) : 0, SYM_GameLabels);
+    Fprint(g.OptPlayMode ? (uint16_t)(g.playoffRoundIdx + 1) : 0, SYM_GameLabels);
     g.printx = (uint16_t)(px + 0x15);
-    PrintStringFromList((uint16_t)(r16(RAM_OFF_gsper + a0) - 1), SYM_PerLabels);
+    Fprint((uint16_t)(r16(RAM_OFF_gsper + a0) - 1), SYM_PerLabels);
     g.printa = 0x2000;
-    TickerTeam(r16(RAM_OFF_gst1 + a0), r16(RAM_OFF_gss1 + a0), px);
-    TickerTeam(r16(RAM_OFF_gst2 + a0), r16(RAM_OFF_gss2 + a0), px);
+    PrintGameInfo(r16(RAM_OFF_gst1 + a0), r16(RAM_OFF_gss1 + a0), px);
+    PrintGameInfo(r16(RAM_OFF_gst2 + a0), r16(RAM_OFF_gss2 + a0), px);
     return 1;
 }
 
@@ -1246,8 +1246,8 @@ static void ticker_start(void)
     }
     NewTicker2();
 }
-void InitTicker(void) { ticker_start(); }
-void TickerNext(void) { ticker_start(); }
+void Intermission_ticker(void) { ticker_start(); }
+void NewTicker2_next(void) { ticker_start(); }
 
 /* Playoffs: the highlight of each game of the round still pending (and not played out) */
 void DoHiLights(void)
@@ -1268,10 +1268,10 @@ void DoHiLights(void)
 
 /* In the intermission (demoflag): the next ticker score every $150 frames, until the ticker is back at its
  * first game: then the highlights. A = 0. */
-uint16_t IntermissionTick(void)
+uint16_t Intermission_tick(void)
 {
     while (g.demoflag && (uint16_t)(g.vcount[0] - g.tickervc) >= 0x150) {
-        TickerNext();
+        NewTicker2_next();
         if (g.tickerstart[0] == g.TickerNum) {
             DoHiLights();
             g.sflags3[0] &= (uint16_t)~0x0008;
@@ -1293,7 +1293,7 @@ void Intermission(void)
     g.pausetimer = 0x0708;
     g.demoflag = 1;
     g.tickervc = (uint16_t)(g.vcount[0] - 0x150);
-    InitTicker();
+    Intermission_ticker();
     g.tickerstart[0] = g.TickerNum;
     g.psfirst = 0;
     g.psitem = 0;
@@ -1309,7 +1309,7 @@ void Intermission(void)
         print((SYM_IntermissionPos & 0xFF0000) | (uint16_t)(SYM_IntermissionPos + 5));
         Framer(0x16, 7);
         printscores1();
-    } while (PauseMenu());
+    } while (Pausemode_menu());
     g.pausemenuon = 0;
     g.InIntermission = 0;
     g.demoflag = 0;

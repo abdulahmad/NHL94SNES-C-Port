@@ -61,7 +61,7 @@ void setoptions_10(uint16_t *a2)
         if (!t) continue;
         if (t & 0x8000) a1 = SYM_PlayoffSetupNames;
         g.printx = 3;
-        PrintStringFromList(x >> 1, a1);
+        Fprint(x >> 1, a1);
         g.printx = 0x11;
         g.d7 = x;
         setoptions_7(0, a2);
@@ -85,7 +85,7 @@ void setoptions_10(uint16_t *a2)
 void setoptions_t1xxxxxxxxxxx(uint16_t x, uint16_t *a2)
 {
     *a2 = x;
-    uint32_t a1 = PlayerShortName(x, GetMatchupPlayer(g.setupmatchup, x));
+    uint32_t a1 = FormatPlayerNumInitial(x, GetMatchupPlayer(g.setupmatchup, x));
     if (!x) MemCopy(a1, 0x000A5C, 0x31);
 }
 
@@ -213,7 +213,7 @@ void setoptions(void)
     ReadAnyPad();
     g.sprpriority = 0;
     print(SYM_setoptionsPos);
-    InitSortObjects();
+    defaultsprites_0();
     g.OldXpos[0] = 0x28;                                   /* (rosxoff) */
     g.OldXpos[6] = 0x28;
     g.notdemo = 0xFFFF;
@@ -254,7 +254,7 @@ void setoptions(void)
             ReadPads();
             g.lastframevc = g.vcount[0];
             g.oldvcount = g.vcount[0];
-            ReadJoy1(&d0, &d1, &d2, &d3);
+            Readjoy1(&d0, &d1, &d2, &d3);
             g.repeatdelay--;
             d1 = ProcessInputWithRepeat(d1, d2, d3) & 0xFFF0;
             if (d1) goto pressed;
@@ -306,6 +306,6 @@ start:;
     g.pojoy = (uint16_t)(g.OptPlayers - 5);
     if (g.OptPlayMode == 1) d2 = PasswordScreen();
     w16(RAM_OFF_PassWord, r16(RAM_OFF_PassWord) | 0x0080);
-    maketree();
+    MakeTree();
     PlayerSelect(a2, d2);
 }

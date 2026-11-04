@@ -3,4 +3,4 @@
 #include <stdint.h>
 
 uint16_t GetTeamRating(uint16_t a2);
-void StatsReport(void);
+void SetHor_rink(void);

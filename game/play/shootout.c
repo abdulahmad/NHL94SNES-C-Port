@@ -113,7 +113,7 @@ void PrintShooterNames(uint16_t a2)
     print(SYM_PrintShooterNamesPos);
     eraser(0x20, 0x13, g.blankchar);
     print(SYM_PrintShooterNamesPos2);
-    uint16_t d1 = (uint16_t)(GoalieCount(a2) - 1);
+    uint16_t d1 = (uint16_t)(GetGoalieCount(a2) - 1);
     uint32_t a5 = SYM_PrintShooterNames_7, a3 = SYM_PrintShooterNames_6;
     if (!((uint16_t)(g.SelectedPlayerIdx - 1) & 0x8000)) {
         a3 = a2 ? RAM_OFF_awayshooters : RAM_OFF_homeshooters;
@@ -131,7 +131,7 @@ void PrintShooterNames(uint16_t a2)
         g.printx = 5;
         a5 = print(a5);
         g.printx = 8;
-        print(PlayerNumName(a2, (uint16_t)(m8(a3) - 1)));
+        print(getname(a2, (uint16_t)(m8(a3) - 1)));
         a3 = (a3 & 0xFF0000) | (uint16_t)(a3 + 1);
         g.printy += 2;
     } while (!((d1 = (uint16_t)(d1 - 1)) & 0x8000));
@@ -151,7 +151,7 @@ void PrintShooterRows(uint16_t d4, uint16_t mask, uint16_t a2)
         if (d1 == g.curplayer[0]) g.printa = 0x2000;
         g.printx = 2;
         uint16_t r1 = (uint16_t)((a3 & 0xFF) - 1), r2 = 0;
-        if ((uint16_t)(r1 - GoalieCount(a2)) & 0x8000) r2 = 0x10;
+        if ((uint16_t)(r1 - GetGoalieCount(a2)) & 0x8000) r2 = 0x10;
         GetNameandAttrib(r1, d4, mask, a2, r2);
         a3++;
         g.printy++;
@@ -203,7 +203,7 @@ void ShooterSelectList(uint16_t a2)
     WaitFrame();
     g.irqline2 = 7;
     g.listcount[0] = GetPlayerCount(a2);
-    uint16_t d0 = GoalieCount(a2);
+    uint16_t d0 = GetGoalieCount(a2);
     g.listcount[0] = (uint16_t)(g.listcount[0] - d0);
     g.pickfirst[0] = d0;
     g.picktop[0] = d0;
@@ -222,7 +222,7 @@ void ShooterSelectList(uint16_t a2)
         SendTextMap2();
         WaitFrame();
         ReadPads();
-        Pad p = ReadPausePad();
+        Pad p = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
         if (d1 & 0x1000) break;
         if (d1 & 0x0800) {
@@ -260,7 +260,7 @@ void PickShooterRow(uint16_t a2)
         ShooterSelectList(a2);
         return;
     }
-    uint16_t d0 = GoalieCount(a2);
+    uint16_t d0 = GetGoalieCount(a2);
     uint16_t a1 = a2 ? RAM_OFF_awayshooters : RAM_OFF_homeshooters;
     uint16_t v = (uint16_t)(r8(a1) + 1);
     if (v != d0 && !((uint16_t)(v - d0) & 0x8000)) v = 1;
@@ -291,7 +291,7 @@ void ShootoutShooters(void)
             SendTextMap();
             WaitFrame();
             ReadPads();
-            Pad p = ReadPausePad();
+            Pad p = getpzjoy();
             uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
             if (d1 & 0x0800) {
                 if (g.curitem[0]) {

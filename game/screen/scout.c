@@ -133,11 +133,11 @@ static void scout_hotcold(void)
     g.hotterteam = 0xFFFF;
 }
 
-/* (ScoutingReport's .12: the commentary's paragraph list (from InitScoutDisplay's a0): $1D, $1C,
+/* (ScoutingReport's .12: the commentary's paragraph list (from InitScoutingDisplay's a0): $1D, $1C,
  * the hot team's $1E, $1F, $20 when the teams differ, $21, the end; no delays, the screen's time) */
 static void scout_list(void)
 {
-    uint32_t a0 = InitScoutDisplay();
+    uint32_t a0 = InitScoutingDisplay();
     uint16_t list[7], n = 0;
     list[n++] = 0x1D;
     list[n++] = 0x1C;

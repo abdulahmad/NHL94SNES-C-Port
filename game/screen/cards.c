@@ -71,7 +71,7 @@ uint32_t PrintCentered(uint32_t a1)
 
 
 /* (DrawPlayerPicture's .8: 1 when curplayer of team a2 is a goalie (below the goalie count)) */
-static uint16_t pic_goalie(uint16_t a2) { return (uint16_t)(g.curplayer[0] - GoalieCount(a2)) & 0x8000 ? 1 : 0; }
+static uint16_t pic_goalie(uint16_t a2) { return (uint16_t)(g.curplayer[0] - GetGoalieCount(a2)) & 0x8000 ? 1 : 0; }
 
 /* (.9: 0 when curplayer is one of the six players of team a2's first line (team data +12), else 1) */
 static uint16_t pic_not_starter(uint16_t a2)
@@ -197,13 +197,13 @@ void DrawPlayerCard(uint16_t a2)
             t = (uint16_t)(m8(a3 + slot) - 1);
         }
         g.curplayer[0] = t;
-        card_print(PlayerNumName(a2, g.curplayer[0]), 0xC);
-        if ((uint16_t)(g.curplayer[0] - GoalieCount(a2)) & 0x8000) {
+        card_print(getname(a2, g.curplayer[0]), 0xC);
+        if ((uint16_t)(g.curplayer[0] - GetGoalieCount(a2)) & 0x8000) {
             card_print(SYM_RosterGroups + 18, 0xD);
             FindGoalieStrengths(a2);
             card_strengths(SYM_StrengthsLabel, SYM_RatingNames + 178);
         } else {
-            uint16_t d1 = GoalieCount(a2);
+            uint16_t d1 = GetGoalieCount(a2);
             uint16_t n = (uint16_t)(GetForwardCount(a2) + d1);
             uint16_t c = (uint16_t)(n - g.curplayer[0]);
             card_print(!c || (c & 0x8000) ? SYM_RosterGroups + 9 : SYM_RosterGroups, 0xD);

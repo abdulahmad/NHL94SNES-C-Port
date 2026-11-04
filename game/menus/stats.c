@@ -68,7 +68,7 @@ uint32_t AttribEnergy(uint16_t d0, uint16_t a2)
 }
 
 /* Roster column: left or right handed (string 1 - bit 0 of d0 of HandedTextTbl); returns a1 past it */
-uint32_t AttribHanded(uint16_t d0) { return PrintStringFromList((d0 & 1) ^ 1, SYM_HandedTextTbl); }
+uint32_t AttribHanded(uint16_t d0) { return Fprint((d0 & 1) ^ 1, SYM_HandedTextTbl); }
 
 /* Roster column: player d0 of team a2's status from tmpdst: a negative word a state (StatusTextTbl
  * 0-3, larger ones 1), bit 12 state 3, otherwise a penalty time and string 4 (5 with bit 14) */
@@ -84,7 +84,7 @@ uint32_t AttribStatus(uint16_t d0, uint16_t a2)
         print(PushTime(s & 0x0FFF));
         s = s & 0x4000 ? 5 : 4;
     }
-    return PrintStringFromList(s, SYM_StatusTextTbl);
+    return Fprint(s, SYM_StatusTextTbl);
 }
 
 /* Print player d0 of team a2's number and name, then at column $19 ($1A out of the pause menu) the
@@ -92,7 +92,7 @@ uint32_t AttribStatus(uint16_t d0, uint16_t a2)
  * included, r2 its weights) */
 void GetNameandAttrib(uint16_t d0, uint16_t d4, uint16_t mask, uint16_t a2, uint16_t r2)
 {
-    print(PlayerNumName(a2, d0));
+    print(getname(a2, d0));
     g.printx = 0x19;
     if (!g.pausesubmenu) g.printx++;
     if (d4 >= 3) {
@@ -119,7 +119,7 @@ static uint16_t player_rating(uint16_t d1, uint16_t a2, uint16_t hotcold)
 {
     uint32_t a1 = SYM_AttribMenuSkater;
     uint16_t r2 = 0;
-    if ((uint16_t)(g.curplayer[0] - GoalieCount(a2)) & 0x8000) {
+    if ((uint16_t)(g.curplayer[0] - GetGoalieCount(a2)) & 0x8000) {
         a1 = SYM_AttribMenuGoalie;
         r2 = 0x10;
     }
@@ -215,7 +215,7 @@ void ShowRosterLine(uint16_t a2)
     print(SYM_ShowRosterLinePos2);
     eraser(0x20, 0x13, g.blankchar);
     print(SYM_YSwitchTeamsTxt2);
-    uint16_t d1 = (uint16_t)(GoalieCount(a2) - 1);
+    uint16_t d1 = (uint16_t)(GetGoalieCount(a2) - 1);
     uint32_t a5 = SYM_RosterGoalieMarks, a3 = SYM_RosterGoalieList;
     uint16_t d0 = (uint16_t)(g.SelectedPlayerIdx - 1);
     if (!(d0 & 0x8000)) {
@@ -231,7 +231,7 @@ void ShowRosterLine(uint16_t a2)
         g.printx = 4;
         uint16_t r1 = (uint16_t)(m8(a3) - 1);
         a3 = (a3 & 0xFF0000) | (uint16_t)(a3 + 1);
-        uint16_t r2 = (uint16_t)(r1 - GoalieCount(a2)) & 0x8000 ? 0x10 : 0;
+        uint16_t r2 = (uint16_t)(r1 - GetGoalieCount(a2)) & 0x8000 ? 0x10 : 0;
         GetNameandAttrib(r1, d4, mask, a2, r2);
         g.printy += 2;
     } while (!(--d1 & 0x8000));
@@ -267,10 +267,10 @@ void SetupScreen(void)
     uint16_t d0 = Decompress(SYM_SmallFontTiles, unpackbuf) >> 5;
     g.nextfreechar = (uint16_t)(g.nextfreechar + d0);
     g.Framercset = g.nextfreechar;
-    RemapTiles(unpackbuf, SYM_PixelRemap8F, d0);
+    remap(unpackbuf, SYM_PixelRemap8F, d0);
     g.nextfreechar = (uint16_t)(g.nextfreechar + 4);
     g.scorechars = g.nextfreechar;
-    RemapTiles(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     uint16_t n = Decompress(SYM_TeamBlocksTiles, unpackbuf);
     g.nextfreechar = (uint16_t)(g.nextfreechar + (n >> 5));
     g.ninetilechars = g.nextfreechar;
@@ -390,11 +390,11 @@ uint16_t SelectLinePlayer(uint16_t a2, uint16_t r7)
     g.irqline2 = 7;
     if ((uint16_t)(g.lineslots[0] - g.linecursor[0] - 3) & 0x8000) {
         g.listcount[0] = GetDefenseCount(a2);
-        g.pickfirst[0] = GoalieCount(a2);
+        g.pickfirst[0] = GetGoalieCount(a2);
         g.pickfirst[0] = (uint16_t)(g.pickfirst[0] + GetForwardCount(a2));
     } else {
         g.listcount[0] = GetForwardCount(a2);
-        g.pickfirst[0] = GoalieCount(a2);
+        g.pickfirst[0] = GetGoalieCount(a2);
     }
     g.picktop[0] = g.pickfirst[0];
     g.pickrows[0] = 9;
@@ -415,7 +415,7 @@ uint16_t SelectLinePlayer(uint16_t a2, uint16_t r7)
         SendTextMap2();
         WaitFrame();
         ReadPads();
-        Pad pd = ReadPausePad();
+        Pad pd = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(pd.press, pd.change, pd.held);
         if (d1 & 0x1000) return 0xFFFF;
         if (d1 & 0x8080) return (uint16_t)(g.picktop[0] + g.pickrows[0] - g.curplayer[0]);
@@ -450,7 +450,7 @@ uint16_t SelectLinePlayer(uint16_t a2, uint16_t r7)
  * the current line with an attribute column; then the loop (TeamRosterLoop): start leaves
  * (RosterRtl), Y switches team (SwapRosterTeam, then TeamRosterRedraw), left / right step the
  * column (MoveRosterColumn), up / down the line (0-7) */
-void TeamRoster(void)
+void TeamRosterScreen(void)
 {
     uint16_t a2 = GetPauseTeam();
     g.SelectedPlayerIdx = (uint16_t)(r16(RAM_OFF_tmline + a2) + 1);
@@ -481,7 +481,7 @@ redraw:
         SendTextMap();
         WaitFrame();
         ReadPads();
-        Pad pd = ReadPausePad();
+        Pad pd = getpzjoy();
         uint16_t d1 = ProcessInputWithRepeat(pd.press, pd.change, pd.held);
         if (d1 & 0x1000) return;
         if (d1 & 0x4000) {
@@ -506,4 +506,30 @@ redraw:
         g.SelectedPlayerIdx = d0;
         ShowRosterLine(a2);
     }
+}
+
+/* statsorder[i] = i for the rows of the list (one at least) */
+void InitStatsOrder(void)
+{
+    uint16_t a = 0, y = 0xFFFF;
+    do {
+        y++;
+        w8(RAM_OFF_statsorder + y, (uint8_t)a);
+        a++;
+    } while (y < g.listend[0]);
+}
+
+/* The first and last row of the player stats list of team a2: its goalies (statcolumn 0), else
+ * its skaters (after the goalies); curitem the first */
+void SetPlayerStatsRange(uint16_t a2)
+{
+    if (!g.statcolumn) {
+        g.listtop[0] = 0;
+        g.listend[0] = GetGoalieCount(a2);
+    } else {
+        g.listtop[0] = GetGoalieCount(a2);
+        g.listend[0] = GetPlayerCount(a2);
+    }
+    g.listend[0]--;
+    g.curitem[0] = g.listtop[0];
 }
