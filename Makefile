@@ -21,6 +21,8 @@ SDLLIB  := $(filter-out -mwindows,$(shell sdl2-config --libs 2>/dev/null))
 SDLSTATIC := $(filter-out -mwindows,$(shell sdl2-config --static-libs 2>/dev/null))
 ifeq ($(OS),Windows_NT)
 EXE     := .exe
+WINDRES ?= $(patsubst %gcc,%windres,$(CC))
+ICONO   := build/obj/icon.o   # (the exe's icon, res/icon.ico)
 endif
 ROM     ?= $(firstword $(wildcard *.smc *.sfc))
 # the first Python 3 that runs (on Windows python3 may be the Store's stand-in, which only says so)
@@ -68,13 +70,16 @@ build/obj/%_gen.o: build/%_gen.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) -c $< -o $@
 
-build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO)
+build/obj/icon.o: res/icon.rc res/icon.ico
+	@mkdir -p $(dir $@)
+	$(WINDRES) -I res $< -O coff -o $@
+build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
 	$(CC) -o $@ $^ $(SDLLIB) -lm
 build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
 	$(CC) -o $@ $^ -lm
 # one file to give a player: SDL2 and the compiler's runtime in it, nothing but the system's DLLs needed
 dist: build/dist/snes94$(EXE)
-build/dist/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO)
+build/dist/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
 	@mkdir -p $(dir $@)
 	$(CC) -static -s -o $@ $^ $(SDLSTATIC) -lm
 
