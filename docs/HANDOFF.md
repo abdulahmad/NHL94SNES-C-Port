@@ -24,6 +24,8 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
   now counts one-line functions too: 855 routines, ok 844, other module 0, renamed 6 (parked), missing 5.
   `test/check.sh` 7 of 7, the clock table 851 and 0 warnings after every unit; the vanilla gate passes at the end.
 
+2026-11-04: CONTRIBUTING.md added. Work stays on `claude/project-thread-4gad59`; do not merge to main.
+
 ## Next, in order
 
 1. **Ask INDIO for ninety-four-snes's oracle tools** (snes9x hook, recordings, the routine-by-routine checker),
