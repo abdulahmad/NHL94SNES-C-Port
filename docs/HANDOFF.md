@@ -7,7 +7,7 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 
 ## Now
 
-S0 checker + S1 flatten stacked on leftover names/recut [#3](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/3). Original-routine files are `game/<module>.c` (no `play/` `menus/` `screen/` `sound/` `system/` extra level). `python3 tools/check_rom_order.py --module print`: 7/7 membership, not ROM order. Names 844/0/6/5. Clock 851. `make CC=gcc ROM=… build/golden` 0 warnings; `test/check.sh` 7 of 7; vanilla PASS. Windowed `snes94` not built here (no SDL2). Next: S2 ROM order (20 modules). Parked 6 / missing 5 stay. Do not merge to main.
+S2 ROM order stacked on flatten [#5](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/5). 20 original-routine files in name_map address order (`title` … `setup`; skip `ram`/`rom`/`snes`). Names 844/0/6/5. Clock 851. `test/check.sh` 7 of 7 after each module. vanilla PASS. Windowed `snes94` not built here (no SDL2). Next: S3 `ram.h` (wide). Parked 6 / missing 5 stay. Do not merge to main.
 
 ## Done
 
@@ -52,7 +52,8 @@ S0 checker + S1 flatten stacked on leftover names/recut [#3](https://github.com/
 5. ~~**S0 ROM-order checker**~~ (2026-11-06): `tools/check_rom_order.py --module M` vs 94S `src/routines/<module>/`.
    Self-test: print membership-complete, not ROM order. Does not fail the tree until S2.
 6. ~~**S1 flatten**~~ (2026-11-06): `game/play|menus|screen|sound|system` → `game/<module>.c`; Makefile `GAME`/`GAMEH` are `game/*.c` / `game/*.h`.
-7. **S2 ROM order** (20 original-routine modules). Parked 6 renamed / 5 missing stay (C `SYM_*_t1`/`_t2` at other addresses; title/intro framehooks have no asm label). Oracle (plan S1/S2) still parked.
+7. ~~**S2 ROM order**~~ (2026-11-06): 20 original-routine files in name_map address order. Parked 6 renamed / 5 missing stay (C `SYM_*_t1`/`_t2` at other addresses; title/intro framehooks have no asm label).
+8. **S3 RAM** (`game/ram.h` vs `ram94s.asm`, offsets stay). Oracle (plan S1/S2) still parked.
 
 ## Needs
 
