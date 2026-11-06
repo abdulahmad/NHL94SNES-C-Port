@@ -570,7 +570,7 @@ uint16_t PasswordScreen(void)
     FramerOutline(3, 3);
     g.PWCharStr[0] = 3;
     print_pw_char(d5);
-    g.fadestep = 0x0A;
+    g.fadein = 0x0A;
     return PasswordRedraw(d4, d5);
 }
 
@@ -925,10 +925,10 @@ void PlayoffScreen(void)
     Decompress(SYM_PlayoffPalette, WRAM24(RAM_OFF_palbuffer));
     n = Decompress(SYM_SmallFontTiles, unpackbuf);
     uint16_t d0 = n >> 5;
-    g.BigFontChars = (uint16_t)(d0 + g.smallfontchars + (n >> 4 & 1));   /* (the last lsr's carry) */
+    g.BigFontchars = (uint16_t)(d0 + g.smallfontchars + (n >> 4 & 1));   /* (the last lsr's carry) */
     remap(unpackbuf, SYM_PixelRemap8F, d0);
     n = Decompress(SYM_SmallFontTiles, unpackbuf);
-    g.scorechars = (uint16_t)((n >> 5) + g.BigFontChars + (n >> 4 & 1));
+    g.scorechars = (uint16_t)((n >> 5) + g.BigFontchars + (n >> 4 & 1));
     p0 = unpackbuf;
     DMAToVRAM(&p0, n, 0xFFFF, 0);
     for (int k = 4; k < 8; k++) w16(RAM_OFF_palbuffer + k * 0x20 + 2, 0x031A);
@@ -1057,12 +1057,12 @@ void PlayoffScreen(void)
     for (;;) {
         WaitFrame();
         ReadPads();
-        if ((g.padnew[0] | g.padnew[1]) == 0x1000) break;
-        if (g.vcount[0] == g.d7) continue;
-        g.d7 = g.vcount[0];
+        if ((g.padnew1[0] | g.padnew1[1]) == 0x1000) break;
+        if (g.Vcount[0] == g.d7) continue;
+        g.d7 = g.Vcount[0];
         PulseColour((uint16_t)(RAM_OFF_palbuffer + 0x2E), 0x7E);
         DMAToCGRAM(WRAM24(RAM_OFF_palbuffer + 0x20), 0x10, 0x10);
-        uint16_t j = g.JoyPad[0] | g.JoyPad[1];
+        uint16_t j = g.PadRaw1[0] | g.PadRaw1[1];
         if (j & 0x0200) d3h = 0xFFFE;
         else if (j & 0x0100) d3h = 2;
         else if (!d3h) continue;
@@ -1138,7 +1138,7 @@ void NewPO(void)
     for (;;) {
         d0 = (d0 + 1) & 0x1F;
         uint16_t a0 = (uint16_t)(SYM_playoffseats + (uint16_t)(d0 << 4));
-        uint16_t t = g.OptTeam1 >= 0x1A ? 0x19 : g.OptTeam1;
+        uint16_t t = g.Opt1team >= 0x1A ? 0x19 : g.Opt1team;
         int found = 0;
         for (d1 = 0xF; !(d1 & 0x8000); d1--) {
             uint8_t s = m8((SYM_playoffseats & 0xFF0000) | a0);
@@ -1159,7 +1159,7 @@ void NewPO(void)
 }
 
 /* Which team each controller plays: in the playoffs the series of the user's team gives HomeTeam,
- * VisTeam, OptTeam2 and gamenum and the pads in use their team (the same table word for each); in
+ * VisTeam, Opt2team and gamenum and the pads in use their team (the same table word for each); in
  * the demo, play modes 0 and 4 only the other games */
 void FigureJoy(void)
 {
@@ -1170,8 +1170,8 @@ void FigureJoy(void)
     uint16_t x = (uint16_t)(d1 << 1), d0;
     g.gamenum = 0xFFFF;
     for (;;) {
-        if (d2 == r16(RAM_OFF_gst1 + x)) { d0 = 0; g.OptTeam2 = r16(RAM_OFF_gst2 + x); break; }
-        if (d2 == r16(RAM_OFF_gst2 + x)) { d0 = 4; g.OptTeam2 = r16(RAM_OFF_gst1 + x); break; }
+        if (d2 == r16(RAM_OFF_gst1 + x)) { d0 = 0; g.Opt2team = r16(RAM_OFF_gst2 + x); break; }
+        if (d2 == r16(RAM_OFF_gst2 + x)) { d0 = 4; g.Opt2team = r16(RAM_OFF_gst1 + x); break; }
         x -= 2;
         if (--d1 & 0x8000) return;
     }
@@ -1549,13 +1549,13 @@ void StartHL2(uint16_t a0, uint16_t d1)
         if (!r16(RAM_OFF_position + x)) g.puckc = (int16_t)(x - 2);
         SprSort();
         uint16_t left = 0xB4;
-        g.oldvcount = g.vcount[0];
+        g.OldVcount = g.Vcount[0];
         for (;;) {
-            while (g.vcount[0] == g.oldvcount) hal_wait_interrupt();
-            uint16_t v = g.vcount[0];
-            frame_steps((uint16_t)(v - g.oldvcount));
+            while (g.Vcount[0] == g.OldVcount) hal_wait_interrupt();
+            uint16_t v = g.Vcount[0];
+            frame_steps((uint16_t)(v - g.OldVcount));
             g.lastframevc = v;
-            g.oldvcount = v;
+            g.OldVcount = v;
             ReadPads();
             if (!(g.sflags & sfpz) && !g.gmclock) {
                 for (uint16_t k = g.d7; k; k--) {
@@ -1744,7 +1744,7 @@ void ShowGoalBox(void)
         a1 = (a1 & 0xFF0000) | (uint16_t)((uint16_t)a1 + m16(a1));
         if (!a2) {
             StartHatTrick();
-            g.Pencntdwn = (int16_t)(g.Pencntdwn + 0xA);
+            g.PenCntDwn = (int16_t)(g.PenCntDwn + 0xA);
         }
     }
     printbig(a1);
@@ -1804,12 +1804,12 @@ void setupice(void)
     FillVRAM(0, 0x20, 0xFFFF, 0);
     unpack(SYM_SmallFontTiles, &t, &c);
     uint32_t s = (uint32_t)t + g.smallfontchars + c;
-    g.Framercset = (uint16_t)s;
-    g.BigFontChars = (uint16_t)(g.Framercset + 4 + (s >> 16));
+    g.framercset = (uint16_t)s;
+    g.BigFontchars = (uint16_t)(g.framercset + 4 + (s >> 16));
     remap(unpackbuf, SYM_PixelRemap83, t);
     remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     n = unpack(SYM_BigFontTiles, &t, &c);
-    g.scorechars = (uint16_t)(t + g.BigFontChars + c);
+    g.scorechars = (uint16_t)(t + g.BigFontchars + c);
     send_tiles(n);
     n = unpack(SYM_TeamBlocksTiles, &t, &c);
     g.ExtraChars = (uint16_t)(t + g.scorechars + c);
@@ -1826,13 +1826,13 @@ void setupice_reset(void)
     g.sflags &= (uint16_t)~sfpz;
     g.Hpos = 0;
     g.Vpos = 0;
-    g.vcountmark[1] = (uint16_t)(g.vcount[1] - 2);
+    g.vcountmark[1] = (uint16_t)(g.Vcount[1] - 2);
     defaultsprites_0();
     nullrtl();
     if (g.gmode & gmdir)
         for (int o = 11; o >= 0; o--) g.pfgoal[o] ^= 1;
     setplayercolors();
-    g.fadestep = 0;
+    g.fadein = 0;
     FadeIn();
     ScreenOn();
 }
@@ -2194,7 +2194,7 @@ uint16_t IntroSequence_30(void)
 }
 
 /* Intro: the start state: BG1 scroll $180 / $190 (job $10 sends it), next state 3, d6 the timeout
- * (vcount + $2D0), d7 the earliest end (vcount + $F0), the Mode 7 registers. (The skip flag d5+2 is
+ * (Vcount + $2D0), d7 the earliest end (Vcount + $F0), the Mode 7 registers. (The skip flag d5+2 is
  * cleared here and never set: its branches are dead.) */
 void IntroSequence_3(IntroDP *s)
 {
@@ -2204,8 +2204,8 @@ void IntroSequence_3(IntroDP *s)
     g.BG1VScroll = 0x0190;
     g.introHookFlags |= 0x0010;
     s->next = 3;
-    s->d6 = (uint16_t)(g.vcount[0] + 0x02D0);
-    g.d7 = (uint16_t)(g.vcount[0] + 0x00F0);
+    s->d6 = (uint16_t)(g.Vcount[0] + 0x02D0);
+    g.d7 = (uint16_t)(g.Vcount[0] + 0x00F0);
     IntroSequence_22();
 }
 
@@ -2234,10 +2234,10 @@ uint16_t IntroSequence_7(IntroDP *s)
     return 0;
 }
 
-/* State 2: wait until vcount reaches d6+2, then state d5 */
+/* State 2: wait until Vcount reaches d6+2, then state d5 */
 uint16_t IntroSequence_8(IntroDP *s)
 {
-    if (!((uint16_t)(g.vcount[0] - s->d6h) & 0x8000)) s->next = s->d5;
+    if (!((uint16_t)(g.Vcount[0] - s->d6h) & 0x8000)) s->next = s->d5;
     return 0;
 }
 
@@ -2296,7 +2296,7 @@ uint16_t IntroSequence_17(IntroDP *s) { s->next = 8; return 0; }
 /* State 12: 30 frames in state 2, then state 8 */
 uint16_t IntroSequence_18(IntroDP *s)
 {
-    s->d6h = (uint16_t)(g.vcount[0] + 0x1E);
+    s->d6h = (uint16_t)(g.Vcount[0] + 0x1E);
     s->next = 2;
     s->d5 = 8;
     return 0;
@@ -2306,9 +2306,9 @@ uint16_t IntroSequence_18(IntroDP *s)
 uint16_t IntroSequence_19(IntroDP *s)
 {
     if (g.brightness != 0x0F) return 0;
-    if ((uint16_t)(g.vcount[0] - g.d7) & 0x8000) return 0;
+    if ((uint16_t)(g.Vcount[0] - g.d7) & 0x8000) return 0;
     if (r16(RAM_OFF_JoyPad)) return 1;
-    return !((uint16_t)(g.vcount[0] - s->d6) & 0x8000);
+    return !((uint16_t)(g.Vcount[0] - s->d6) & 0x8000);
 }
 
 /* Intro: one step of the state machine (d4 = d4+2), unless the frame hook still has jobs; 1 at the end */
@@ -2336,13 +2336,13 @@ void IntroSequence(void)
     SPCIntroUpload();
     g.Mode7InUse = 0xFF;
     InitSprites(0x6000, 0, 0x01A0);
-    g.DMAQueueHead = 0;
-    g.DMAQueueTail = 0;
+    g.DMAlisthead = 0;
+    g.DMAlistend = 0;
     IntroSequence_33(SYM_IntroSequence_1);
     IntroSequence_2();
     g.introHookFlags = 0;
     IntroSequence_3(&s);
-    g.fadestep = 0;
+    g.fadein = 0;
     g.brightness = 0;
     SpriteFrameStart();
     SpriteFrameEnd();

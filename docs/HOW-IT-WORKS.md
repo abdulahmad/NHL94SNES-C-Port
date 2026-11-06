@@ -53,14 +53,14 @@ clock calls at the moment the hardware would (`platform/clock.c`):
 - **NMI** (every frame, at the vertical blank; `NMI` in `system/snes.c`): the NMI hook of the
   current screen, the IRQ timers, the scroll registers, the colour DMA, the DMA queue (tiles and
   maps the game queued during the frame, as far as the frame's DMA budget goes), the sprite table
-  (`NMI_SendOAM`), the frame counter `vcount` (`NMI_Tick`), then the frame hook, the pads
-  (`JoyPad`), the music sequencer (`SoundUpdate`) and the sound stream.
+  (`NMI_SendOAM`), the frame counter `Vcount` (`NMI_Tick`), then the frame hook, the pads
+  (`PadRaw1`), the music sequencer (`SoundUpdate`) and the sound stream.
 - **IRQ** (at a set line, when a screen splits its picture: the title, the stats screens, the
   rink's scoreboard band): `IRQ_Fast` jumps through `IRQHook`, and each `IRQ_*` routine changes
   scroll or layer registers mid-picture and sets the next.
 
 A wait in the game (`hal_wait_interrupt`) is the original's loop polling RAM an interrupt changes
-(`vcount`, `JoyPad`): the console runs to the next interrupt, which runs, and the loop looks again.
+(`Vcount`, `PadRaw1`): the console runs to the next interrupt, which runs, and the loop looks again.
 
 ## How the C stands in for the 65816
 

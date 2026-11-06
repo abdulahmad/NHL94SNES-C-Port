@@ -67,8 +67,8 @@ void checkfornewpen(void)
             uint16_t d0 = r8(a0 - 2);
             uint16_t a1 = (uint16_t)(SYM_Penaltylist + m16(SYM_Penaltylist + d0));
             uint16_t d1 = (uint16_t)(m8((pb | a1) + 1) << 5);
-            uint16_t d = (uint16_t)(d1 - (uint16_t)g.Pencntdwn);
-            if (d && !(d & 0x8000)) g.Pencntdwn = (int16_t)d1;
+            uint16_t d = (uint16_t)(d1 - (uint16_t)g.PenCntDwn);
+            if (d && !(d & 0x8000)) g.PenCntDwn = (int16_t)d1;
         }
         continue;
     delayed:
@@ -112,7 +112,7 @@ void Stop4Pen(uint16_t a0)
     if (!g.replaydelay) g.replaydelay = 0x1E;
     g.SfxVelocity = 0x7000;
     QueueSound(0x15);
-    g.Pencntdwn = 0;
+    g.PenCntDwn = 0;
     g.gmode |= gmpen;
     SetPA(0x0A);
 }
@@ -213,14 +213,14 @@ static void chkprogress_find(void)
 void chkprogress(void)
 {
     if (!(g.gmode & gmpen)) return;
-    if (g.Pencntdwn < 0) {
+    if (g.PenCntDwn < 0) {
         SeatPenaltyBox();
         if (g.RefCnt >= 0 || g.RefStep >= 0) return;
         chkprogress_find();
         return;
     }
-    g.Pencntdwn = (int16_t)(g.Pencntdwn - g.d7);
-    if (g.Pencntdwn >= 0) return;
+    g.PenCntDwn = (int16_t)(g.PenCntDwn - g.d7);
+    if (g.PenCntDwn >= 0) return;
     g.gmode &= (uint16_t)~0x0008;
     uint32_t pb = SYM_Penaltylist & 0xFF0000;
     uint16_t a0 = PenBuf;
@@ -522,11 +522,11 @@ void updatepentime(void)
 {
     g.sflags3[0] &= (uint16_t)~0x0020;
     if (g.gmclock || g.PenShotActive) return;
-    uint16_t t = g.pentimer;
+    uint16_t t = g.Penaltytimer;
     uint16_t v = (uint16_t)(t - g.d7);
-    g.pentimer = v;
+    g.Penaltytimer = v;
     if (!(v & 0x8000)) return;
-    g.pentimer = (uint16_t)(v + 0x18 + (t >= g.d7));   /* (sbc's carry) */
+    g.Penaltytimer = (uint16_t)(v + 0x18 + (t >= g.d7));   /* (sbc's carry) */
     g.sflags3[0] |= 0x0020;
     chkatop();
     updatePPTeamTime();
@@ -970,22 +970,22 @@ void Intermission(void)
 {
     SetupTeamForIntermission();
     for (int y = 0x1E; y >= 0; y -= 2) w16(RAM_OFF_Xpos + y, 0);
-    g.vcountmark[0] = g.vcount[0];
-    g.vcountmark[1] = g.vcount[1];
+    g.vcountmark[0] = g.Vcount[0];
+    g.vcountmark[1] = g.Vcount[1];
     g.sflags &= (uint16_t)~sfpz;
     g.pausetimer = 0x0708;
     g.demoflag = 1;
-    g.tickervc = (uint16_t)(g.vcount[0] - 0x150);
+    g.tickervc = (uint16_t)(g.Vcount[0] - 0x150);
     Intermission_ticker();
     g.tickerstart[0] = g.TickerNum;
     g.psfirst = 0;
     g.psitem = 0;
-    g.pausepad = 0xFFFF;
+    g.sfpj = 0xFFFF;
     for (uint16_t y = 0; y < 0x0A; y += 2) {
         uint16_t t = r16(RAM_OFF_cont1team + y);
-        if (t) { g.pausepad = (uint16_t)-t; break; }
+        if (t) { g.sfpj = (uint16_t)-t; break; }
     }
-    if (!(g.cont1team | g.cont2team | g.cont3team | g.cont4team | g.cont5team[0])) g.pausepad = 0;
+    if (!(g.cont1team | g.cont2team | g.cont3team | g.cont4team | g.cont5team[0])) g.sfpj = 0;
     g.InIntermission = 1;
     do {
         for (int y = 0x1E; y >= 0; y -= 2) w16(RAM_OFF_Xpos + y, 0);
@@ -1017,7 +1017,7 @@ void Intermission_ticker(void) { ticker_start(); }
  * first game: then the highlights. A = 0. */
 uint16_t Intermission_tick(void)
 {
-    while (g.demoflag && (uint16_t)(g.vcount[0] - g.tickervc) >= 0x150) {
+    while (g.demoflag && (uint16_t)(g.Vcount[0] - g.tickervc) >= 0x150) {
         NewTicker2_next();
         if (g.tickerstart[0] == g.TickerNum) {
             DoHiLights();
@@ -1049,7 +1049,7 @@ static int ticker_box(uint16_t d3)
     if (!(g.sflags & sfpz)) print(SYM_NewTicker3Pos2);
     if (!g.sfhormode) g.printy -= 5;
     Framer(0x1C, 5);
-    g.tickervc = g.vcount[0];
+    g.tickervc = g.Vcount[0];
     g.printx++;
     g.printy -= 4;
     uint16_t px = g.printx, d1, d2;
@@ -1137,7 +1137,7 @@ void ClrHor(void)
         forcefade();
         WaitFadeOut();
         FadeIn();
-        g.fadestep = 0x0A;
+        g.fadein = 0x0A;
     }
     g.sfhormode = 0;
     g.Oldrow = 0x03E7;

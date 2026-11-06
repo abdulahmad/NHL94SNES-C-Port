@@ -11,7 +11,7 @@ uint8_t io_r8(uint16_t addr);
 static inline void io_w16(uint16_t addr, uint16_t v) { io_w8(addr, (uint8_t)v); io_w8((uint16_t)(addr + 1), (uint8_t)(v >> 8)); }
 static inline uint16_t io_r16(uint16_t addr) { uint8_t lo = io_r8(addr); return (uint16_t)(lo | io_r8((uint16_t)(addr + 1)) << 8); }
 
-/* Wait for the next interrupt (a loop polling RAM the NMI or IRQ handler changes: JoyPad, vcount):
+/* Wait for the next interrupt (a loop polling RAM the NMI or IRQ handler changes: PadRaw1, Vcount):
  * the console runs to it and the handler runs. */
 void hal_wait_interrupt(void);
 

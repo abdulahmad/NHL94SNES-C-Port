@@ -119,7 +119,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `PauseSubmenuDone` | `$9FE2AE` | The end of a pause submenu: the whole text map redrawn, A = 1 |
 | `restoreteams` | `$9FC702` | Put both teams' players on the bench (tmap 6) |
 | `updatecrowdf` | `$9B9F7A` | Every game loop: the crowd's hold counts down (at most 60), then its level (at most $480) falls by impactstep, to 0 |
-| `seta2` | `$9FC76C` | The team of the controller that paused (a2: 0 home, 2 visitors); a negative pausepad is minus the side whose first controller counts |
+| `seta2` | `$9FC76C` | The team of the controller that paused (a2: 0 home, 2 visitors); a negative sfpj is minus the side whose first controller counts |
 | `ChoosePauseMenu` | `$9FE4BF` | The longer pause menu when this side still has a timeout (clock stopped, not the intermission), else the standard one; the first item shown kept inside it |
 | `RestoreBenchEnergy` | `$9FDDCD` | With line changes on, the benched players of both teams get 10 energy back, up to $1000 |
 | `start_hdma` | (a helper) | The window and COLDATA HDMA (channels 2 and 3): window 1 from left to right, the tables in bank $9D |
@@ -143,7 +143,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `AskExitGame` | `$9FF00B` | Ask "exit game?": up / down choose (curitem 0 or 1), A / B take it, Start cancels (0); returns it |
 | `demo_read` | (a helper) | In the demo: Start pauses, any other button ends it (Opening2); in mode 4 with pads on teams, Start on any of them pauses from that pad |
 | `demoread` | `$9F967B` | The game loop's pad check after each frame: in the demo a button pauses or ends it (demo_read) |
-| `SelectPauseController` | `$9FE618` | The pause controller: the pad that has it (a negative pausepad: the first pad of that side to press a button takes it, the menu rebuilt), its buttons with repeat in *d1 / *d3; it is given up after a while idle; in the intermission's demo the pause times out (Start). |
+| `SelectPauseController` | `$9FE618` | The pause controller: the pad that has it (a negative sfpj: the first pad of that side to press a button takes it, the menu rebuilt), its buttons with repeat in *d1 / *d3; it is given up after a while idle; in the intermission's demo the pause times out (Start). |
 | `PauseResume` | `$9FE733` | The pause menu handlers (the item chosen, with the pad's new presses d1); A: 0 leaves the menu |
 | `PauseDefControl` | `$9FE418` | Defense control: A / B / left / right turn it on or off for the pause controller's team |
 | `PauseExitGame` | `$9FE741` | Exit game: A / B ask to be sure (AskExitGame), then the game is abandoned for the option screens (Opening2) |
@@ -408,7 +408,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `Multi5ConnectCheck` | `$9B83BE` | Look for a multitap on each port: one when the first 8 signature bits are all 1 and the next 8 are not |
 | `Multi5Init` | `$9B8358` | Check for the multitap, then clear the multitap pads and state |
 | `mp5_sig` | (a helper) | Read the five pads: pads 1 and 2 from the auto read, pads 3 to 5 through the multitap on port 2 when mp5present is set (pads 4 and 5 only every 30 frames while nobody uses them); a port line change runs Multi5ConnectCheck for 16 frames; pads without the standard signature read $000F; with a warning every pad flashes $1000 / 0. |
-| `Multi5Bios` | `$9B80AB` | The pads' read of each frame, run by the NMI after the frame hook: JoyPad[0-4], with the multitap's check and warnings |
+| `Multi5Bios` | `$9B80AB` | The pads' read of each frame, run by the NMI after the frame hook: PadRaw1[0-4], with the multitap's check and warnings |
 | `PrintScrollArrows` | `$9B9AB2` | The scroll arrows beside a summary list (right while rows are below the five shown, left while rows are above), or blanks in their place; then the text map queued |
 
 ### `game/optsetup.c` (24)
@@ -641,7 +641,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `ReadPassBits` | `$9BCC41` | The playoff state back out of the password bits (last written first): the series wins, WinBits, pojoy, potreeteam, playoffRoundIdx, bosgames, postarts ($FFFF when the checksum is wrong). |
 | `wpb_value` | (a helper) | value d0 of range d1 into the password bits, added to the checksum in d7 (.t1) |
 | `WritePassBits` | `$9BC623` | The playoff state into the password bits, with a checksum (the running sum kept in d7) |
-| `FigureJoy` | `$9D995D` | Which team each controller plays: in the playoffs the series of the user's team gives HomeTeam, VisTeam, OptTeam2 and gamenum and the pads in use their team (the same table word for each); in the demo, play modes 0 and 4 only the other games |
+| `FigureJoy` | `$9D995D` | Which team each controller plays: in the playoffs the series of the user's team gives HomeTeam, VisTeam, Opt2team and gamenum and the pads in use their team (the same table word for each); in the demo, play modes 0 and 4 only the other games |
 | `MakeTree` | `$9D9783` | Build the playoff tree: the 16 seats of tree postarts into potree, the winner of each pair (by WinBits) after them, then this round's series (gst1 / gst2, home first in the 2-3-2 rounds of bosgames 2, 3 and 5) with their scores cleared, and FigureJoy |
 | `NewPO` | `$9D98D3` | New playoffs with team 1 (25 at most): a random tree (from the next of a random number on) that holds the team, its seat potreeteam and the tree postarts, the first round; bosgames 7 for single games (play mode 2), else 0 and the series wins cleared; then the tree |
 | `rg_winbits` | (a helper) | the round's winners d3 (a bit a series, set for the second team) into WinBits at the round's first bit d2, and the next round |
@@ -697,10 +697,10 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `IntroSequence_32` | `$9FFA08` | Intro: $20 bytes from [p0] to the buffer (the palette a fade works on) |
 | `IntroSequence_29` | `$9FF975` | Intro: the palette at p0 into the buffer, the palette job's source the buffer, 16 colours |
 | `IntroSequence_30` | `$9FF992` | Intro: one fade step of the buffer's 16 colours, each component +1 up to 31; 1 when all are white |
-| `IntroSequence_3` | `$9FF5E3` | Intro: the start state: BG1 scroll $180 / $190 (job $10 sends it), next state 3, d6 the timeout (vcount + $2D0), d7 the earliest end (vcount + $F0), the Mode 7 registers. |
+| `IntroSequence_3` | `$9FF5E3` | Intro: the start state: BG1 scroll $180 / $190 (job $10 sends it), next state 3, d6 the timeout (Vcount + $2D0), d7 the earliest end (Vcount + $F0), the Mode 7 registers. |
 | `IntroSequence_6` | `$9FF64D` | Intro states (.4's jump table), each 0 to go on, 1 at the end. |
 | `IntroSequence_7` | `$9FF676` | State 1: the palette toward white, up to 3 steps a frame; once white, reloaded from p0, then state d5 |
-| `IntroSequence_8` | `$9FF6A9` | State 2: wait until vcount reaches d6+2, then state d5 |
+| `IntroSequence_8` | `$9FF6A9` | State 2: wait until Vcount reaches d6+2, then state d5 |
 | `intro_logo` | (a helper) | (states 3 and 5: the logo's map block into the buffer from scale 1, zoomed in (state 0), then state d5) |
 | `IntroSequence_9` | `$9FF6BA` | State 3: sound 0 and the E logo |
 | `intro_sprites` | (a helper) | (states 4 and 6: sprites 0 to n - 1 at ($38, $2F), then state next) |
@@ -957,7 +957,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `cache_add` | (a helper) | (record the frame in the tile cache: its entry number by frame number, address, bank, number, allocation, first tile; the entry's VRAM address, tile * 16 + SpriteVRAM with the carry of the last shift) |
 | `dma_entry` | (a helper) | (LoadFrameTiles: DMA queue entry x, type 1 (DMAP), len bytes from bank:src; the caller stores the VRAM address at +6) |
 | `split_run` | (a helper) | (split run x of length len at need: the rest a free run after it, which points back at x, and the run after the rest at the rest; the second add takes the first's carry) |
-| `LoadFrameTiles` | `$80B3E1` | Allocate sprite VRAM for the frame at [p0] (p0 the direct page's 4 bytes: the cache keeps the word at p0+2), queue the DMA of its tiles (one or two rows: PieceX / PieceY bytes) and add a tile cache entry: its entry * 2, $FFFF when there is no room or all 128 entries are in use, x when the frame has no pieces. |
+| `LoadFrameTiles` | `$80B3E1` | Allocate sprite VRAM for the frame at [p0] (p0 the direct page's 4 bytes: the cache keeps the word at p0+2), queue the DMA of its tiles (one or two rows: sprox / sproy bytes) and add a tile cache entry: its entry * 2, $FFFF when there is no room or all 128 entries are in use, x when the frame has no pieces. |
 | `FindCachedFrame` | `$80B3CE` | The tile cache entry (* 2) of the frame at [p0], searching y entries from x; else LoadFrameTiles |
 | `GetFrameTiles` | `$80B01E` | The first VRAM tile of the frame at [p0] (its entry by frame number with FrameByNumber, else by address), loaded now if needed (x as the original's X there), its use mark refreshed; FrameTilesFail and $FFFF when there is no room |
 | `piece_entry` | (a helper) | (one OAM entry for the current piece at (px, py), if on screen: the tile word (piece tile + first tile, xor r3) and the high table's size and X bits; mode: 0 plain, 1 mirrored, 2 flipped (x mirrored too when r3 has $4000)) |
@@ -965,14 +965,14 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `DrawSprite_draw` | `$80B0B0` | Draw the frame at [p0] at (r5, r5h), r3 xored into each tile word (bit 15: flipped, the pieces' positions mirrored, DrawSpritePieces; bit 14: mirrored); x is the original's X at the tile cache lookup |
 | `DrawSprite` | `$80B08D` | Draw frame `frame` of the sprite set at [p1] (p1 the direct page's 4 bytes) at (x, y), a xored into the tile and attribute word |
 | `FreeCacheEntry_go` | `$80B77B` | Free tile cache entry x: the last entry moves into its slot (its frame pointed at it), and its VRAM run is given back, joined with a free run after it (blocks: in the same row of 8) and with a free run before it |
-| `FreeCacheEntry` | `$80B772` | Free entry x of frame number y (its FrameCacheOf slot cleared); _A: the entry in a's high byte |
+| `FreeCacheEntry` | `$80B772` | Free entry x of frame number y (its sprframetime slot cleared); _A: the entry in a's high byte |
 | `FreeFrameTiles` | `$80B719` | Free the VRAM tiles of the frame at [p0] (by its number with FrameByNumber); not cached: nothing. |
 | `FreeFrameTiles_t1` | `$80B724` | (unused entries) FreeFrameTiles for frame a of the sprite set at [p1]; the sum of the free block run lengths, walking from index SpriteBlockTiles |
-| `FreeFrameTiles_t2` | `$80B8AE` | (unused entry) The sum of the free block run lengths, walking BlockRuns from SpriteBlockTiles (after a free run the step is the sum so far, as the original) |
-| `SpriteFrameStart` | `$80AF7B` | Start filling OAMDrawBuf after the reserved entries (the high table's shift from the byte offset, as the original); age the tile cache's use marks and free the entries not drawn since |
+| `FreeFrameTiles_t2` | `$80B8AE` | (unused entry) The sum of the free block run lengths, walking sprbigslot from SpriteBlockTiles (after a free run the step is the sum so far, as the original) |
+| `SpriteFrameStart` | `$80AF7B` | Start filling Satt after the reserved entries (the high table's shift from the byte offset, as the original); age the tile cache's use marks and free the entries not drawn since |
 | `DMAToCGRAM` | `$808723` | DMA x colours from [p0] to CGRAM at colour y: at once with the screen blanked (none for x = 0; y is a byte there, CGADD), else left for the NMI (CGDMALen etc.; the colour word as y is) |
 | `DMAToCGRAM_t3` | `$808766` | (unused entry) x colours from colour y of [p0] into [p1]: a = 0 fills them with y * 2 (the index, as the original leaves it in A), $0100 copies them, else scales each component by the byte a / 256 (the multiplier) |
-| `PulseColour` | `$9D96A9` | Store at y:x the colour of this moment (vcount) of a 60-frame pulse: white to $7E10 and back, each component interpolated over 30 frames (the divides' remainders as the divider leaves them) |
+| `PulseColour` | `$9D96A9` | Store at y:x the colour of this moment (Vcount) of a 60-frame pulse: white to $7E10 and back, each component interpolated over 30 frames (the divides' remainders as the divider leaves them) |
 | `map_addr` | (a helper) | (the screen map in VRAM: the word address of column c, row r) |
 | `map_dma_now` | (a helper) | (MapToVRAM with the screen blanked: channel 1's size n, source src and VMADD vram for a row; the caller starts the DMA) |
 | `MapToVRAM` | `$808ADF` | Copy map [p0] (width, height, then the entries from +6) into the screen map in VRAM at column x, row y, a row at a time (a row crossing column 32 in two, the rest on the next screen); at once with the screen blanked, else queued |
@@ -987,7 +987,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `nmi_dma` | (a helper) | (a DMA of channel 0 for a queue entry: its source and size from the entry, to VRAM at +6, if the budget left covers cost + its size; 0 when not) |
 | `NMI_HookReturn` | `$808186` | The NMI after its hook: the IRQ timers, INIDISP, the six BG scroll registers, the colour DMA left by DMAToCGRAM, then the DMA queue while the frame's budget lasts (entry types: a DMAP value; $FE $FF one or two words written through VMDATA; $FD / $FC low / high byte fills; $FB low bytes; the rest high bytes), then NMI_SendOAM (NMI_Tick when the budget ran out) |
 | `NMI_SendOAM` | `$8083A5` | The NMI: the queue head at x; the sprite table to OAM when it is ready and the budget has $26E left; then NMI_Tick |
-| `NMI_Tick` | `$8083DD` | The NMI's frame work: vcount (with the 50 Hz fraction's carry), a step of the fade (in after the fadestep delay, out with $FFFF; not on the frames STAT77 bit 7 is set), FrameCount (unless held), then the frame hook (FrameHookNext taken when set) |
+| `NMI_Tick` | `$8083DD` | The NMI's frame work: Vcount (with the 50 Hz fraction's carry), a step of the fade (in after the fadein delay, out with $FFFF; not on the frames STAT77 bit 7 is set), FrameCount (unless held), then the frame hook (FrameHookNext taken when set) |
 | `NMI_FrameHookReturn` | `$808469` | The NMI after the frame hook: the pads (Multi5Bios; b the accumulator's high byte the hook leaves), SoundUpdate, the sound stream, NMISkip cleared |
 | `DrawSpritePieces_cacheat` | `$80B389` | (unused entry) The tile cache entry * 2 of the frame at [p0], found by its number with FrameByNumber, else by its address; LoadFrameTiles when it is not cached |
 | `DrawSpritePieces_cacheframe` | `$80B394` | (unused entry) DrawSpritePieces_cacheat for frame a of the sprite set at [p1] (DrawFrameNum = a) |

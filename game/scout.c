@@ -138,7 +138,7 @@ void ScoutingReport(void)
         SendTextMap();
         WaitFrame();
         ReadPads();
-        uint16_t r3 = g.padnew[0];
+        uint16_t r3 = g.padnew1[0];
         for (uint16_t x = 2; x < 0xA; x += 2)
             if (r16(RAM_OFF_cont1team + x)) r3 |= r16(RAM_OFF_padnew + x);
         if (r3 & 0x1000) break;
@@ -164,7 +164,7 @@ void ScoutingReport(void)
             g.matchuptimer = t;
         }
         g.asv = 0;
-        if ((g.JoyPad[0] | g.JoyPad[1]) & 0x0400) g.asv = 0xFFFF;
+        if ((g.PadRaw1[0] | g.PadRaw1[1]) & 0x0400) g.asv = 0xFFFF;
         UpdateScoutingDisplay();
         if (g.matchuphold || g.notdemo) continue;
         g.screentimer--;
@@ -265,10 +265,10 @@ void LoadScoutingScreen(void)
     uint16_t n = Decompress(SYM_SmallFontTiles, unpackbuf);
     uint16_t d0 = n >> 5;
     g.outlinechars = (uint16_t)(g.outlinechars + d0);
-    g.Framercset = (uint16_t)(d0 + g.smallfontchars);
+    g.framercset = (uint16_t)(d0 + g.smallfontchars);
     remap(unpackbuf, SYM_PixelRemap8F, d0);
     g.outlinechars = (uint16_t)(g.outlinechars + 4);
-    g.scorechars = (uint16_t)(g.Framercset + 4);
+    g.scorechars = (uint16_t)(g.framercset + 4);
     remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     n = Decompress(SYM_TeamBlocksTiles, unpackbuf);
     g.outlinechars = (uint16_t)(g.outlinechars + (n >> 5));

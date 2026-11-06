@@ -11,7 +11,7 @@ it. This page is a map into it.
 
 | Offset | What |
 |---|---|
-| $0000-$00D0 | The direct page: the routines' scratch registers (`r0`-`r9`, `p0`, `p1`, `a0`-`a5`, `d0`-`d6`, `tmp0`-`tmp5`), which the C keeps as arguments and locals; `vcount` and `d7` |
+| $0000-$00D0 | The direct page: the routines' scratch registers (`r0`-`r9`, `p0`, `p1`, `a0`-`a5`, `d0`-`d6`, `tmp0`-`tmp5`), which the C keeps as arguments and locals; `Vcount` and `d7` |
 | $0100-$04FF | The DMA queue: tiles and maps waiting for the NMI to send them to VRAM |
 | $0500-$1EC2 | The game's variables: the interrupts and their hooks, the pads, the sprites, the sound sequencer, every object, the teams, the clock |
 | $1EC3-$1FFF | The stack |
@@ -32,13 +32,13 @@ object 14 (`puckobj` in `consts.h`, X = $1C).
 
 | Variable | Offset | What |
 |---|---|---|
-| `g.vcount` | $0083 | frames so far (a 32-bit count; the NMI adds 1, PAL's extra steps through `vcountfrac`) |
-| `g.oldvcount` | $0D01 | `vcount` at the last game loop pass |
+| `g.Vcount` | $0083 | frames so far (a 32-bit count; the NMI adds 1, PAL's extra steps through `vcountfrac`) |
+| `g.OldVcount` | $0D01 | `Vcount` at the last game loop pass |
 | `g.d7` | $00C1 | frames since the last pass: every speed and timer is scaled by it |
-| `g.JoyPad` | $0776 | the five pads' buttons held (the NMI reads them); `g.padnew` ($0AB8) the newly pressed |
+| `g.PadRaw1` | $0776 | the five pads' buttons held (the NMI reads them); `g.padnew1` ($0AB8) the newly pressed |
 | `g.mp5present` | $1A0C | the MultiPlayer 5 multitap is in port 2 (pads 3-5 are read) |
 | `g.NMIHook`, `g.FrameHook`, `g.IRQHook` | $078C, $0789, $078F | the routines the interrupts jump to (long addresses; `call_long` runs them) |
-| `g.DMAQueue` | $0100 | the DMA queue's 8-byte entries (`DMAQueueHead`, `DMAQueueTail` at $3A, $3C) |
+| `g.DMAList` | $0100 | the DMA queue's 8-byte entries (`DMAlisthead`, `DMAlistend` at $3A, $3C) |
 | `g.IniDispShadow` | $0762 | the screen's brightness and forced blank, written by the NMI |
 | `g.seed` | $0792 | `RandomWord`'s two generators |
 | `g.gmode`, `g.sflags` | $15D4, $15D8 | the game's mode and state flags (clock stopped, pause, shootout ...; `gm*`, `sf*` in `consts.h`) |

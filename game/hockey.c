@@ -73,7 +73,7 @@ static void demo_read(void)
     Readjoy1(&d0, &d1, &d2, &d3);
     if (d1 & 0x1000) { startpause1(); return; }
     if (!d1) return;
-    g.fadestep = 0;
+    g.fadein = 0;
     g.FrameByNumber = 0;
     Opening2();
 }
@@ -127,12 +127,12 @@ static void start_period(void)
     ResetClock();
     InitCrowdExcite();
     if (g.pregamepause) {
-        g.pausepad = 0xFFFF;
+        g.sfpj = 0xFFFF;
         for (uint16_t y = 0; y < 0xA; y += 2) {
             uint16_t c = r16(RAM_OFF_cont1team + y);
-            if (c) { g.pausepad = (uint16_t)-c; break; }
+            if (c) { g.sfpj = (uint16_t)-c; break; }
         }
-        if (!(g.cont1team | g.cont2team | g.cont3team | g.cont4team | g.cont5team[0])) g.pausepad = 0;
+        if (!(g.cont1team | g.cont2team | g.cont3team | g.cont4team | g.cont5team[0])) g.sfpj = 0;
         startpause();
     }
     g.fox = 0;
@@ -145,14 +145,14 @@ static void start_period(void)
     g.percue = 0xFFFF;
     if (g.OptPlayMode != 4) {
         g.sflags &= (uint16_t)~0x0010;
-        g.ReplayBufferPtr = ReplayBufferStart;
+        g.recbpr = ReplayBufferStart;
     } else if (!g.pregamepause) g.percue = 0;
     g.textdirtylo = 0xFFFF;
     g.textdirtyhi = 0;
-    g.vcount[0] = 0;
-    g.vcount[1] = 0;
+    g.Vcount[0] = 0;
+    g.Vcount[1] = 0;
     g.lastframevc = 0;
-    g.oldvcount = 0;
+    g.OldVcount = 0;
     InitSprites(0x6000, 0, 0x01C0);
     if (!g.shootoutmode) Gameloop();
 }
@@ -218,7 +218,7 @@ void StartGame_go(void)
     clearTeamStats();
     restoreteams();
     InitScores();
-    g.ReplayBufferPtr = ReplayBufferStart;
+    g.recbpr = ReplayBufferStart;
     g.sflags &= (uint16_t)~0x0010;
     LoadTeamLines(0);
     LoadTeamLines(2);
@@ -261,16 +261,16 @@ void StartPer(void)
 void Gameloop(void)
 {
     for (;;) {
-        while (!(uint16_t)(g.vcount[0] - g.oldvcount)) hal_wait_interrupt();
+        while (!(uint16_t)(g.Vcount[0] - g.OldVcount)) hal_wait_interrupt();
         g.gameframes[0]++;
         uint32_t m = Mul16x8U(g.gameframes[0], 0x3C);
         g.gamefps = Div32U(m, g.FrameCount);
         if (g.gsp == 2 && !g.MusicOn && !(RandomWord() & 0x0FFF)) PlayTeamSong(5);
         RandomWord();
-        uint16_t v = g.vcount[0];
-        frame_steps((uint16_t)(v - g.oldvcount));
+        uint16_t v = g.Vcount[0];
+        frame_steps((uint16_t)(v - g.OldVcount));
         g.lastframevc = v;
-        g.oldvcount = v;
+        g.OldVcount = v;
         ReadPads();
         if (!(g.sflags & sfpz) && !g.gmclock) {
             if (!g.shootoutmode && g.PenShotActive) {
@@ -289,7 +289,7 @@ void Gameloop(void)
                 }
             }
         }
-        if (g.cheercnt && (uint16_t)(g.vcount[0] - g.cheervc) >= 0x96) {
+        if (g.cheercnt && (uint16_t)(g.Vcount[0] - g.cheervc) >= 0x96) {
             g.cheercnt--;
             g.cheervc = (uint16_t)(g.cheervc + 0x96);
         }
@@ -387,7 +387,7 @@ over:
     if (!((uint16_t)(g.tmscore[0] - g.tmscore[1]) & 0x8000)) {
         g.Crowdlevel = 0;
         g.cheercnt = 3;
-        g.cheervc = (uint16_t)(g.vcount[0] - 0x96);
+        g.cheervc = (uint16_t)(g.Vcount[0] - 0x96);
     }
     AddPenalty2(x >> 1, PenEOG);
     if (p0) AddPenalty2(x >> 1, PenNoText3);
@@ -424,9 +424,9 @@ void start_hdma(uint8_t left, uint8_t right, uint16_t wtab, uint16_t ctab)
 }
 
 /* Pause for pad a / from controller 1 */
-void startpause_pad(uint16_t a) { g.pausepad = a; startpause(); }
+void startpause_pad(uint16_t a) { g.sfpj = a; startpause(); }
 
-void startpause1(void) { g.pausepad = 0; startpause(); }
+void startpause1(void) { g.sfpj = 0; startpause(); }
 
 /* Pause mode: the text map saved, the sound stopped, the scoreboard screen with the pause menu until it is
  * left, then the text map and the screen back, the pause sounds, the frame clock restarted */
@@ -478,8 +478,8 @@ void Pausemode(void)
     QueueSound(0x13);
     g.recsfx = 0xFFFF;
     g.recsfx2 = 0xFFFF;
-    g.lastframevc = g.vcount[0];
-    g.oldvcount = g.vcount[0];
+    g.lastframevc = g.Vcount[0];
+    g.OldVcount = g.Vcount[0];
 }
 
 /* The game loop's pad check after each frame: in the demo a button pauses or ends it (demo_read) */
@@ -489,7 +489,7 @@ void demoread(void)
 }
 
 /* The period length in seconds for the period length option (d0) */
-uint16_t GetPeriodTime(void) { return rom16(SYM_GetPeriodTime_timetab + (uint16_t)(g.OptPerlen << 1)); }
+uint16_t GetPeriodTime(void) { return rom16(SYM_GetPeriodTime_timetab + (uint16_t)(g.Optperlen << 1)); }
 
 /* Once a game loop: when the clock has run out, freeze the view and end the period */
 void clockcont(void)
@@ -521,11 +521,11 @@ void restoreteams(void)
     }
 }
 
-/* The team of the controller that paused (a2: 0 home, 2 visitors); a negative pausepad is minus the side
+/* The team of the controller that paused (a2: 0 home, 2 visitors); a negative sfpj is minus the side
  * whose first controller counts */
 uint16_t seta2(void)
 {
-    uint16_t x = g.pausepad;
+    uint16_t x = g.sfpj;
     if (x & 0x8000) {
         uint16_t side = (uint16_t)-x;
         for (x = 0; x < 0x0A; x += 2)
@@ -613,7 +613,7 @@ uint16_t PauseReplay(uint16_t d1)
     WaitFadeOut();
     forceblack();
     uint16_t d7 = g.d7;
-    g.vcountmark[1] = (uint16_t)(g.vcount[1] - 2);
+    g.vcountmark[1] = (uint16_t)(g.Vcount[1] - 2);
     ReplayMode();
     FadeIn();
     ScreenOn();
@@ -705,7 +705,7 @@ uint16_t PauseDefStore(void) { return PauseMenuPoll(); }
  * standard one; the first item shown kept inside it */
 void ChoosePauseMenu(void)
 {
-    uint16_t x = g.pausepad;
+    uint16_t x = g.sfpj;
     if (!(x & 0x8000) && g.gmclock && !g.InIntermission && r16(RAM_OFF_tmtimeouts + (r16(RAM_OFF_cont1team + x) & 2))) {
         g.pmenucount = 0x11;
         g.pmenulist = 5;
@@ -716,7 +716,7 @@ void ChoosePauseMenu(void)
     if ((uint16_t)(g.psfirst + 5) >= g.pmenucount) g.psfirst--;
 }
 
-/* The pause controller: the pad that has it (a negative pausepad: the first pad of that side to press a
+/* The pause controller: the pad that has it (a negative sfpj: the first pad of that side to press a
  * button takes it, the menu rebuilt), its buttons with repeat in *d1 / *d3; it is given up after a while
  * idle; in the intermission's demo the pause times out (Start). Returns once a button is down. */
 void SelectPauseController(uint16_t *d1, uint16_t *d3)
@@ -730,7 +730,7 @@ void SelectPauseController(uint16_t *d1, uint16_t *d3)
         WaitFrame();
         SpriteFrameEnd();
         ReadPads();
-        uint16_t a = g.pausepad;
+        uint16_t a = g.sfpj;
         if (a & 0x8000) {
             uint16_t k;
             for (k = 0; k < 5; k++) {
@@ -744,25 +744,25 @@ void SelectPauseController(uint16_t *d1, uint16_t *d3)
             }
             if (k == 5) goto idle;
             uint16_t x = (uint16_t)(k << 1);
-            if ((uint16_t)-r16(RAM_OFF_cont1team + x) != g.pausepad) {
-                g.pausepad = x;
+            if ((uint16_t)-r16(RAM_OFF_cont1team + x) != g.sfpj) {
+                g.sfpj = x;
                 g.psitem = 0;
                 g.psfirst = 0;
                 SetupPauseScreen();
                 SendTextMap();
                 PulseUntilRelease();
                 g.pausepadidle = 0x3C;
-                g.repeatdelay = 0x14;
+                g.repeatdelayframes = 0x14;
                 if (!g.pmenulist || g.pmenulist == 5) ChoosePauseMenu();
                 return;
             }
-            g.pausepad = x;
+            g.sfpj = x;
             g.pausepadidle = 0x3C;
             a = x;
         }
         {
             Pad p = ReadjoyA(a >> 1);
-            g.repeatdelay -= 2;
+            g.repeatdelayframes -= 2;
             *d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
             *d3 = p.held;
             if (p.held) g.pausepadidle = 0x3C;
@@ -771,7 +771,7 @@ void SelectPauseController(uint16_t *d1, uint16_t *d3)
                 g.pausepadidle = v;
                 if (!v || (v & 0x8000)) {
                     g.pausepadidle = 0;
-                    g.pausepad = (uint16_t)-r16(RAM_OFF_cont1team + g.pausepad);
+                    g.sfpj = (uint16_t)-r16(RAM_OFF_cont1team + g.sfpj);
                     return;
                 }
             }
@@ -812,7 +812,7 @@ uint16_t PauseExitGame(uint16_t d1)
  * in a demo or with no side */
 void PulsePauseSide(void)
 {
-    uint16_t x = g.pausepad, side = 0;
+    uint16_t x = g.sfpj, side = 0;
     if (g.notdemo && !(x & 0x8000)) side = r16(RAM_OFF_cont1team + x);
     if (!side) {
         w16(RAM_OFF_colourbuf + 0x1DE, 0xFFFF);
@@ -835,7 +835,7 @@ void PulseUntilRelease(void)
         PulsePauseSide();
         WaitFrame();
         DMAToCGRAM(0x7E0000 + RAM_OFF_colourbuf + 0x1C0, 0x20, 0xE0);
-    } while (r16(RAM_OFF_JoyPad + g.pausepad) & 0x8080);
+    } while (r16(RAM_OFF_JoyPad + g.sfpj) & 0x8080);
 }
 
 /* Draw the pause menu: five items of the current list from psfirst, the selected one (psitem)

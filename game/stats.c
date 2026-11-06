@@ -382,7 +382,7 @@ static uint32_t lp(uint32_t bank, uint16_t ptr, uint16_t y) { return ((bank << 1
 /* Wait until the pause pad's buttons are up (the pads are read by the interrupt) */
 void WaitButtonRelease(void)
 {
-    while (r16(RAM_OFF_JoyPad + g.pausepad)) hal_wait_interrupt();
+    while (r16(RAM_OFF_JoyPad + g.sfpj)) hal_wait_interrupt();
 }
 
 /* The line editor of the pausing team: left / right the line (with line changes on; lines 6 and 7 have
@@ -1355,7 +1355,7 @@ void SetupScreen(void)
     io_w16(0x2116, (uint16_t)((uint16_t)(g.smallfontchars << 4) + 0x1000 + (g.smallfontchars >> 12 & 1)));   /* (asl's carry) */
     uint16_t d0 = Decompress(SYM_SmallFontTiles, unpackbuf) >> 5;
     g.nextfreechar = (uint16_t)(g.nextfreechar + d0);
-    g.Framercset = g.nextfreechar;
+    g.framercset = g.nextfreechar;
     remap(unpackbuf, SYM_PixelRemap8F, d0);
     g.nextfreechar = (uint16_t)(g.nextfreechar + 4);
     g.scorechars = g.nextfreechar;
@@ -1383,8 +1383,8 @@ void SetupScreen(void)
     p0 = unpackbuf;
     p1 = WRAM_PTR(RAM_OFF_logoboxmap + 6);
     PasteMapPart(&p0, &p1, 0x0C00, 0, 0, 7, 1, 1, 7, 7);
-    g.logoboxmap[0] = 7;
-    g.logoboxmap[1] = 7;
+    g.LogoBoxMap[0] = 7;
+    g.LogoBoxMap[1] = 7;
     p0 = unpackbuf;
     p1 = WRAM_PTR(RAM_OFF_textmap2);
     PasteMap(&p0, &p1, (uint16_t)(g.charofs2 + 0x0C00), 0, 0, 0x20);
@@ -1450,7 +1450,7 @@ void MenuScreenHDMA(void) { start_hdma(0x40, 0xBF, (uint16_t)SYM_MenuScreenHDMA_
 /* a2: the team of the controller that owns the pause menu (2 the away team, else 0) */
 uint16_t GetPauseTeam(void)
 {
-    return r16(RAM_OFF_cont1team + g.pausepad) == 2 ? 2 : 0;
+    return r16(RAM_OFF_cont1team + g.sfpj) == 2 ? 2 : 0;
 }
 
 /* Print string a1 at printx / printy into the stats page buffer (32 wide) through SmallFontMap. A zero
@@ -1705,7 +1705,7 @@ void ExitStatsScreen(void)
     remap(unpackbuf, SYM_PixelRemap83, (uint16_t)(n >> 5));
     remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
     n = Decompress(SYM_BigFontTiles, unpackbuf);
-    g.scorechars = (uint16_t)((n >> 5) + g.BigFontChars + (n >> 4 & 1));   /* (lsr's carry) */
+    g.scorechars = (uint16_t)((n >> 5) + g.BigFontchars + (n >> 4 & 1));   /* (lsr's carry) */
     p0 = unpackbuf;
     DMAToVRAM(&p0, n, 0xFFFF, r3);
     n = Decompress(SYM_TeamBlocksTiles, unpackbuf);

@@ -40,7 +40,7 @@ void Reset_Fast(void)
         uint8_t c = rom8(SYM_InitTag + k);
         g.RAMTag[k] = c;
         g.RAMTag2[k] = c;
-        g.ReplayBufferEnd[k] = c;
+        g.replayend[k] = c;
     }
     for (int k = 0x10; k; k--) g.OAMHiMasks[k - 1] = rom8(SYM_OAMHighMasks + k - 1);
     Reset_Fast_ret();

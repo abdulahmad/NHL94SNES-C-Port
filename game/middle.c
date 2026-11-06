@@ -701,28 +701,28 @@ uint32_t HeapFreeBank(uint32_t p0, uint16_t y, uint32_t sum)
 void ReadPads(void)
 {
     for (int i = 0; i < 5; i++) {
-        g.paddir[i] = rom8(SYM_PadDirection + (g.JoyPad[i] >> 8 & 0xF));
+        g.paddir[i] = rom8(SYM_PadDirection + (g.PadRaw1[i] >> 8 & 0xF));
     }
     GetNewPresses();
     g.padchangeany = g.padchange[0] | g.padchange[1] | g.padchange[2] | g.padchange[3] | g.padchange[4];
 }
 
-/* The pads' read of each frame, run by the NMI after the frame hook: JoyPad[0-4], with the
+/* The pads' read of each frame, run by the NMI after the frame hook: PadRaw1[0-4], with the
  * multitap's check and warnings */
 void Multi5Bios(uint8_t b)
 {
     g.mp5padsig[3] = g.mp5padsig[4] = 0;
     while (io_r8(0x4212) & 0x01) {}
-    g.JoyPad[0] = io_r16(0x4218);
-    g.mp5padsig[0] = (uint8_t)(g.JoyPad[0] & 0x0F);
+    g.PadRaw1[0] = io_r16(0x4218);
+    g.mp5padsig[0] = (uint8_t)(g.PadRaw1[0] & 0x0F);
     rol8(RAM_OFF_mp5padsig, io_r8(0x4016) & 1);
-    g.JoyPad[1] = io_r16(0x421A);
-    g.mp5padsig[1] = (uint8_t)(g.JoyPad[1] & 0x0F);
+    g.PadRaw1[1] = io_r16(0x421A);
+    g.mp5padsig[1] = (uint8_t)(g.PadRaw1[1] & 0x0F);
     if (!(uint8_t)g.mp5present) {
         rol8(RAM_OFF_mp5padsig + 1, io_r8(0x4017) & 1);
     } else {
-        g.JoyPad[2] = io_r16(0x421E);
-        g.mp5padsig[2] = (uint8_t)(g.JoyPad[2] & 0x0F);
+        g.PadRaw1[2] = io_r16(0x421E);
+        g.mp5padsig[2] = (uint8_t)(g.PadRaw1[2] & 0x0F);
         uint8_t j = io_r8(0x4017);
         rol8(RAM_OFF_mp5padsig + 1, j & 1);
         rol8(RAM_OFF_mp5padsig + 2, j >> 1 & 1);
@@ -766,29 +766,29 @@ void Multi5Bios(uint8_t b)
     if (c2 | g.mp5portchg[0]) g.mp5checktimer[0] = 0x10;
     if (g.mp5checktimer[0]) {
         Multi5ConnectCheck();
-        g.JoyPad[2] = g.JoyPad[3] = g.JoyPad[4] = 0x000F;
+        g.PadRaw1[2] = g.PadRaw1[3] = g.PadRaw1[4] = 0x000F;
         if (g.mp5connect & 0x80) g.mp5warning |= 1; else g.mp5warning &= (uint16_t)~1;
         if (g.mp5connect & 0x40) g.mp5present |= 1; else g.mp5present &= (uint16_t)~1;
     } else {
         io_w8(0x4016, 0);
     }
     if (g.mp5padsig[0] != 0x01) {
-        g.JoyPad[0] = 0x000F;
+        g.PadRaw1[0] = 0x000F;
         if (g.mp5present) mp5_sig(g.mp5padsig[0]);
     }
     if (g.mp5padsig[1] != 0x01) {
-        g.JoyPad[1] = 0x000F;
+        g.PadRaw1[1] = 0x000F;
         if (!g.mp5present) goto warn;
         mp5_sig(g.mp5padsig[1]);
     }
     if ((uint8_t)g.mp5present) {
         for (int i = 2; i < 5; i++)
-            if (g.mp5padsig[i] != 0x01) { g.JoyPad[i] = 0x000F; mp5_sig(g.mp5padsig[i]); }
+            if (g.mp5padsig[i] != 0x01) { g.PadRaw1[i] = 0x000F; mp5_sig(g.mp5padsig[i]); }
     }
 warn:
     if ((uint8_t)g.mp5warning) {
-        uint16_t v = (uint8_t)g.vcount[0] & 0x10 ? 0x0000 : 0x1000;
-        for (int i = 0; i < 5; i++) g.JoyPad[i] = v;
+        uint16_t v = (uint8_t)g.Vcount[0] & 0x10 ? 0x0000 : 0x1000;
+        for (int i = 0; i < 5; i++) g.PadRaw1[i] = v;
     }
 }
 
@@ -796,7 +796,7 @@ warn:
 void Multi5Init(void)
 {
     Multi5ConnectCheck();
-    g.JoyPad[2] = g.JoyPad[3] = g.JoyPad[4] = 0x000F;
+    g.PadRaw1[2] = g.PadRaw1[3] = g.PadRaw1[4] = 0x000F;
     g.mp5present = g.mp5warning = 0;
     w16(RAM_OFF_mp5checktimer, 0);
     g.mp5readdelay = 0;
@@ -829,11 +829,11 @@ void Multi5ConnectCheck(void)
 void GetNewPresses(void)
 {
     for (int i = 0; i < 5; i++) {
-        g.padchange[i] = g.JoyPad[i] ^ g.padlast[i];
-        g.padnew[i] = g.padchange[i] & g.JoyPad[i];
+        g.padchange[i] = g.PadRaw1[i] ^ g.padlast1[i];
+        g.padnew1[i] = g.padchange[i] & g.PadRaw1[i];
     }
     for (int i = 0; i < 5; i++) {
-        g.padlast[i] = g.JoyPad[i];
+        g.padlast1[i] = g.PadRaw1[i];
     }
 }
 
@@ -848,9 +848,9 @@ Pad ReadjoyA(uint16_t n)
 /* Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held */
 void Readjoy1(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3)
 {
-    *d3 = g.JoyPad[0];
+    *d3 = g.PadRaw1[0];
     *d2 = g.padchange[0];
-    *d1 = g.padnew[0];
+    *d1 = g.padnew1[0];
     *d0 = g.paddir[0];
 }
 
@@ -861,10 +861,10 @@ uint16_t ReadAnyPad(void) { return g.padchangeany; }
 uint16_t ProcessInputWithRepeat(uint16_t d1, uint16_t d2, uint16_t d3)
 {
     if (!d3) return d1;
-    if (d2) { g.repeatdelay = 0x14; return d1; }
-    g.repeatdelay--;
-    if (!(g.repeatdelay & 0x8000)) return d1;
-    g.repeatdelay = 6;
+    if (d2) { g.repeatdelayframes = 0x14; return d1; }
+    g.repeatdelayframes--;
+    if (!(g.repeatdelayframes & 0x8000)) return d1;
+    g.repeatdelayframes = 6;
     return d3;
 }
 
@@ -1075,7 +1075,7 @@ void marktextlo(uint16_t a) { if (a < g.textdirtylo) g.textdirtylo = a; }
 /* Raise the high end of the changed text map area to a */
 void marktexthi(uint16_t a) { if (a >= g.textdirtyhi) g.textdirtyhi = a; }
 
-void forcefade(void) { g.fadestep = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
+void forcefade(void) { g.fadein = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
 
 /* d0 mod 100 */
 uint16_t Mod100(uint16_t d0)
@@ -1096,8 +1096,8 @@ Pad waitx(uint16_t d0)
         SpriteFrameStart();
         setvideo();
         SpriteFrameEnd();
-        uint16_t v = g.vcount[0];
-        while (g.vcount[0] == v) hal_wait_interrupt();
+        uint16_t v = g.Vcount[0];
+        while (g.Vcount[0] == v) hal_wait_interrupt();
         ReadPads();
     } while (!(--n & 0x8000));
     return p;

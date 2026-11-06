@@ -1078,7 +1078,7 @@ void Goal(int o)
         g.crowdhold = 0x78;
         PlayTeamSong(3);
     }
-    g.sfxmutetime = g.vcount[0];
+    g.sfxmutetime = g.Vcount[0];
     EndPenaltyShotPlay(o);
     g.breakaway = 0;
     g.onetimer = 0;

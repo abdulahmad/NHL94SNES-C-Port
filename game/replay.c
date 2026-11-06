@@ -15,7 +15,7 @@ static uint32_t next_record(uint32_t a4)
 }
 
 /* ReadjoyA for the controller that owns the pause menu */
-Pad getpzjoy(void) { return ReadjoyA(g.pausepad >> 1); }
+Pad getpzjoy(void) { return ReadjoyA(g.sfpj >> 1); }
 
 /* a byte's sign as a high byte */
 static uint8_t sign8(uint8_t b) { return b & 0x80 ? 0xFF : 0; }
@@ -32,18 +32,18 @@ void updatereplay(void)
         g.replaydelay = a;
     }
     if (!(g.sflags & sf2drec)) {
-        uint32_t lo = (g.ReplayBufferPtr & 0xFFFF) + replaysize;
-        uint32_t hi = g.ReplayBufferPtr >> 16;
+        uint32_t lo = (g.recbpr & 0xFFFF) + replaysize;
+        uint32_t hi = g.recbpr >> 16;
         if (lo >> 16) hi = (hi + 1) & 0xFFFF;
         lo &= 0xFFFF;
-        g.ReplayBufferPtr = hi << 16 | lo;
+        g.recbpr = hi << 16 | lo;
         if (lo == (ReplayBufferEnd_addr & 0xFFFF) && hi == ReplayBufferEnd_addr >> 16) {
             g.sflags |= sfwrap;
-            g.ReplayBufferPtr = ReplayBufferStart;
+            g.recbpr = ReplayBufferStart;
         }
     }
-    io_w16(0x2181, (uint16_t)g.ReplayBufferPtr);
-    io_w8(0x2183, (uint8_t)(g.ReplayBufferPtr >> 16));
+    io_w16(0x2181, (uint16_t)g.recbpr);
+    io_w8(0x2183, (uint8_t)(g.recbpr >> 16));
     for (int x = 0; x < 0x20; x += 2) {
         io_w8(WMDATA, r8(RAM_OFF_Xpos + x));
         io_w8(WMDATA, (uint8_t)(r8(RAM_OFF_Ypos + 1 + x) << 4 | (r8(RAM_OFF_Xpos + 1 + x) & 0x0F)));
@@ -154,12 +154,12 @@ void ReplayMode(void)
     g.replaypanel = 0xFFFF;
     g.MapVRAM = 0;
     MapPartToVRAMOffset(rinkmapbuf, g.charofs, 2, 2, 0x2000, 0x20, 0x55, 8, 8);
-    uint32_t saved_ptr = g.ReplayBufferPtr;
+    uint32_t saved_ptr = g.recbpr;
     g.sflags &= (uint16_t)~0x20;
     int16_t saved_v = g.Vpos, saved_h = g.Hpos;
-    uint32_t p = g.ReplayBufferPtr;
-    if (p < ReplayBufferStart || ReplayBufferEnd_addr < p || (p - ReplayBufferStart) >> 16) g.ReplayBufferPtr = ReplayBufferStart;   /* (Div32U's quotient unused) */
-    uint32_t a4 = g.ReplayBufferPtr;
+    uint32_t p = g.recbpr;
+    if (p < ReplayBufferStart || ReplayBufferEnd_addr < p || (p - ReplayBufferStart) >> 16) g.recbpr = ReplayBufferStart;   /* (Div32U's quotient unused) */
+    uint32_t a4 = g.recbpr;
     uint16_t n = 0;
     do {
         a4 = suba4(a4);
@@ -170,7 +170,7 @@ void ReplayMode(void)
     g.replayVpos = (uint16_t)g.Vpos;
     InitSprites(0x6000, 0, 0x1C0);
     g.brightness = 0;
-    g.fadestep = 0xA;
+    g.fadein = 0xA;
     SetFrameHook(SYM_BrightnessHook);
     ScreenOn();
     SprSort();
@@ -337,9 +337,9 @@ out:
     SoundVoicesOff();
     g.Hpos = saved_h;
     g.Vpos = saved_v;
-    g.ReplayBufferPtr = saved_ptr;
+    g.recbpr = saved_ptr;
     g.sflags &= (uint16_t)~0x20;
-    RestoreReplayFrame(g.ReplayBufferPtr);
+    RestoreReplayFrame(g.recbpr);
     g.sflags &= (uint16_t)~0x0800;
     SetHor();
     SpriteFrameStart();
@@ -367,7 +367,7 @@ uint32_t suba4(uint32_t a4)
     }
     uint32_t lo = (a4 & 0xFFFF) - replaysize, hi = (a4 >> 16) - ((lo >> 16) & 1);
     a4 = (hi & 0xFFFF) << 16 | (lo & 0xFFFF);
-    if (a4 != g.ReplayBufferPtr) { RestoreReplayFrame(a4); return a4; }
+    if (a4 != g.recbpr) { RestoreReplayFrame(a4); return a4; }
     a4 = next_record(a4);
     g.d7 = 0;
     return a4;
@@ -378,8 +378,8 @@ uint32_t suba4(uint32_t a4)
 uint32_t adda4(uint32_t a4)
 {
     w16(RAM_OFF_d7, 0);
-    if ((g.sflags & sf2drec) && adda43(a4) == g.ReplayBufferPtr) return a4;
-    if (a4 == g.ReplayBufferPtr) return a4;
+    if ((g.sflags & sf2drec) && adda43(a4) == g.recbpr) return a4;
+    if (a4 == g.recbpr) return a4;
     RestoreReplayFrame(a4);
     return adda43(a4);
 }

@@ -3557,7 +3557,7 @@ void puckfaceoff2(int o, int a3)
         g.brightness = 0;
     }
     FadeIn();
-    g.fadestep = 0xA;
+    g.fadein = 0xA;
     if (!g.MusicOn) {
         uint16_t r3 = g.PBnum >> 4, lo = g.PBnum & 0xF;
         if (g.PBnum && lo != r3) PlayTeamSong(lo > r3 ? 1 : 4);

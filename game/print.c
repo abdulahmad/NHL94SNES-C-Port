@@ -5,7 +5,7 @@
  * range of the text map kept */
 void Framer(uint16_t d0, uint16_t d1)
 {
-    uint16_t tmp0 = (uint16_t)((g.Framercset + g.printfontset) | g.printa), t2, x;
+    uint16_t tmp0 = (uint16_t)((g.framercset + g.printfontset) | g.printa), t2, x;
     uint32_t bank = SYM_FramerMap & 0xFF0000;
     FramerRow(bank | (uint16_t)(SYM_FramerMap + 6), tmp0, d0, &t2, &x);
     if ((uint16_t)(t2 >> 1) < g.textdirtylo) g.textdirtylo = t2 >> 1;
@@ -86,7 +86,7 @@ uint32_t print(uint32_t a1)
 static uint16_t big_tile(uint32_t off)
 {
     unsigned c = 0;
-    uint16_t t = adc(rom16(SYM_BigFontMap + off), g.BigFontChars, &c);
+    uint16_t t = adc(rom16(SYM_BigFontMap + off), g.BigFontchars, &c);
     return (uint16_t)(adc(t, g.printfontset, &c) | g.printa);
 }
 

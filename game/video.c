@@ -80,10 +80,10 @@ static int puck_in(uint16_t lo, uint16_t xlo, uint16_t xhi)
 /* IRQ hooks: the BG1 scroll splits of the stats screens and the band, each installing the next */
 static void set_irq_hook(uint32_t hook) { w16(RAM_OFF_IRQHook, (uint16_t)hook); }
 
-/* The sprite VRAM allocators: BlockRuns (16x16 blocks, from tile 0) and TileRuns (8x8 tiles,
+/* The sprite VRAM allocators: sprbigslot (16x16 blocks, from tile 0) and sprslot (8x8 tiles,
  * after SpriteBlockTiles) are byte lists of runs, each run's first byte its length (bit 7 used;
- * a block run of a chain of 8-unit runs has bit 6), with the run before it in BlockRunPrev /
- * TileRunPrev ($FF none); a length of 0 ends the list. All of it 8-bit, as the original. */
+ * a block run of a chain of 8-unit runs has bit 6), with the run before it in sprbigslotprev /
+ * sprslotprev ($FF none); a length of 0 ends the list. All of it 8-bit, as the original. */
 static uint8_t br(uint8_t x) { return r8(RAM_OFF_BlockRuns + x); }
 
 static void br_w(uint8_t x, uint8_t v) { w8(RAM_OFF_BlockRuns + x, v); }
@@ -143,17 +143,17 @@ static void trp_w(uint8_t x, uint8_t v) { w8(RAM_OFF_TileRunPrev + x, v); }
 static int piece_entry(int mode, uint16_t r3, uint16_t tile0, uint16_t r5, uint16_t r5h, uint16_t *ox)
 {
     uint16_t ctr = r16(RAM_OFF_PieceSize) ? 0x000F : 0x0007, py, px;
-    py = mode == 2 ? (uint16_t)(r5h - g.PieceY - ctr) : (uint16_t)(g.PieceY + r5h);
+    py = mode == 2 ? (uint16_t)(r5h - g.sproy - ctr) : (uint16_t)(g.sproy + r5h);
     if ((uint16_t)(py - 0xFFF0) & 0x8000) return 0;
     if (!((uint16_t)(py - 0x00E0) & 0x8000)) return 0;
-    if (mode == 1 || (mode == 2 && (r3 & 0x4000))) px = (uint16_t)(r5 - g.PieceX - ctr);
-    else px = (uint16_t)(g.PieceX + r5);
+    if (mode == 1 || (mode == 2 && (r3 & 0x4000))) px = (uint16_t)(r5 - g.sprox - ctr);
+    else px = (uint16_t)(g.sprox + r5);
     if (!((uint16_t)(px - 0x0100) & 0x8000)) return 0;
     if ((uint16_t)(px - 0xFFF0) & 0x8000) return 0;
     uint16_t x = *ox;
     w16(x, px);
     w16(x + 1, py);
-    w16(x + 2, (uint16_t)((uint16_t)(g.PieceTile + tile0) ^ r3));
+    w16(x + 2, (uint16_t)((uint16_t)(g.sprtile + tile0) ^ r3));
     uint16_t hp = g.OAMHiPtr, sh = g.OAMHiShift;
     uint8_t v = r8(hp), sz = r8(RAM_OFF_PieceSize);
     uint32_t m = RAM_OFF_OAMHiMasks + sh;
@@ -165,8 +165,8 @@ static int piece_entry(int mode, uint16_t r3, uint16_t tile0, uint16_t r5, uint1
     if (sh & 0x8000) { g.OAMHiShift = 3; g.OAMHiPtr++; }
     else g.OAMHiShift = sh;
     if (mode < 2) hal_cost_mark(mode ? SYM_DrawSprite_draw_4x : SYM_DrawSprite_draw_4);   /* (a piece drawn) */
-    g.OAMNext = (uint16_t)(g.OAMNext + 4);
-    *ox = g.OAMNext;
+    g.sprcount = (uint16_t)(g.sprcount + 4);
+    *ox = g.sprcount;
     return 1;
 }
 
@@ -179,9 +179,9 @@ static void draw_pieces(int mode, uint32_t p0, uint16_t r3, uint16_t tile0, uint
     do {
         if (mode < 2) hal_cost_mark(mode ? SYM_DrawSprite_draw_8 : SYM_DrawSprite_draw_2);   /* (the piece loop's head) */
         if (!g.SpritesLeft) return;
-        g.PieceX = m16(f + y);
-        g.PieceY = m16(f + (uint16_t)(y + 2));
-        g.PieceTile = m16(f + (uint16_t)(y + 4));
+        g.sprox = m16(f + y);
+        g.sproy = m16(f + (uint16_t)(y + 2));
+        g.sprtile = m16(f + (uint16_t)(y + 4));
         w16(RAM_OFF_PieceSize, m8(f + (uint16_t)(y + 6)));
         g.PieceNext = (uint16_t)(y + 7);
         piece_entry(mode, r3, tile0, r5, r5h, &x);
@@ -282,8 +282,8 @@ void NMI_HookReturn(void)
         w16(RAM_OFF_DMABudget, (uint16_t)(d - 0x48 - (d >> 31)));
         g.CGDMALen = 0;
     }
-    uint16_t x = g.DMAQueueHead;
-    while (x != g.DMAQueueTail) {
+    uint16_t x = g.DMAlisthead;
+    while (x != g.DMAlistend) {
         uint32_t e = RAM_OFF_DMAQueue + x;
         uint8_t t = r8(e);
         int ok;
@@ -313,7 +313,7 @@ void NMI_HookReturn(void)
         else if (t == 0xFC) ok = nmi_dma(x, 0x1908, 0x0079, 0);
         else if (t == 0xFB) ok = nmi_dma(x, 0x1800, 0x007D, 1);
         else ok = nmi_dma(x, 0x1900, 0x007D, 0);
-        if (!ok) { g.DMAQueueHead = x; NMI_Tick(); return; }
+        if (!ok) { g.DMAlisthead = x; NMI_Tick(); return; }
         x = (x + 8) & 0x03FF;
     }
     NMI_SendOAM(x);
@@ -323,7 +323,7 @@ void NMI_HookReturn(void)
  * left; then NMI_Tick */
 void NMI_SendOAM(uint16_t x)
 {
-    g.DMAQueueHead = x;
+    g.DMAlisthead = x;
     if (r16(RAM_OFF_DMABudget) >= 0x026E && g.OAMReady[0]) {
         g.OAMReady[0] = 0;
         io_w8(0x4304, 0x7E);
@@ -336,26 +336,26 @@ void NMI_SendOAM(uint16_t x)
     NMI_Tick();
 }
 
-/* The NMI's frame work: vcount (with the 50 Hz fraction's carry), a step of the fade (in after the
- * fadestep delay, out with $FFFF; not on the frames STAT77 bit 7 is set), FrameCount (unless held),
+/* The NMI's frame work: Vcount (with the 50 Hz fraction's carry), a step of the fade (in after the
+ * fadein delay, out with $FFFF; not on the frames STAT77 bit 7 is set), FrameCount (unless held),
  * then the frame hook (FrameHookNext taken when set) */
 void NMI_Tick(void)
 {
     uint32_t f = (uint32_t)g.vcountfrac + g.vcountstep;
     g.vcountfrac = (uint16_t)f;
-    uint32_t v = (uint32_t)g.vcount[0] + 1 + (f >> 16);
-    g.vcount[0] = (uint16_t)v;
-    if (v >> 16) g.vcount[1]++;
-    uint16_t fs = g.fadestep;
+    uint32_t v = (uint32_t)g.Vcount[0] + 1 + (f >> 16);
+    g.Vcount[0] = (uint16_t)v;
+    if (v >> 16) g.Vcount[1]++;
+    uint16_t fs = g.fadein;
     if (fs) {
         if (!(fs & 0x8000)) {
-            if (fs != 1) g.fadestep--;
-            else if (g.brightness >= 0x000F) { g.brightness = 0x000F; g.fadestep = 0; }
+            if (fs != 1) g.fadein--;
+            else if (g.brightness >= 0x000F) { g.brightness = 0x000F; g.fadein = 0; }
             else if (!(io_r16(0x213E) & 0x8000)) g.brightness++;
-        } else if (fs != 0xFFFF) g.fadestep++;
+        } else if (fs != 0xFFFF) g.fadein++;
         else if (!(io_r16(0x213E) & 0x8000)) {
             g.brightness--;
-            if (!g.brightness || (g.brightness & 0x8000)) { g.brightness = 0; g.fadestep = 0; }
+            if (!g.brightness || (g.brightness & 0x8000)) { g.brightness = 0; g.fadein = 0; }
         }
     }
     if (!g.FrameCountHold) g.FrameCount++;
@@ -451,7 +451,7 @@ void WaitFrames(uint16_t x, uint16_t y)
 /* Wait until the DMA queue is empty (the NMI moves its head up to the tail) */
 void WaitDMAQueue(void)
 {
-    while (wait_r16(RAM_OFF_DMAQueueHead) != g.DMAQueueTail) wait_tick();
+    while (wait_r16(RAM_OFF_DMAQueueHead) != g.DMAlistend) wait_tick();
 }
 
 /* Wait for a frame, set the default hooks, turn the IRQ off, force blank (a frame later HDMA off)
@@ -465,7 +465,7 @@ void BlankScreen(void)
     g.IniDispShadow[0] = 0x8F;
     WaitFrame();
     io_w8(0x420C, 0);
-    g.DMAQueueTail = g.DMAQueueHead;
+    g.DMAlistend = g.DMAlisthead;
 }
 
 /* Full brightness (fading in unless already there), no forced blank */
@@ -546,7 +546,7 @@ uint16_t FillVRAM(uint16_t a, uint16_t x, uint16_t y, uint16_t r3)
         io_w8(0x420B, 0x02);
         return (uint16_t)((x >> 1) + r3 + (x & 1));
     }
-    uint16_t n = x, t = g.DMAQueueTail;
+    uint16_t n = x, t = g.DMAlistend;
     for (;;) {
         uint16_t k = n >= 0x1001 ? 0x1000 : n;
         uint32_t e = RAM_OFF_DMAQueue + t;
@@ -560,7 +560,7 @@ uint16_t FillVRAM(uint16_t a, uint16_t x, uint16_t y, uint16_t r3)
         if (n <= 0x1000) break;
         n = (uint16_t)(n - 0x1000);
     }
-    g.DMAQueueTail = t;
+    g.DMAlistend = t;
     return y;
 }
 
@@ -587,7 +587,7 @@ uint16_t FillVRAMSplit(uint16_t a, uint16_t x, uint16_t y)
         io_w8(0x420B, 0x02);
         return (uint16_t)(x + y);
     }
-    uint16_t n = x, t = g.DMAQueueTail;
+    uint16_t n = x, t = g.DMAlistend;
     for (;;) {
         uint16_t k = n >= 0x1001 ? 0x1000 : n;
         uint32_t e = RAM_OFF_DMAQueue + t;
@@ -601,7 +601,7 @@ uint16_t FillVRAMSplit(uint16_t a, uint16_t x, uint16_t y)
         if (n <= 0x1000) break;
         n = (uint16_t)(n - 0x1000);
     }
-    g.DMAQueueTail = t;
+    g.DMAlistend = t;
     return y;
 }
 
@@ -625,7 +625,7 @@ uint16_t DMAToVRAM(uint32_t *p0, uint16_t x, uint16_t y, uint16_t r3)
  * low word: the second add takes the first's carry) */
 uint16_t QueueVRAMDMA(uint32_t *p0, uint16_t x, uint16_t y)
 {
-    uint16_t a = x, t = g.DMAQueueTail, lo = (uint16_t)*p0;
+    uint16_t a = x, t = g.DMAlistend, lo = (uint16_t)*p0;
     for (;;) {
         uint16_t n = a >= 0x1000 ? 0x1000 : a;
         uint32_t e = RAM_OFF_DMAQueue + t;
@@ -642,7 +642,7 @@ uint16_t QueueVRAMDMA(uint32_t *p0, uint16_t x, uint16_t y)
         if (a <= 0x1000) break;
         a = (uint16_t)(a - 0x1000);
     }
-    g.DMAQueueTail = t;
+    g.DMAlistend = t;
     *p0 = (*p0 & 0xFF0000) | lo;
     return y;
 }
@@ -660,7 +660,7 @@ uint16_t DMAToVRAMHigh(uint32_t *p0, uint16_t x, uint16_t y)
         io_w8(0x420B, 0x02);
         return (uint16_t)((x >> 1) + y + (x & 1));
     }
-    uint16_t a = x, t = g.DMAQueueTail;
+    uint16_t a = x, t = g.DMAlistend;
     for (;;) {
         uint16_t n = a >= 0x1001 ? 0x1000 : a;
         uint32_t e = RAM_OFF_DMAQueue + t;
@@ -675,7 +675,7 @@ uint16_t DMAToVRAMHigh(uint32_t *p0, uint16_t x, uint16_t y)
         if (a <= 0x1000) break;
         a = (uint16_t)(a - 0x1000);
     }
-    g.DMAQueueTail = t;
+    g.DMAlistend = t;
     return y;
 }
 
@@ -835,7 +835,7 @@ void Mode7MapToVRAM(uint32_t p0, uint16_t x, uint16_t y)
         io_w8(0x2115, 0x80);
         return;
     }
-    uint16_t t = g.DMAQueueTail;
+    uint16_t t = g.DMAlistend;
     do {
         uint32_t e = RAM_OFF_DMAQueue + t;
         w16(e + 1, src);
@@ -847,7 +847,7 @@ void Mode7MapToVRAM(uint32_t p0, uint16_t x, uint16_t y)
         w8(e, 0xFB);
         t = (t + 8) & 0x03FF;
     } while (--h);
-    g.DMAQueueTail = t;
+    g.DMAlistend = t;
 }
 
 /* (unused entry) paste r6+2 bytes of [p0] into the map at [p1] (r7 entries a row) at column x,
@@ -950,34 +950,34 @@ void InitSprites(uint16_t a, uint16_t x, uint16_t y)
         w8(RAM_OFF_BlockRunPrev + (uint8_t)(k + 8), k);
         v = 8;
     } while (!(k & 0x80));
-    g.BlockRunPrev[0] = 0xFF;
-    g.CacheUseMark = 2;
+    g.sprbigslotprev[0] = 0xFF;
+    g.sprslotlife = 2;
     uint8_t n = (uint8_t)(0x0200 - g.SpriteBlockTiles);
-    g.TileRuns[0] = n;
+    g.sprslot[0] = n;
     w8(RAM_OFF_TileRuns + n, 0);
     w8(RAM_OFF_TileRunPrev + n, 0);
-    g.TileRunPrev[0] = 0xFF;
+    g.sprslotprev[0] = 0xFF;
     g.SpritesLeft = 0x0080;
-    g.OAMNext = 0x2100;
+    g.sprcount = 0x2100;
     g.OAMHideEnd = 0x2300;
     g.OAMLastEnd = 0x2520;
     g.OAMShowBuf = 0x2320;
-    g.OAMDrawBuf = 0x2100;
+    g.Satt = 0x2100;
     for (int i = 0x03D0; i >= 0; i -= 2) w16(RAM_OFF_FrameCacheOf + i, 0xFFFF);
     SpriteFrameEnd();
 }
 
-/* Start filling OAMDrawBuf after the reserved entries (the high table's shift from the byte offset,
+/* Start filling Satt after the reserved entries (the high table's shift from the byte offset,
  * as the original); age the tile cache's use marks and free the entries not drawn since */
 void SpriteFrameStart(void)
 {
     uint16_t sr = g.SpritesReserved;
     g.SpritesLeft = (uint16_t)(0x0080 - sr);
     uint16_t x = sr >> 2;
-    uint32_t s = (uint32_t)x + g.OAMDrawBuf;
+    uint32_t s = (uint32_t)x + g.Satt;
     g.OAMHiPtr = (uint16_t)(s + 0x0200 + (s >> 16));
     g.OAMHiShift = (x & 3) ^ 3;
-    g.OAMNext = (uint16_t)((uint16_t)(sr << 2) + g.OAMDrawBuf + (sr >> 14 & 1));
+    g.sprcount = (uint16_t)((uint16_t)(sr << 2) + g.Satt + (sr >> 14 & 1));
     if (!g.FrameCacheCount) return;
     for (int16_t k = (int16_t)((g.FrameCacheCount - 1) << 1); k >= 0; k -= 2) {
         uint16_t u = r16(RAM_OFF_FrameCacheUse + k);
@@ -991,17 +991,17 @@ void SpriteFrameStart(void)
 /* Move the unused OAM entries off screen (Y = $E1), swap the OAM buffers and set OAMReady */
 void SpriteFrameEnd(void)
 {
-    uint16_t x = g.OAMNext;
+    uint16_t x = g.sprcount;
     while (x < g.OAMHideEnd) {
         w16(x, 0xE100);
         x += 4;
         if (!x) break;
     }
     uint16_t last = g.OAMLastEnd;
-    g.OAMLastEnd = g.OAMNext;
+    g.OAMLastEnd = g.sprcount;
     g.OAMHideEnd = last;
-    uint16_t d = g.OAMDrawBuf;
-    g.OAMDrawBuf = g.OAMShowBuf;
+    uint16_t d = g.Satt;
+    g.Satt = g.OAMShowBuf;
     g.OAMShowBuf = d;
     g.OAMReady[0] = 1;
 }
@@ -1029,7 +1029,7 @@ uint16_t GetFrameTiles(uint32_t p0, uint16_t x)
     x = LoadFrameTiles(p0, x);
     if (x & 0x8000) { g.FrameTilesFail = 0xFFFF; return 0xFFFF; }
 found:
-    w16(RAM_OFF_FrameCacheUse + x, g.CacheUseMark);
+    w16(RAM_OFF_FrameCacheUse + x, g.sprslotlife);
     return r16(RAM_OFF_FrameCacheTile + x);
 }
 
@@ -1057,7 +1057,7 @@ void DrawSprite_draw(uint32_t p0, uint16_t r3, uint16_t r5, uint16_t r5h, uint16
     uint16_t tile0 = GetFrameTiles(p0, x);
     if (tile0 & 0x8000) return;
     uint16_t r0 = m8(p0 & 0xFFFFFF);
-    draw_pieces(r3 & 0x8000 ? 2 : r3 & 0x4000 ? 1 : 0, p0, r3, tile0, r5, r5h, r0, g.OAMNext);
+    draw_pieces(r3 & 0x8000 ? 2 : r3 & 0x4000 ? 1 : 0, p0, r3, tile0, r5, r5h, r0, g.sprcount);
 }
 
 /* The tile cache entry (* 2) of the frame at [p0], searching y entries from x; else LoadFrameTiles */
@@ -1071,7 +1071,7 @@ uint16_t FindCachedFrame(uint32_t p0, uint16_t x, uint16_t y)
 }
 
 /* Allocate sprite VRAM for the frame at [p0] (p0 the direct page's 4 bytes: the cache keeps the word
- * at p0+2), queue the DMA of its tiles (one or two rows: PieceX / PieceY bytes) and add a tile cache
+ * at p0+2), queue the DMA of its tiles (one or two rows: sprox / sproy bytes) and add a tile cache
  * entry: its entry * 2, $FFFF when there is no room or all 128 entries are in use, x when the
  * frame has no pieces. A negative piece count is a frame of 16x16 blocks (in units of 4 tiles,
  * more than 8 taking a chain of 8-unit runs), else of 8x8 tiles. */
@@ -1082,8 +1082,8 @@ uint16_t LoadFrameTiles(uint32_t p0, uint16_t x)
     uint8_t bank = (uint8_t)(p0 >> 16);
     uint16_t r0 = m16(f);
     if (!r0) return x;
-    g.PieceX = m16(f + 0x0C);
-    g.PieceY = m16(f + 0x0E);
+    g.sprox = m16(f + 0x0C);
+    g.sproy = m16(f + 0x0E);
     uint16_t src = (uint16_t)(m16(f + 0x10) + (uint16_t)p0);
     if (!(r0 & 0x8000)) {
         uint16_t need = m16(f + 2);
@@ -1096,11 +1096,11 @@ uint16_t LoadFrameTiles(uint32_t p0, uint16_t x)
         }
         split_run(tr_w, trp_w, k, tr(k), (uint8_t)need);
         tr_w(k, (uint8_t)need | 0x80);
-        uint16_t t = g.DMAQueueTail;
-        dma_entry(t, src, bank, g.PieceX);
+        uint16_t t = g.DMAlistend;
+        dma_entry(t, src, bank, g.sprox);
         uint16_t vram = cache_add(p0, k, (uint16_t)(k + g.SpriteBlockTiles));
         w16(RAM_OFF_DMAQueue + t + 6, vram);
-        g.DMAQueueTail = (t + 8) & 0x03FF;
+        g.DMAlistend = (t + 8) & 0x03FF;
         return cache_result();
     }
     uint16_t need = (uint16_t)((uint16_t)(m16(f + 2) + 3) & 0xFFFC) >> 2;
@@ -1155,39 +1155,39 @@ uint16_t LoadFrameTiles(uint32_t p0, uint16_t x)
             k = (uint8_t)(k + 8);
         }
         br_w(k, left | 0x80);
-        uint16_t t = g.DMAQueueTail;
-        dma_entry(t, src, bank, g.PieceX);
-        src = (uint16_t)(g.PieceX + src);
+        uint16_t t = g.DMAlistend;
+        dma_entry(t, src, bank, g.sprox);
+        src = (uint16_t)(g.sprox + src);
         uint16_t vram = cache_add(p0, run | 0x8000, (uint16_t)(((run & 0xFFF8) << 1) + (run & 7)) << 1);
         w16(RAM_OFF_DMAQueue + t + 6, vram);
         t = (t + 8) & 0x03FF;
-        if (!g.PieceY) {
-            g.DMAQueueTail = t;
+        if (!g.sproy) {
+            g.DMAlistend = t;
             return cache_result();
         }
-        dma_entry(t, src, bank, g.PieceY);
-        w16(RAM_OFF_DMAQueue + t + 6, (uint16_t)((((g.PieceX >> 1) & 0xFF00) | 0x0100) + vram));
-        g.DMAQueueTail = (t + 8) & 0x03FF;
+        dma_entry(t, src, bank, g.sproy);
+        w16(RAM_OFF_DMAQueue + t + 6, (uint16_t)((((g.sprox >> 1) & 0xFF00) | 0x0100) + vram));
+        g.DMAlistend = (t + 8) & 0x03FF;
         return cache_result();
     }
-    uint16_t t = g.DMAQueueTail;
-    dma_entry(t, src, bank, g.PieceX);
-    src = (uint16_t)(g.PieceX + src);
+    uint16_t t = g.DMAlistend;
+    dma_entry(t, src, bank, g.sprox);
+    src = (uint16_t)(g.sprox + src);
     uint16_t vram = cache_add(p0, run | 0x8000, (uint16_t)(((run & 0xFFF8) << 1) + (run & 7)) << 1);
     w16(RAM_OFF_DMAQueue + t + 6, vram);
     t = (t + 8) & 0x03FF;
-    dma_entry(t, src, bank, g.PieceY);
-    if (!g.PieceY) {
-        g.DMAQueueTail = t;
+    dma_entry(t, src, bank, g.sproy);
+    if (!g.sproy) {
+        g.DMAlistend = t;
         return cache_result();
     }
     w16(RAM_OFF_DMAQueue + t + 6, vram | 0x0100);
-    g.DMAQueueTail = (t + 8) & 0x03FF;
+    g.DMAlistend = (t + 8) & 0x03FF;
     return cache_result();
 }
 
 /* Free the VRAM tiles of the frame at [p0] (by its number with FrameByNumber); not cached: nothing.
- * Found by its address the frame keeps its FrameCacheOf slot. */
+ * Found by its address the frame keeps its sprframetime slot. */
 void FreeFrameTiles(uint32_t p0)
 {
     uint16_t y = g.FrameCacheCount;
@@ -1216,7 +1216,7 @@ void FreeFrameTiles_t1(uint16_t a, uint32_t p1)
     FreeFrameTiles((uint16_t)lo | (uint32_t)hi << 16);
 }
 
-/* (unused entry) The sum of the free block run lengths, walking BlockRuns from SpriteBlockTiles
+/* (unused entry) The sum of the free block run lengths, walking sprbigslot from SpriteBlockTiles
  * (after a free run the step is the sum so far, as the original) */
 uint16_t FreeFrameTiles_t2(void)
 {
@@ -1231,7 +1231,7 @@ uint16_t FreeFrameTiles_t2(void)
 
 void FreeCacheEntryA(uint16_t a, uint16_t y) { FreeCacheEntry((uint16_t)((a >> 8 & 0xFF) << 1), y); }
 
-/* Free entry x of frame number y (its FrameCacheOf slot cleared); _A: the entry in a's high byte */
+/* Free entry x of frame number y (its sprframetime slot cleared); _A: the entry in a's high byte */
 void FreeCacheEntry(uint16_t x, uint16_t y)
 {
     w8(RAM_OFF_FrameCacheOf + 1 + y, 0xFF);
@@ -1452,12 +1452,12 @@ void UpdateHatTrick(void)
 void addframe(void)
 {
     if (g.sprframe >= 0x3D1) return;
-    if (g.sprhflip) g.sprattr |= 0x4000;
-    if (g.sprvflip) g.sprattr |= 0x8000;
+    if (g.sprhflip) g.sprpal |= 0x4000;
+    if (g.sprvflip) g.sprpal |= 0x8000;
     uint16_t f = (uint16_t)(g.sprframe - 1);
     if (f & 0x8000) f = 0;
     if (f >= 0x3D0) f = 0x3D0;
-    DrawSprite(g.sprattr, g.sprx, g.spry, f, SYM_SpriteFrames);
+    DrawSprite(g.sprpal, g.sprx, g.spry, f, SYM_SpriteFrames);
 }
 
 /* Project rink position d0 / d1 (height d2) to the screen: d0 = x, d1 = y ($4E20 off the screen) */
@@ -1573,18 +1573,18 @@ void setsortcords(void)
             g.sprhflip = g.attribute[o] & 0x0800;
             g.sprvflip = g.attribute[o] & 0x1000;
         }
-        g.sprattr = g.attribute[o] & 1 ? 0x2200 : 0x2000;
+        g.sprpal = g.attribute[o] & 1 ? 0x2200 : 0x2000;
         addframe();
         if (g.sprframe < SPFcup || g.sprframe >= SPFcupover + 8) continue;
-        DrawSprite(g.sprattr & 0xF000, g.sprx, g.spry, (uint16_t)(g.sprframe + SPFcupover - SPFcup - 1), SYM_SpriteFrames);
+        DrawSprite(g.sprpal & 0xF000, g.sprx, g.spry, (uint16_t)(g.sprframe + SPFcupover - SPFcup - 1), SYM_SpriteFrames);
     }
 }
 
-/* Store at y:x the colour of this moment (vcount) of a 60-frame pulse: white to $7E10 and back,
+/* Store at y:x the colour of this moment (Vcount) of a 60-frame pulse: white to $7E10 and back,
  * each component interpolated over 30 frames (the divides' remainders as the divider leaves them) */
 void PulseColour(uint16_t x, uint16_t y)
 {
-    uint16_t t = (uint16_t)(g.vcount[0] % 30), half = (uint16_t)(g.vcount[0] / 30) % 2;
+    uint16_t t = (uint16_t)(g.Vcount[0] % 30), half = (uint16_t)(g.Vcount[0] / 30) % 2;
     uint32_t tab = SYM_PulseColour_1 + (uint16_t)(half << 1);
     uint16_t c0 = rom16(tab), c1 = rom16(tab + 2);
     static const int sh[3] = { 10, 5, 0 };
@@ -1657,7 +1657,7 @@ void SendColours(void) { DMAToCGRAM(0x7E0000 + RAM_OFF_colourbuf, 0x0100, 0); }
 void showref(void) { g.sflags &= (uint16_t)~sf2refref; }
 
 /* Fade the screen in after a 5-frame delay, or out: BrightnessHook as the frame hook */
-void FadeIn(void) { g.fadestep = 5; SetFrameHook(SYM_BrightnessHook); }
+void FadeIn(void) { g.fadein = 5; SetFrameHook(SYM_BrightnessHook); }
 
 /* Wait until the fade has reached black */
 void WaitFadeOut(void)
@@ -1721,12 +1721,12 @@ void showclock(void)
  * since vcountmark, less the borrow c leaves: the caller's carry) */
 void showzam(int c)
 {
-    uint32_t lo = (uint32_t)g.vcount[0] - g.vcountmark[0] - !c;
-    uint16_t hi = (uint16_t)(g.vcount[1] - g.vcountmark[1] - (lo >> 16 & 1));
+    uint32_t lo = (uint32_t)g.Vcount[0] - g.vcountmark[0] - !c;
+    uint16_t hi = (uint16_t)(g.Vcount[1] - g.vcountmark[1] - (lo >> 16 & 1));
     if (hi || !g.sfhormode || !g.InIntermission) return;
     g.sprhflip = 0;
     g.sprvflip = 0;
-    g.sprattr = 0x2000;
+    g.sprpal = 0x2000;
     g.sprx = (uint16_t)lo >> 2;
     g.spry = 0xC8;
     g.sprframe = SPFzamboni;
@@ -1745,7 +1745,7 @@ void checkfo(void)
         g.spry = g.fodropy;
         g.sprframe = (uint16_t)(r16(RAM_OFF_fofdata2 + x) + SPFfaceoff - 1);
         g.sprhflip = r16(RAM_OFF_fofdata2 + 2 + x) & 0x0800;
-        g.sprattr = (x == 4 ? 0x0200 : 0) | g.sprpriority;
+        g.sprpal = (x == 4 ? 0x0200 : 0) | g.sprpriority;
         addframe();
     }
     g.sprpriority = 0x2000;

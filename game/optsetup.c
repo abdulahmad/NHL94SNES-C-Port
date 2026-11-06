@@ -46,8 +46,8 @@ uint16_t setoptions_9(uint16_t d3, uint16_t d2, uint16_t d4, uint16_t d5)
 void setoptions_10(uint16_t *a2)
 {
     if (g.teamschanged) {
-        g.HomeTeam = g.OptTeam1;
-        g.VisTeam[0] = g.OptTeam2;
+        g.HomeTeam = g.Opt1team;
+        g.VisTeam[0] = g.Opt2team;
         setteams();
         g.teamschanged = 0;
     }
@@ -277,7 +277,7 @@ void PlayerSelect(uint16_t a2, uint16_t d2)
     MenuScreenHDMA();
     ScreenOn();
     FadeIn();
-    g.fadestep = 0x0A;
+    g.fadein = 0x0A;
     uint16_t solo = 0;                                     /* (d1+2: one player against the computer) */
     if (g.OptPlayMode >= 1 && g.OptPlayMode < 4) {
         g.cont1team = 1;
@@ -433,8 +433,8 @@ void setoptions(void)
     forceblack();
     ClearTextMap();
     InitSetupChars();
-    g.HomeTeam = g.OptTeam1;
-    g.VisTeam[0] = g.OptTeam2;
+    g.HomeTeam = g.Opt1team;
+    g.VisTeam[0] = g.Opt2team;
     setteams();
     g.setupvis = (uint16_t)(g.VisTeam[0] + 0x21);
     g.setuphome = g.HomeTeam;
@@ -491,10 +491,10 @@ void setoptions(void)
             }
             if (g.mp5warning) continue;
             ReadPads();
-            g.lastframevc = g.vcount[0];
-            g.oldvcount = g.vcount[0];
+            g.lastframevc = g.Vcount[0];
+            g.OldVcount = g.Vcount[0];
             Readjoy1(&d0, &d1, &d2, &d3);
-            g.repeatdelay--;
+            g.repeatdelayframes--;
             d1 = ProcessInputWithRepeat(d1, d2, d3) & 0xFFF0;
             if (d1) goto pressed;
             setoptions_11(&a2);
@@ -523,26 +523,26 @@ void setoptions(void)
         setoptions_10(&a2);
     }
 timeout:
-    g.OptTeam1 = randoma8(0x1C);
-    g.HomeTeam = g.OptTeam1;
+    g.Opt1team = randoma8(0x1C);
+    g.HomeTeam = g.Opt1team;
     uint16_t t;
-    do t = randoma8(0x1C); while (t == g.OptTeam1);
-    g.OptTeam2 = t;
+    do t = randoma8(0x1C); while (t == g.Opt1team);
+    g.Opt2team = t;
     g.VisTeam[0] = t;
     g.notdemo = 0;
     g.OptPlayMode = 0;
-    g.OptPlayers = 0;
+    g.OptNOP = 0;
 start:;
     uint16_t n = Decompress(SYM_BigLetterTiles, WRAM24(RAM_OFF_bigtextbuf));
     LinearToPlanar(WRAM24(RAM_OFF_bigtextbuf), (uint16_t)RAM_OFF_hlsavebuf, n);
     g.matchupphotos = 0;
     if (g.OptPlayMode == 2 || g.OptPlayMode == 3) {
         NewPO();
-        d2 = g.OptTeam1 < 0x1A ? g.OptTeam1 : 0x19;       /* (NewPO leaves team 1 in d2) */
+        d2 = g.Opt1team < 0x1A ? g.Opt1team : 0x19;       /* (NewPO leaves team 1 in d2) */
     }
-    g.OptPlayers = 1;
-    if (g.OptPlayMode >= 1 && g.OptPlayMode < 4) g.OptPlayers = 5;
-    g.pojoy = (uint16_t)(g.OptPlayers - 5);
+    g.OptNOP = 1;
+    if (g.OptPlayMode >= 1 && g.OptPlayMode < 4) g.OptNOP = 5;
+    g.pojoy = (uint16_t)(g.OptNOP - 5);
     if (g.OptPlayMode == 1) d2 = PasswordScreen();
     w16(RAM_OFF_PassWord, r16(RAM_OFF_PassWord) | 0x0080);
     MakeTree();
@@ -672,6 +672,6 @@ void InitSetupChars(void)
     FillVRAM(0, 0x20, 0x3000, 0);
     uint16_t n = Decompress(SYM_SmallFontTiles, unpackbuf);
     uint32_t s = (uint32_t)(n >> 5) + g.smallfontchars + (n >> 4 & 1);   /* (lsr's carry) */
-    g.Framercset = (uint16_t)s;
-    g.scorechars = (uint16_t)(g.Framercset + 4 + (s >> 16 & 1));
+    g.framercset = (uint16_t)s;
+    g.scorechars = (uint16_t)(g.framercset + 4 + (s >> 16 & 1));
 }

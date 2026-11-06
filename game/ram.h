@@ -27,8 +27,8 @@ struct G {
     uint16_t ClipBottomUnused; /* ResetPPURegs sta.b $32 = $00E0 (224, screen height); never read anywhere */
     uint32_t SoundTable; /* Long pointer to the sound/instrument offset table; $36 = SoundTable+2 (bank, stored as a word so ... */
     uint16_t NMISkip; /* VBlank: lda.b $38 : beq -> nonzero = just pla/plb/rti (no hook, DMA, OAM, sound) */
-    uint16_t DMAQueueHead; /* Read index into the DMAQueue ring ($0100, 8-byte entries, and #$03FF): NMI_HookReturn ldx $3A ... */
-    uint16_t DMAQueueTail; /* Write index of the DMAQueue ring: QueueVRAMDMA, DMAToVRAMHigh, FillVRAM, FillVRAMSplit, ... */
+    uint16_t DMAlisthead; /* Read index into the DMAList ring ($0100, 8-byte entries, and #$03FF): NMI_HookReturn ldx $3A ... */
+    uint16_t DMAlistend; /* Write index of the DMAList ring: QueueVRAMDMA, DMAToVRAMHigh, FillVRAM, FillVRAMSplit, ... */
     uint16_t MulCand[2]; /* Multiplicand of the software multiply (taken when Mode7InUse bit 6 is set): MulFrac8 $3E = A low ... */
     uint8_t StreamLoop; /* UpdateStreamSfx: $42 = byte-swapped first word of the stream block header, then ldy $42 -> Y = ... */
     uint8_t MulFracResult[3]; /* MulFrac16 returns A*Y/128 in A and $43 (soft path: lda $43 = MulProd+1; hardware path: MPYM*2 -> ... */
@@ -63,7 +63,7 @@ struct G {
     uint8_t LZDistance[2]; /* Back-reference distance: (cmd and $60)*8 + byte 2, or ((byte 2 and $3F) << 8) + byte 3, or the ... */
     uint8_t HuffSpan[4]; /* Table entries per code of the current length, plus 1 (lda .4,x / sta $7D; ldy $7D / dey / bne ... */
     uint16_t crowdhold; /* frames the crowd level holds before it fades (Goal 120, puckglue 20; updatecrowdf counts it down) */
-    uint16_t vcount[2]; /* 32-bit frame counter, +1 per NMI (NMI_Tick; 93S vcount) */
+    uint16_t Vcount[2]; /* 32-bit frame counter, +1 per NMI (NMI_Tick; 93S Vcount) */
     uint16_t xsave; /* X saved around the push/pop loops */
     uint32_t a0; /* long pointer; a0+2 is the bank */
     uint32_t a1; /* long pointer; a1+2 is the bank */
@@ -96,7 +96,7 @@ struct G {
     uint16_t PlayersUnused[2]; /* never read: updateplayers sets $FFFF for every object at the top of the per-object loop (lda #$FFFF / sta ... */
     uint16_t curobjteam; /* never read. Team of the object being updated, 0 = home, 2 = away: updateplayers sets 0 before the loop and 2 ... */
     uint16_t curobjopp[10]; /* never read. The other team of the object being updated (2 for the home objects, 0 from X = $0C on), set ... */
-    uint16_t DMAQueue[512]; /* Ring of 128 8-byte VRAM transfer entries: ... */
+    uint16_t DMAList[512]; /* Ring of 128 8-byte VRAM transfer entries: ... */
     uint8_t DecompTab1[256]; /* DecompressPairs: first byte of each pair code (sta DecompTab1,x, read in the expand loop); DecompressHuffman: ... */
     uint8_t DecompTab2[256]; /* DecompressPairs: second byte of each pair code (sta DecompTab2,x); DecompressHuffman: code-length jump index of ... */
     uint8_t HuffCount[32]; /* DecompressHuffman header loop: sta HuffCount,x = number of codes of each length (x = 2*length, 16 words), ... */
@@ -112,22 +112,22 @@ struct G {
     uint8_t CGDMABank[2]; /* DMAToCGRAM sta CGDMABank ($0E); NMI_HookReturn ldx CGDMABank -> A1B0 */
     uint8_t FrameHookNext[3]; /* SetFrameHook sta FrameHookNext / stx $0772 (bank); NMI_SendOAM: when $0771 (address high byte) is nonzero copies ... */
     uint8_t NMIHookNext[3]; /* ClearNMIHook sta NMIHookNext / stx $0775 (bank); VBlank: when $0774 is nonzero copies it to NMIHook ... */
-    uint16_t JoyPad[5]; uint8_t JoyPad_end_; /* buttons held, a word per pad (5 pads) */
+    uint16_t PadRaw1[5]; uint8_t PadRaw1_end_; /* buttons held, a word per pad (5 pads) */
     uint8_t Multi5Sig[6]; /* Multi5ConnectCheck rol.w JOYSER0/1 bit 1 into $0782/Multi5Sig (port 1) and $0784/$0783 (port 2); $FF then ... */
     uint16_t FrameCountHold; /* NMI_SendOAM: lda FrameCountHold bne skips inc FrameCount; no writer in routines apart from the Reset_Fast clear */
     uint8_t FrameHook[3]; /* NMI_SendOAM jml [FrameHook] (returns to NMI_FrameHookReturn); loaded from FrameHookNext; Reset_Fast copies ... */
     uint8_t NMIHook[3]; /* VBlank jml [NMIHook] (returns to NMI_HookReturn); loaded from NMIHookNext */
     uint8_t IRQHook[3]; /* IRQ_Fast jml [IRQHook]; SetIRQ sta IRQHook / stx $0791 (bank = IRQHook+2); IRQOff sets IRQHook_Off; the IRQ_* ... */
     uint16_t seed[2]; /* RandomWord's two 16-bit generators (seed, $0794); FallDown/chk4shot/asspuckc/chk4lc read seed where 93S ... */
-    uint8_t RAMTag[6]; /* Reset_Fast copies InitTag 'EACDSI' here (and to RAMTag2 and ReplayBufferEnd); no reader found - a RAM marker */
+    uint8_t RAMTag[6]; /* Reset_Fast copies InitTag 'EACDSI' here (and to RAMTag2 and replayend); no reader found - a RAM marker */
     uint16_t MapVRAM; /* VRAM word address of the screen map: MapToVRAM/MapPartToVRAM/MapPartToVRAMOffset/Mode7MapToVRAM add row*32 ... */
     uint16_t MapScreenStep; /* MapToVRAM/MapPartToVRAM add MapScreenStep to the VRAM address after row 31 (to the next 32-row screen); no writer ... */
     uint16_t HeapStart7E; /* first block header of the bank $7E heap */
     uint16_t HeapStart7F; /* first block header of the bank $7F heap */
     uint16_t NewHandleSlot; /* NewHandle: the free handle being filled */
     uint16_t NewHandleSkipBank; /* NewHandle: the bank it must not use */
-    uint16_t OAMLastEnd; /* OAMNext of the frame last finished */
-    uint16_t OAMDrawBuf; /* OAM buffer (bank $7E) the sprites are drawn into */
+    uint16_t OAMLastEnd; /* sprcount of the frame last finished */
+    uint16_t Satt; /* OAM buffer (bank $7E) the sprites are drawn into */
     uint16_t OAMShowBuf; /* OAM buffer (bank $7E) the NMI copies */
     uint16_t SpritesLeft; /* OAM entries still free this frame */
     uint16_t OAMHiPtr; /* byte of the OAM high table that takes the next entry's size and X high bits */
@@ -136,15 +136,15 @@ struct G {
     uint16_t SpritesReserved; /* OAM entries at the start that the sprite drawing leaves alone */
     uint16_t SpriteBlockTiles; /* InitSprites: (Y+$1F)&~$1F (at least $1A0) = tiles of the 16x16 block area of sprite VRAM; LoadFrameTiles ... */
     uint16_t FrameCacheCount; /* Tile cache entries in use: InitSprites stz, LoadFrameTiles inc (max $80), FreeCacheEntry dec; ... */
-    uint16_t OAMNext; /* next OAM entry to fill in OAMDrawBuf */
-    uint16_t OAMHideEnd; /* SpriteFrameEnd moves the entries from OAMNext up to here off screen */
+    uint16_t sprcount; /* next OAM entry to fill in Satt */
+    uint16_t OAMHideEnd; /* SpriteFrameEnd moves the entries from sprcount up to here off screen */
     uint16_t FrameTilesFail; /* GetFrameTiles stores $FFFF here when LoadFrameTiles finds no room; never read */
-    uint16_t CacheUseMark; /* InitSprites sets 2; GetFrameTiles stores it in the entry's FrameCacheUse word, which SpriteFrameStart shifts ... */
+    uint16_t sprslotlife; /* InitSprites sets 2; GetFrameTiles stores it in the entry's sprslottime word, which SpriteFrameStart shifts ... */
     uint16_t DrawFrameNum; /* DrawSprite/FreeFrameTiles/GetFrameTiles store the frame number here; with FrameByNumber set the cache ... */
     uint16_t FrameByNumber; /* Nonzero ($FFFF from StartGame/ExitStatsScreen): GetFrameTiles/FreeFrameTiles/DrawSpritePieces find the entry by ... */
-    uint16_t PieceX; /* DrawSprite/DrawSpritePieces: x offset of the current frame piece (with $1C); ... */
-    uint16_t PieceY; /* DrawSprite/DrawSpritePieces: y offset of the piece (from $1E); LoadFrameTiles reuses it for the 8x8 tile ... */
-    uint16_t PieceTile; /* DrawSpritePieces: piece tile/attribute word, + first tile $16, eor $14 -> OAM +2 */
+    uint16_t sprox; /* DrawSprite/DrawSpritePieces: x offset of the current frame piece (with $1C); ... */
+    uint16_t sproy; /* DrawSprite/DrawSpritePieces: y offset of the piece (from $1E); LoadFrameTiles reuses it for the 8x8 tile ... */
+    uint16_t sprtile; /* DrawSpritePieces: piece tile/attribute word, + first tile $16, eor $14 -> OAM +2 */
     uint8_t PieceSize[2]; /* DrawSpritePieces: piece size byte (0 = 8x8, else 16x16: centre 15 not 7, size bit in the OAM high table) */
     uint16_t PieceNext; /* DrawSprite/DrawSpritePieces sty PieceNext: offset of the next piece record of the frame */
     uint16_t IRQVTime; /* SetIRQ sty IRQVTime (IRQ line); NMI_HookReturn writes it to VTIMEL every frame */
@@ -215,17 +215,17 @@ struct G {
     uint16_t PWCharStr[34]; /* PasswordScreen: a one-character print string (length word 3, then the PasstoText character) printed ... */
     uint16_t PushWidthBuf[5]; /* PushNumberWrap/PushNumberWidth: length word (digits + 2), then 8 characters ($0A90-$0A97) set to spaces ... */
     uint16_t gamefps; /* Gameloop: gameframes (game frames since the faceoff) * 60 / FrameCount (NMI frames since the faceoff) = game frames ... */
-    uint16_t padlast[5]; /* 5 words: each pad's buttons at the last ReadPads */
+    uint16_t padlast1[5]; /* 5 words: each pad's buttons at the last ReadPads */
     uint16_t paddir[5]; /* 5 words: each pad's direction (PadDirection of the dpad bits) */
     uint16_t padchange[5]; /* 5 words: each pad's buttons that changed at the last ReadPads */
-    uint16_t padnew[5]; /* 5 words: each pad's buttons newly pressed at the last ReadPads */
+    uint16_t padnew1[5]; /* 5 words: each pad's buttons newly pressed at the last ReadPads */
     uint16_t padchangeany; /* ReadPads: OR of the five padchange words; ReadAnyPad returns it in d1; SaveRegsStartHL2 clears it. */
-    uint16_t repeatdelay; /* ProcessInputWithRepeat: frames to the next key repeat (dec, reload 6 / 20 on a change), as the 93S ... */
-    uint16_t pausepad; /* the controller that owns the pause menu */
-    uint16_t pausepadidle; /* SelectPauseController: 60 when the pause pad holds a button, -3 per idle frame; at 0 pausepad goes back to ... */
+    uint16_t repeatdelayframes; /* ProcessInputWithRepeat: frames to the next key repeat (dec, reload 6 / 20 on a change), as the 93S ... */
+    uint16_t sfpj; /* the controller that owns the pause menu */
+    uint16_t pausepadidle; /* SelectPauseController: 60 when the pause pad holds a button, -3 per idle frame; at 0 sfpj goes back to ... */
     uint8_t mp5padsig[5]; /* Multi5Bios: 5 bytes, one per pad: the low nibble of JOYxL (controller signature) shifted left with one ... */
     uint16_t bosgames; /* ReadPassBits/WritePassBits read and write it at the 93S bosgames slot (range 8); 0-6 = game of the best of ... */
-    uint16_t fadestep; /* fade: a delay counting down to a fade in, or $FFFF to fade out (NMI) */
+    uint16_t fadein; /* fade: a delay counting down to a fade in, or $FFFF to fade out (NMI) */
     uint16_t brightness; /* screen brightness 0-15 the fade sets; BrightnessHook writes it to INIDISP */
     uint16_t WinBits; /* ReadPassBits/WritePassBits at the 93S WinBits slot (range $4000); ResolveGames sets the bits of the teams ... */
     uint16_t mp5readall; /* PlayerSelect sets $FFFF while it runs and clears it at the end; when nonzero Multi5Bios reads the multitap ... */
@@ -275,7 +275,7 @@ struct G {
     };
     union {
         struct {
-            uint16_t TitleSkipMask; /* Title: the frame hook ends the title (titleskip) when JoyPad has a bit of it; 0 at first, $F0C0 once the ... */
+            uint16_t TitleSkipMask; /* Title: the frame hook ends the title (titleskip) when PadRaw1 has a bit of it; 0 at first, $F0C0 once the ... */
             uint8_t LogoPalBits[2]; /* LoadTitleLogo: the palette bits ($60 or $70) ORed into every unpacked logo pixel. */
             uint16_t TitlePathPos; /* TitleScreen .6: integer part of the logo path position (TitlePathFrac carries into it); with TitlePathFrac+1 it ... */
             uint16_t TitlePathFrac; /* TitleScreen .6: fraction of the path position (+$0C00 a frame). */
@@ -313,8 +313,8 @@ struct G {
     uint16_t cursong; /* PlayTeamSong stores the TeamSongs slot + 1 of the song started; the SPC uploads and UpdateStreamSfx (no ... */
     uint16_t sprhflip; /* addframe parameter: nonzero = x flip (attribute $4000); setsortcords/checkfo set attribute & $0800 as 93S ... */
     uint16_t reloadtime; /* StartPer clears it, ExitStatsScreen adds 60 each time it reloads the rink; never read. */
-    uint16_t sprattr; /* addframe parameter: the OAM attribute word for DrawSprite (priority, palette $0200; addframe ORs in the ... */
-    uint16_t sprpriority; /* checkfo sets $3000 for the faceoff sprites and $2000 after, ORed into sprattr; setoptions sets 0: as 93S ... */
+    uint16_t sprpal; /* addframe parameter: the OAM attribute word for DrawSprite (priority, palette $0200; addframe ORs in the ... */
+    uint16_t sprpriority; /* checkfo sets $3000 for the faceoff sprites and $2000 after, ORed into sprpal; setoptions sets 0: as 93S ... */
     uint16_t sprframe; /* addframe parameter: sprite frame number (1-based, at most $3D0), as 93S sprframe; set by setsortcords, ... */
     uint16_t sprx; /* addframe parameter: screen x of the frame (93S sprx). */
     uint16_t spry; /* addframe parameter: screen y of the frame (93S spry). */
@@ -329,7 +329,7 @@ struct G {
     uint16_t pausetimer; /* pause menu: frames left before a demo pause ends by itself */
     uint16_t ThirdPBonus; /* setplayer: +2 when tied or trailing late in the 3rd period */
     uint16_t cheercnt; /* crowd cheers still to play after a goal (one every 150 frames, Gameloop) */
-    uint16_t cheervc; /* vcount of the last crowd cheer */
+    uint16_t cheervc; /* Vcount of the last crowd cheer */
     int16_t Hpos; /* ice rink horizontal position */
     int16_t Hscroll; /* horizontal scroll */
     uint16_t HmAwBonus; /* setplayer: home bonus / visitor penalty */
@@ -337,7 +337,7 @@ struct G {
     uint16_t lastplayer[2]; /* the last player who touched the puck (doshot, puckstick) */
     uint16_t lldisp; /* count down for the once-a-second screen / game updates (periodicevents) */
     uint16_t nibblebuffer[4]; /* 4 words: the weights SetScore picks from */
-    uint16_t oldvcount; /* vcount at the last game frame (d7 = vcount - oldvcount) */
+    uint16_t OldVcount; /* Vcount at the last game frame (d7 = Vcount - OldVcount) */
     uint16_t passdir; /* direction for pass/shot 0-7 (8 = none) */
     uint16_t passspeed; /* speed of pass/shot */
     uint16_t passReceiverPlayerNum; /* the player the last pass was aimed at (negative = none) */
@@ -349,16 +349,16 @@ struct G {
     uint16_t psfirst; /* pause menu: first item shown (SetupPauseScreen shows five from here) */
     uint16_t psitem; /* pause menu item */
     uint16_t puckcross[4]; /* 2 entries of (x, frames): where / when the puck crosses the top / bottom goal line */
-    uint32_t ReplayBufferPtr; /* long pointer to the next replay frame record */
+    uint32_t recbpr; /* long pointer to the next replay frame record */
     uint16_t Oldrow; /* last rink map row */
     uint16_t vramrow[2]; /* BG2 tile map row at the top of the ring buffer */
     uint16_t shotplayer; /* the player who shot last (doshot) */
-    uint16_t sfxmutetime; /* vcount of the last goal: Stop4Pen waits 60 frames after it */
+    uint16_t sfxmutetime; /* Vcount of the last goal: Stop4Pen waits 60 frames after it */
     uint16_t threat; /* direction of threat on puck handler (nonzero = threat) */
     uint16_t demoflag; /* nonzero in demo mode */
     uint16_t TickerNum; /* playoff game the score ticker shows next */
-    uint16_t tickervc; /* vcount when the ticker box was last shown */
-    uint16_t lastframevc; /* vcount of the last game frame (Gameloop) */
+    uint16_t tickervc; /* Vcount when the ticker box was last shown */
+    uint16_t lastframevc; /* Vcount of the last game frame (Gameloop) */
     int16_t Vpos; /* ice rink vertical position */
     int16_t Vscroll; /* vertical scroll (low 3 bits = BG2 fine scroll) */
     uint16_t wcradiusx; /* wall collision radius x */
@@ -372,7 +372,7 @@ struct G {
     int16_t xc1; /* scroll lock x */
     int16_t yc1; /* scroll lock y */
     uint16_t yleader; /* lead distance on scrolling */
-    uint16_t vcountmark[2]; /* 32-bit vcount snapshot: elapsed time base */
+    uint16_t vcountmark[2]; /* 32-bit Vcount snapshot: elapsed time base */
     int16_t Xpos[17]; /* x position (integer part) of each object */
     uint16_t Xfrac[16]; /* fraction of Xpos */
     uint16_t frame[16]; /* sprite frame number of each object (SPF groups); object 14 ($1C) is the puck, 15 ($1E) its shadow */
@@ -451,8 +451,8 @@ struct G {
     uint16_t sflags; /* sflags (low byte) and sflags2 (high byte) as one word (sf* /sf2* masks) */
     uint16_t sfhormode; /* nonzero: screen in horizontal mode. sflags bit sfhor */
     uint16_t sflags3[34]; /* sflags3 (sf3* masks) */
-    int16_t Pencntdwn; /* penalty/fight count down (negative = fight over) */
-    uint16_t pentimer; /* frames to the next penalty clock second (updatepentime) */
+    int16_t PenCntDwn; /* penalty/fight count down (negative = fight over) */
+    uint16_t Penaltytimer; /* frames to the next penalty clock second (updatepentime) */
     uint16_t PBnum; /* players in the penalty boxes: home*16 + visitors */
     uint16_t InjCntDown; /* frames until the injury box is shown */
     uint16_t penmsgtimer; /* count down to reprinting the horizontal penalty message line */
@@ -490,7 +490,7 @@ struct G {
     uint16_t tmnearpl[2]; /* the team's player nearest the puck (updateplayers, assnearest) */
     uint16_t tmchecks[2]; /* body checks (FallDown) */
     uint16_t tmpasscomp[2]; /* completed passes (puckglue) */
-    uint16_t tmpassatt[2]; /* pass attempts (dopass) */
+    uint16_t tmpasses[2]; /* pass attempts (dopass) */
     uint16_t tmBreakaways[2]; /* breakaways (StartBreakaway) */
     uint16_t tmBreakawayGoals[2]; /* breakaway goals */
     uint16_t tmPenShots[2]; /* penalty shots (StartPenaltyShot) */
@@ -639,19 +639,19 @@ struct G {
     uint16_t pmenulist; /* Pause menu list shown (0-5): Pausemode_menu/ChoosePauseMenu pick it, SetupPauseScreen prints items and values by it, ... */
     uint16_t pmenucount; /* Items in that pause menu list (Pausemode_menu/ChoosePauseMenu set it with pmenulist); bounds psitem and psfirst */
     uint16_t pregamepause; /* StartGame sets 1 when any pad has a team; StartPer then opens the pause menu at the start (startpause), ... */
-    uint8_t RAMTag2[323]; /* Reset_Fast copies the 6 byte InitTag 'EACDSI' here (and to RAMTag and ReplayBufferEnd) after clearing RAM; ... */
+    uint8_t RAMTag2[323]; /* Reset_Fast copies the 6 byte InitTag 'EACDSI' here (and to RAMTag and replayend) after clearing RAM; ... */
     uint8_t HandleTable[1344]; /* handles of 4 bytes: address word, bank word (0,0 = free) */
     uint16_t FrameCacheAddr[128]; /* address of the frame (LoadFrameTiles; FindCachedFrame compares it) */
     uint16_t FrameCacheBank[128]; /* bank of the frame */
-    uint8_t FrameCacheOf[1024]; /* a byte per frame number ($2741 + DrawFrameNum): its cache entry, $FF none (InitSprites fills $FF) */
+    uint8_t sprframetime[1024]; /* a byte per frame number ($2741 + DrawFrameNum): its cache entry, $FF none (InitSprites fills $FF) */
     uint16_t FrameCacheNum[128]; /* frame number of the entry */
     uint16_t FrameCacheAlloc[128]; /* the entry's allocation: block run index | $8000 (16x16 blocks), else the single tile run index */
-    uint16_t FrameCacheUse[128]; /* use bits: GetFrameTiles sets CacheUseMark when drawn, SpriteFrameStart shifts them each frame and frees the entry when they run out */
+    uint16_t sprslottime[128]; /* use bits: GetFrameTiles sets sprslotlife when drawn, SpriteFrameStart shifts them each frame and frees the entry when they run out */
     uint16_t FrameCacheTile[128]; /* first VRAM tile of the entry's tiles (the DMA destination) */
-    uint8_t BlockRuns[121]; /* 16x16 block area of sprite VRAM (InitSprites: one free run of SpriteBlockTiles / 4) */
-    uint8_t BlockRunPrev[121]; /* previous run of each block run ($FF = none) */
-    uint8_t TileRuns[97]; /* single 8x8 tile area (from SpriteBlockTiles to $200) */
-    uint8_t TileRunPrev[97]; /* previous run of each tile run ($FF = none) */
+    uint8_t sprbigslot[121]; /* 16x16 block area of sprite VRAM (InitSprites: one free run of SpriteBlockTiles / 4) */
+    uint8_t sprbigslotprev[121]; /* previous run of each block run ($FF = none) */
+    uint8_t sprslot[97]; /* single 8x8 tile area (from SpriteBlockTiles to $200) */
+    uint8_t sprslotprev[97]; /* previous run of each tile run ($FF = none) */
     uint16_t carriedy; /* updateplayers stores pucky here while puckc >= 0, as 93S updateplayers .cy stores carriedy. */
     uint16_t ltplayer; /* a2touchpuck stores the touching player (index / 2) here like 93S a2touchpuck sta ltplayer. */
     uint16_t ltx; /* a2touchpuck stores Xpos,y (93S ltx); Stop4Pen loads it as the OOP faceoff x like 93S; EndPenaltyShotPlay ... */
@@ -682,7 +682,7 @@ struct G {
     uint16_t pspuckback; /* pucknorm: during a penalty shot (PenShotActive) counts the frames the loose puck moves back from the goal; ... */
     uint16_t setuphome; /* setoptions sets HomeTeam ($1D logo, $FFFF while a player picture shows) like 94G GameSetUp setuphome; ... */
     uint16_t setupvis; /* As setuphome for the visitors (left) box: VisTeam (+$21 asks SetupScreen for SetupBack), $1C logo, $FFFF ... */
-    uint16_t teamschanged; /* setoptions: set at entry and when a mode / team row changes; .10 then copies OptTeam1 / OptTeam2 to ... */
+    uint16_t teamschanged; /* setoptions: set at entry and when a mode / team row changes; .10 then copies Opt1team / Opt2team to ... */
     uint16_t cardtimer; /* setoptions .11: counts down by 2 each pass; below 0 it is reset to $78 and the next matchup picture is ... */
     uint16_t matchuphome; /* Player (or matchup slot in matchup photo mode) whose picture DrawMatchupPictures draws in the home box, ... */
     uint16_t matchupvis; /* As matchuphome for the visitors box (94G matchupvis); set by setoptions and ShowMatchups. */
@@ -701,13 +701,13 @@ struct G {
     uint16_t playerstatson; /* PlayerStatsScreen sets 1 while it runs; DrawMatchupPictures then skips the picture DMA. */
     uint16_t gamesstarted[33]; /* StartGame increments it right after clearing carriedy to playerstatson (count of games started; no reader found). */
     uint16_t OptPlayMode; /* Setup menu row 0 'Play Mode' (base of the 7-word option block setoptions edits; choices Regular Season .. ... */
-    uint16_t OptTeam1; /* Setup row 1 'Home': setoptions copies it to HomeTeam; NewPO takes it as the user's team (93S OptTeam1). */
-    uint16_t OptTeam2; /* Setup row 2 'Visitor', copied to VisTeam; FigureJoy stores the opponent here like 93S FigureJoy sta OptTeam2. */
-    uint16_t OptPerlen; /* the period length option (index into GetPeriodTime_timetab) */
+    uint16_t Opt1team; /* Setup row 1 'Home': setoptions copies it to HomeTeam; NewPO takes it as the user's team (93S Opt1team). */
+    uint16_t Opt2team; /* Setup row 2 'Visitor', copied to VisTeam; FigureJoy stores the opponent here like 93S FigureJoy sta Opt2team. */
+    uint16_t Optperlen; /* the period length option (index into GetPeriodTime_timetab) */
     uint16_t OptPen; /* penalties (0 = off) */
     uint16_t OptLine; /* setup row 5 Line Changes: 0 off, 1 on, 2 automatic (93S / 94G use 0 = on); readers test 0 or 2 */
     uint16_t OptGoalie; /* Setup row 6 'Goalie' (Automatic / Manual); StartGame copies it to goaliemode1 / goaliemode2 as 94G ... */
-    uint16_t OptPlayers; /* FigureJoy regular season: index * 4 into the controller team list, as 93S FigureJoy .fjnpo lda OptPlayers; ... */
+    uint16_t OptNOP; /* FigureJoy regular season: index * 4 into the controller team list, as 93S FigureJoy .fjnpo lda OptNOP; ... */
     uint16_t notdemo; /* DefaultMenus sets $FFFF, setoptions clears it for the attract demo; FigureJoy / PlayerSelect / ... */
     uint16_t pojoy; /* ReadPassBits stores the range-4 field here like 93S sta pojoy; FigureJoy adds it to the pad list index; ... */
     uint16_t postarts; /* ReadPassBits stores the range-32 field ($FFFF on a bad checksum) like 93S postarts; MakeTree, ... */
@@ -727,14 +727,14 @@ struct G {
     uint16_t printfontset; /* tile base of the selected print font */
     uint16_t charofs; /* Tile offset added to text map words: setupice / ExitStatsScreen set $FF00, PlayoffScreen 0; PushRef, EASNLogo, ... */
     uint16_t charofs2; /* Second tile offset, cleared with charofs by the screen setups (SetupScreen, LoadScoutingScreen, setupice) ... */
-    uint16_t BigFontChars; /* setupice sets it to Framercset+4 ahead of the BigFontTiles; printbig adds it, as 93S BigFontChars. */
+    uint16_t BigFontchars; /* setupice sets it to framercset+4 ahead of the BigFontTiles; printbig adds it, as 93S BigFontchars. */
     uint16_t EASNcset; /* setupice: first tile of RinkLogoTiles after the faceoff tiles; EASNLogo pastes EASNLogoMap with it (93S ... */
     uint16_t cardbackchars; /* LoadPlayerCardScreen: first tile of CardBackTiles (set 0) and the map base of the card back. */
     uint16_t backchars; /* SetupScreen / LoadScoutingScreen: first BG2 tile after MenuBackTiles, where the screen background ... */
     uint16_t smallfontchars; /* vram tiles for the small font (print) */
     uint16_t centericechars; /* setupice: tile count of IceRinkTiles = first tile of the centre ice logo; LoadCenterIce DMAs the logo ... */
     uint16_t faceoffvrcset; /* LoadCenterIce sets it after the logo tiles; setupice loads FaceOffTiles there and puckfaceoff2 adds it to ... */
-    uint16_t Framercset; /* vram tiles for the Framer box */
+    uint16_t framercset; /* vram tiles for the Framer box */
     uint16_t ninetilechars; /* SetupScreen: first tile of FramerNineTileTiles (then +$1400 palette); FramerNineTile builds its box from it. */
     uint16_t outlinechars; /* SetupScreen / LoadScoutingScreen: first tile of FramerOutlineTiles (then +$1000); FramerOutline builds its ... */
     uint16_t ExtraChars; /* setupice: first tile after TeamBlocksTiles (the last set), as 93S setupice sta ExtraChars; no reader found. */
@@ -747,7 +747,7 @@ struct G {
     uint16_t picchars; /* SetupScreen / LoadPlayerCardScreen: tile base of the two picture boxes; DrawPlayerPicture adds it to the ... */
     uint16_t playoffRoundIdx; /* playoff round for other scores and password bits */
     uint16_t gamenum; /* FigureJoy stores -1 or the user's game index and InitScores skips that game, as 93S gamenum. */
-    uint16_t vcountfrac; /* NMI_Tick: fraction accumulator; its carry adds an extra vcount tick. */
+    uint16_t vcountfrac; /* NMI_Tick: fraction accumulator; its carry adds an extra Vcount tick. */
     uint16_t vcountstep; /* CheckPAL: 0 on NTSC, $3333 on PAL; NMI_Tick adds it to vcountfrac each frame (60 / 50 time step). */
     uint16_t tickerstart[2]; /* Intermission saves TickerNum here; Intermission_tick plays DoHiLights when the ticker comes round to it, as ... */
     uint16_t Crowdlevel; /* crowd noise level: raised by the play, fades every frame */
@@ -767,7 +767,7 @@ struct G {
     uint16_t screenmap[67]; /* PlayoffScreen map buffer (+0 width $80, +2 height $20, words from +6: bracket, team blocks, Stanley Cup); ... */
     uint8_t _pad0A6F6[0x1F80];
     uint16_t screenmap2[4096]; /* Second PlayoffScreen map ($80 x $20: +0 / +2 header, words from +6) for the BigLetterPlayoff letters, sent ... */
-    uint8_t ReplayBufferEnd[6]; /* replay buffer end */
+    uint8_t replayend[6]; /* replay buffer end */
     uint8_t OAMHiMasks[2436]; /* Reset_Fast copies OAMHighMasks (16 bytes) here; DrawSprite / DrawSpritePieces AND with it (x indexed). */
     uint16_t titleteams[2048]; /* ShuffleTitleTeams fills it with the 26 team numbers in random order; TitleScreen / NextTitleTeam read word ... */
     uint8_t _pad10000[0x4000];
@@ -775,7 +775,7 @@ struct G {
     uint8_t _pad14030[0x26D0];
     uint8_t brackettiles[3584]; /* PlayoffScreen draws the $70 bracket tiles (bytes $FF / $80 / $7F / $00) here and DMAs $E00 bytes to VRAM. */
     uint16_t colourbuf[256]; /* The colour buffer SetColours fills and SendColours sends (256 colours) on the menu screens; PlayoffScreen ... */
-    uint16_t logoboxmap[64]; /* SetupScreen pastes the 7 x 7 part of MenuBackMap here (header 7, 7 at +0 / +2, words from +6); ... */
+    uint16_t LogoBoxMap[64]; /* SetupScreen pastes the 7 x 7 part of MenuBackMap here (header 7, 7 at +0 / +2, words from +6); ... */
     uint16_t picboxmap[1088]; /* LoadPictureMap / LoadPlayerCardScreen unpack the 7 x 7 PictureMap here (+0 width, +2 height, words from ... */
     uint16_t titlescale[8]; /* BuildTitlePath: mode 7 scale of each of the $500 title logo path steps; TitleScreen reads it. */
     uint8_t introchars[2544]; /* IntroSequence unpacks EALogoTiles here and sends them as the mode 7 character bytes (VMDATAH); the same ... */
@@ -803,8 +803,8 @@ _Static_assert(offsetof(struct G, ClipTopUnused) == 0x00030, "ClipTopUnused");
 _Static_assert(offsetof(struct G, ClipBottomUnused) == 0x00032, "ClipBottomUnused");
 _Static_assert(offsetof(struct G, SoundTable) == 0x00034, "SoundTable");
 _Static_assert(offsetof(struct G, NMISkip) == 0x00038, "NMISkip");
-_Static_assert(offsetof(struct G, DMAQueueHead) == 0x0003A, "DMAQueueHead");
-_Static_assert(offsetof(struct G, DMAQueueTail) == 0x0003C, "DMAQueueTail");
+_Static_assert(offsetof(struct G, DMAlisthead) == 0x0003A, "DMAlisthead");
+_Static_assert(offsetof(struct G, DMAlistend) == 0x0003C, "DMAlistend");
 _Static_assert(offsetof(struct G, MulCand) == 0x0003E, "MulCand");
 _Static_assert(offsetof(struct G, StreamLoop) == 0x00042, "StreamLoop");
 _Static_assert(offsetof(struct G, MulFracResult) == 0x00043, "MulFracResult");
@@ -839,7 +839,7 @@ _Static_assert(offsetof(struct G, LZSrcIdx) == 0x00079, "LZSrcIdx");
 _Static_assert(offsetof(struct G, LZDistance) == 0x0007B, "LZDistance");
 _Static_assert(offsetof(struct G, HuffSpan) == 0x0007D, "HuffSpan");
 _Static_assert(offsetof(struct G, crowdhold) == 0x00081, "crowdhold");
-_Static_assert(offsetof(struct G, vcount) == 0x00083, "vcount");
+_Static_assert(offsetof(struct G, Vcount) == 0x00083, "Vcount");
 _Static_assert(offsetof(struct G, xsave) == 0x00087, "xsave");
 _Static_assert(offsetof(struct G, a0) == 0x00089, "a0");
 _Static_assert(offsetof(struct G, a1) == 0x0008D, "a1");
@@ -872,7 +872,7 @@ _Static_assert(offsetof(struct G, curobj) == 0x000E4, "curobj");
 _Static_assert(offsetof(struct G, PlayersUnused) == 0x000E6, "PlayersUnused");
 _Static_assert(offsetof(struct G, curobjteam) == 0x000EA, "curobjteam");
 _Static_assert(offsetof(struct G, curobjopp) == 0x000EC, "curobjopp");
-_Static_assert(offsetof(struct G, DMAQueue) == 0x00100, "DMAQueue");
+_Static_assert(offsetof(struct G, DMAList) == 0x00100, "DMAList");
 _Static_assert(offsetof(struct G, DecompTab1) == 0x00500, "DecompTab1");
 _Static_assert(offsetof(struct G, DecompTab2) == 0x00600, "DecompTab2");
 _Static_assert(offsetof(struct G, HuffCount) == 0x00700, "HuffCount");
@@ -888,7 +888,7 @@ _Static_assert(offsetof(struct G, CGDMASrc) == 0x0076C, "CGDMASrc");
 _Static_assert(offsetof(struct G, CGDMABank) == 0x0076E, "CGDMABank");
 _Static_assert(offsetof(struct G, FrameHookNext) == 0x00770, "FrameHookNext");
 _Static_assert(offsetof(struct G, NMIHookNext) == 0x00773, "NMIHookNext");
-_Static_assert(offsetof(struct G, JoyPad) == 0x00776, "JoyPad");
+_Static_assert(offsetof(struct G, PadRaw1) == 0x00776, "PadRaw1");
 _Static_assert(offsetof(struct G, Multi5Sig) == 0x00781, "Multi5Sig");
 _Static_assert(offsetof(struct G, FrameCountHold) == 0x00787, "FrameCountHold");
 _Static_assert(offsetof(struct G, FrameHook) == 0x00789, "FrameHook");
@@ -903,7 +903,7 @@ _Static_assert(offsetof(struct G, HeapStart7F) == 0x007A2, "HeapStart7F");
 _Static_assert(offsetof(struct G, NewHandleSlot) == 0x007A4, "NewHandleSlot");
 _Static_assert(offsetof(struct G, NewHandleSkipBank) == 0x007A6, "NewHandleSkipBank");
 _Static_assert(offsetof(struct G, OAMLastEnd) == 0x007A8, "OAMLastEnd");
-_Static_assert(offsetof(struct G, OAMDrawBuf) == 0x007AA, "OAMDrawBuf");
+_Static_assert(offsetof(struct G, Satt) == 0x007AA, "Satt");
 _Static_assert(offsetof(struct G, OAMShowBuf) == 0x007AC, "OAMShowBuf");
 _Static_assert(offsetof(struct G, SpritesLeft) == 0x007AE, "SpritesLeft");
 _Static_assert(offsetof(struct G, OAMHiPtr) == 0x007B0, "OAMHiPtr");
@@ -912,15 +912,15 @@ _Static_assert(offsetof(struct G, SpriteVRAM) == 0x007B4, "SpriteVRAM");
 _Static_assert(offsetof(struct G, SpritesReserved) == 0x007B6, "SpritesReserved");
 _Static_assert(offsetof(struct G, SpriteBlockTiles) == 0x007B8, "SpriteBlockTiles");
 _Static_assert(offsetof(struct G, FrameCacheCount) == 0x007BA, "FrameCacheCount");
-_Static_assert(offsetof(struct G, OAMNext) == 0x007BC, "OAMNext");
+_Static_assert(offsetof(struct G, sprcount) == 0x007BC, "sprcount");
 _Static_assert(offsetof(struct G, OAMHideEnd) == 0x007BE, "OAMHideEnd");
 _Static_assert(offsetof(struct G, FrameTilesFail) == 0x007C0, "FrameTilesFail");
-_Static_assert(offsetof(struct G, CacheUseMark) == 0x007C2, "CacheUseMark");
+_Static_assert(offsetof(struct G, sprslotlife) == 0x007C2, "sprslotlife");
 _Static_assert(offsetof(struct G, DrawFrameNum) == 0x007C4, "DrawFrameNum");
 _Static_assert(offsetof(struct G, FrameByNumber) == 0x007C6, "FrameByNumber");
-_Static_assert(offsetof(struct G, PieceX) == 0x007C8, "PieceX");
-_Static_assert(offsetof(struct G, PieceY) == 0x007CA, "PieceY");
-_Static_assert(offsetof(struct G, PieceTile) == 0x007CC, "PieceTile");
+_Static_assert(offsetof(struct G, sprox) == 0x007C8, "sprox");
+_Static_assert(offsetof(struct G, sproy) == 0x007CA, "sproy");
+_Static_assert(offsetof(struct G, sprtile) == 0x007CC, "sprtile");
 _Static_assert(offsetof(struct G, PieceSize) == 0x007CE, "PieceSize");
 _Static_assert(offsetof(struct G, PieceNext) == 0x007D0, "PieceNext");
 _Static_assert(offsetof(struct G, IRQVTime) == 0x007D2, "IRQVTime");
@@ -991,17 +991,17 @@ _Static_assert(offsetof(struct G, mesarea) == 0x00A2A, "mesarea");
 _Static_assert(offsetof(struct G, PWCharStr) == 0x00A4A, "PWCharStr");
 _Static_assert(offsetof(struct G, PushWidthBuf) == 0x00A8E, "PushWidthBuf");
 _Static_assert(offsetof(struct G, gamefps) == 0x00A98, "gamefps");
-_Static_assert(offsetof(struct G, padlast) == 0x00A9A, "padlast");
+_Static_assert(offsetof(struct G, padlast1) == 0x00A9A, "padlast1");
 _Static_assert(offsetof(struct G, paddir) == 0x00AA4, "paddir");
 _Static_assert(offsetof(struct G, padchange) == 0x00AAE, "padchange");
-_Static_assert(offsetof(struct G, padnew) == 0x00AB8, "padnew");
+_Static_assert(offsetof(struct G, padnew1) == 0x00AB8, "padnew1");
 _Static_assert(offsetof(struct G, padchangeany) == 0x00AC2, "padchangeany");
-_Static_assert(offsetof(struct G, repeatdelay) == 0x00AC4, "repeatdelay");
-_Static_assert(offsetof(struct G, pausepad) == 0x00AC6, "pausepad");
+_Static_assert(offsetof(struct G, repeatdelayframes) == 0x00AC4, "repeatdelayframes");
+_Static_assert(offsetof(struct G, sfpj) == 0x00AC6, "sfpj");
 _Static_assert(offsetof(struct G, pausepadidle) == 0x00AC8, "pausepadidle");
 _Static_assert(offsetof(struct G, mp5padsig) == 0x00ACA, "mp5padsig");
 _Static_assert(offsetof(struct G, bosgames) == 0x00ACF, "bosgames");
-_Static_assert(offsetof(struct G, fadestep) == 0x00AD1, "fadestep");
+_Static_assert(offsetof(struct G, fadein) == 0x00AD1, "fadein");
 _Static_assert(offsetof(struct G, brightness) == 0x00AD3, "brightness");
 _Static_assert(offsetof(struct G, WinBits) == 0x00AD5, "WinBits");
 _Static_assert(offsetof(struct G, mp5readall) == 0x00AD7, "mp5readall");
@@ -1081,7 +1081,7 @@ _Static_assert(offsetof(struct G, percue) == 0x00CC1, "percue");
 _Static_assert(offsetof(struct G, cursong) == 0x00CC3, "cursong");
 _Static_assert(offsetof(struct G, sprhflip) == 0x00CC5, "sprhflip");
 _Static_assert(offsetof(struct G, reloadtime) == 0x00CC7, "reloadtime");
-_Static_assert(offsetof(struct G, sprattr) == 0x00CC9, "sprattr");
+_Static_assert(offsetof(struct G, sprpal) == 0x00CC9, "sprpal");
 _Static_assert(offsetof(struct G, sprpriority) == 0x00CCB, "sprpriority");
 _Static_assert(offsetof(struct G, sprframe) == 0x00CCD, "sprframe");
 _Static_assert(offsetof(struct G, sprx) == 0x00CCF, "sprx");
@@ -1105,7 +1105,7 @@ _Static_assert(offsetof(struct G, iflags) == 0x00CF1, "iflags");
 _Static_assert(offsetof(struct G, lastplayer) == 0x00CF3, "lastplayer");
 _Static_assert(offsetof(struct G, lldisp) == 0x00CF7, "lldisp");
 _Static_assert(offsetof(struct G, nibblebuffer) == 0x00CF9, "nibblebuffer");
-_Static_assert(offsetof(struct G, oldvcount) == 0x00D01, "oldvcount");
+_Static_assert(offsetof(struct G, OldVcount) == 0x00D01, "OldVcount");
 _Static_assert(offsetof(struct G, passdir) == 0x00D03, "passdir");
 _Static_assert(offsetof(struct G, passspeed) == 0x00D05, "passspeed");
 _Static_assert(offsetof(struct G, passReceiverPlayerNum) == 0x00D07, "passReceiverPlayerNum");
@@ -1117,7 +1117,7 @@ _Static_assert(offsetof(struct G, printy) == 0x00D11, "printy");
 _Static_assert(offsetof(struct G, psfirst) == 0x00D13, "psfirst");
 _Static_assert(offsetof(struct G, psitem) == 0x00D15, "psitem");
 _Static_assert(offsetof(struct G, puckcross) == 0x00D17, "puckcross");
-_Static_assert(offsetof(struct G, ReplayBufferPtr) == 0x00D1F, "ReplayBufferPtr");
+_Static_assert(offsetof(struct G, recbpr) == 0x00D1F, "recbpr");
 _Static_assert(offsetof(struct G, Oldrow) == 0x00D23, "Oldrow");
 _Static_assert(offsetof(struct G, vramrow) == 0x00D25, "vramrow");
 _Static_assert(offsetof(struct G, shotplayer) == 0x00D29, "shotplayer");
@@ -1219,8 +1219,8 @@ _Static_assert(offsetof(struct G, gmclock) == 0x015D6, "gmclock");
 _Static_assert(offsetof(struct G, sflags) == 0x015D8, "sflags");
 _Static_assert(offsetof(struct G, sfhormode) == 0x015DA, "sfhormode");
 _Static_assert(offsetof(struct G, sflags3) == 0x015DC, "sflags3");
-_Static_assert(offsetof(struct G, Pencntdwn) == 0x01620, "Pencntdwn");
-_Static_assert(offsetof(struct G, pentimer) == 0x01622, "pentimer");
+_Static_assert(offsetof(struct G, PenCntDwn) == 0x01620, "PenCntDwn");
+_Static_assert(offsetof(struct G, Penaltytimer) == 0x01622, "Penaltytimer");
 _Static_assert(offsetof(struct G, PBnum) == 0x01624, "PBnum");
 _Static_assert(offsetof(struct G, InjCntDown) == 0x01626, "InjCntDown");
 _Static_assert(offsetof(struct G, penmsgtimer) == 0x01628, "penmsgtimer");
@@ -1258,7 +1258,7 @@ _Static_assert(offsetof(struct G, tmnear) == 0x017AE, "tmnear");
 _Static_assert(offsetof(struct G, tmnearpl) == 0x017B2, "tmnearpl");
 _Static_assert(offsetof(struct G, tmchecks) == 0x017B6, "tmchecks");
 _Static_assert(offsetof(struct G, tmpasscomp) == 0x017BA, "tmpasscomp");
-_Static_assert(offsetof(struct G, tmpassatt) == 0x017BE, "tmpassatt");
+_Static_assert(offsetof(struct G, tmpasses) == 0x017BE, "tmpasses");
 _Static_assert(offsetof(struct G, tmBreakaways) == 0x017C2, "tmBreakaways");
 _Static_assert(offsetof(struct G, tmBreakawayGoals) == 0x017C6, "tmBreakawayGoals");
 _Static_assert(offsetof(struct G, tmPenShots) == 0x017CA, "tmPenShots");
@@ -1411,15 +1411,15 @@ _Static_assert(offsetof(struct G, RAMTag2) == 0x01EBD, "RAMTag2");
 _Static_assert(offsetof(struct G, HandleTable) == 0x02000, "HandleTable");
 _Static_assert(offsetof(struct G, FrameCacheAddr) == 0x02540, "FrameCacheAddr");
 _Static_assert(offsetof(struct G, FrameCacheBank) == 0x02640, "FrameCacheBank");
-_Static_assert(offsetof(struct G, FrameCacheOf) == 0x02740, "FrameCacheOf");
+_Static_assert(offsetof(struct G, sprframetime) == 0x02740, "sprframetime");
 _Static_assert(offsetof(struct G, FrameCacheNum) == 0x02B40, "FrameCacheNum");
 _Static_assert(offsetof(struct G, FrameCacheAlloc) == 0x02C40, "FrameCacheAlloc");
-_Static_assert(offsetof(struct G, FrameCacheUse) == 0x02D40, "FrameCacheUse");
+_Static_assert(offsetof(struct G, sprslottime) == 0x02D40, "sprslottime");
 _Static_assert(offsetof(struct G, FrameCacheTile) == 0x02E40, "FrameCacheTile");
-_Static_assert(offsetof(struct G, BlockRuns) == 0x02F40, "BlockRuns");
-_Static_assert(offsetof(struct G, BlockRunPrev) == 0x02FB9, "BlockRunPrev");
-_Static_assert(offsetof(struct G, TileRuns) == 0x03032, "TileRuns");
-_Static_assert(offsetof(struct G, TileRunPrev) == 0x03093, "TileRunPrev");
+_Static_assert(offsetof(struct G, sprbigslot) == 0x02F40, "sprbigslot");
+_Static_assert(offsetof(struct G, sprbigslotprev) == 0x02FB9, "sprbigslotprev");
+_Static_assert(offsetof(struct G, sprslot) == 0x03032, "sprslot");
+_Static_assert(offsetof(struct G, sprslotprev) == 0x03093, "sprslotprev");
 _Static_assert(offsetof(struct G, carriedy) == 0x030F4, "carriedy");
 _Static_assert(offsetof(struct G, ltplayer) == 0x030F6, "ltplayer");
 _Static_assert(offsetof(struct G, ltx) == 0x030F8, "ltx");
@@ -1469,13 +1469,13 @@ _Static_assert(offsetof(struct G, pausemenuon) == 0x03476, "pausemenuon");
 _Static_assert(offsetof(struct G, playerstatson) == 0x03478, "playerstatson");
 _Static_assert(offsetof(struct G, gamesstarted) == 0x0347A, "gamesstarted");
 _Static_assert(offsetof(struct G, OptPlayMode) == 0x034BC, "OptPlayMode");
-_Static_assert(offsetof(struct G, OptTeam1) == 0x034BE, "OptTeam1");
-_Static_assert(offsetof(struct G, OptTeam2) == 0x034C0, "OptTeam2");
-_Static_assert(offsetof(struct G, OptPerlen) == 0x034C2, "OptPerlen");
+_Static_assert(offsetof(struct G, Opt1team) == 0x034BE, "Opt1team");
+_Static_assert(offsetof(struct G, Opt2team) == 0x034C0, "Opt2team");
+_Static_assert(offsetof(struct G, Optperlen) == 0x034C2, "Optperlen");
 _Static_assert(offsetof(struct G, OptPen) == 0x034C4, "OptPen");
 _Static_assert(offsetof(struct G, OptLine) == 0x034C6, "OptLine");
 _Static_assert(offsetof(struct G, OptGoalie) == 0x034C8, "OptGoalie");
-_Static_assert(offsetof(struct G, OptPlayers) == 0x034CA, "OptPlayers");
+_Static_assert(offsetof(struct G, OptNOP) == 0x034CA, "OptNOP");
 _Static_assert(offsetof(struct G, notdemo) == 0x034CC, "notdemo");
 _Static_assert(offsetof(struct G, pojoy) == 0x034CE, "pojoy");
 _Static_assert(offsetof(struct G, postarts) == 0x034D0, "postarts");
@@ -1495,14 +1495,14 @@ _Static_assert(offsetof(struct G, gsflags) == 0x03598, "gsflags");
 _Static_assert(offsetof(struct G, printfontset) == 0x035A8, "printfontset");
 _Static_assert(offsetof(struct G, charofs) == 0x035AA, "charofs");
 _Static_assert(offsetof(struct G, charofs2) == 0x035AC, "charofs2");
-_Static_assert(offsetof(struct G, BigFontChars) == 0x035AE, "BigFontChars");
+_Static_assert(offsetof(struct G, BigFontchars) == 0x035AE, "BigFontchars");
 _Static_assert(offsetof(struct G, EASNcset) == 0x035B0, "EASNcset");
 _Static_assert(offsetof(struct G, cardbackchars) == 0x035B2, "cardbackchars");
 _Static_assert(offsetof(struct G, backchars) == 0x035B4, "backchars");
 _Static_assert(offsetof(struct G, smallfontchars) == 0x035B6, "smallfontchars");
 _Static_assert(offsetof(struct G, centericechars) == 0x035B8, "centericechars");
 _Static_assert(offsetof(struct G, faceoffvrcset) == 0x035BA, "faceoffvrcset");
-_Static_assert(offsetof(struct G, Framercset) == 0x035BC, "Framercset");
+_Static_assert(offsetof(struct G, framercset) == 0x035BC, "framercset");
 _Static_assert(offsetof(struct G, ninetilechars) == 0x035BE, "ninetilechars");
 _Static_assert(offsetof(struct G, outlinechars) == 0x035C0, "outlinechars");
 _Static_assert(offsetof(struct G, ExtraChars) == 0x035C2, "ExtraChars");
@@ -1533,13 +1533,13 @@ _Static_assert(offsetof(struct G, hlsavebuf) == 0x047F4, "hlsavebuf");
 _Static_assert(offsetof(struct G, bigtextbuf) == 0x04EF4, "bigtextbuf");
 _Static_assert(offsetof(struct G, screenmap) == 0x0A670, "screenmap");
 _Static_assert(offsetof(struct G, screenmap2) == 0x0C676, "screenmap2");
-_Static_assert(offsetof(struct G, ReplayBufferEnd) == 0x0E676, "ReplayBufferEnd");
+_Static_assert(offsetof(struct G, replayend) == 0x0E676, "replayend");
 _Static_assert(offsetof(struct G, OAMHiMasks) == 0x0E67C, "OAMHiMasks");
 _Static_assert(offsetof(struct G, titleteams) == 0x0F000, "titleteams");
 _Static_assert(offsetof(struct G, introbuf) == 0x14000, "introbuf");
 _Static_assert(offsetof(struct G, brackettiles) == 0x16700, "brackettiles");
 _Static_assert(offsetof(struct G, colourbuf) == 0x17500, "colourbuf");
-_Static_assert(offsetof(struct G, logoboxmap) == 0x17700, "logoboxmap");
+_Static_assert(offsetof(struct G, LogoBoxMap) == 0x17700, "LogoBoxMap");
 _Static_assert(offsetof(struct G, picboxmap) == 0x17780, "picboxmap");
 _Static_assert(offsetof(struct G, titlescale) == 0x18000, "titlescale");
 _Static_assert(offsetof(struct G, introchars) == 0x18010, "introchars");
