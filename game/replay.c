@@ -13,7 +13,9 @@ static uint32_t next_record(uint32_t a4)
     if (lo == (ReplayBufferEnd_addr & 0xFFFF) && hi == ReplayBufferEnd_addr >> 16) return ReplayBufferStart;
     return hi << 16 | lo;
 }
-uint32_t adda43(uint32_t a4) { return next_record(a4); }
+
+/* ReadjoyA for the controller that owns the pause menu */
+Pad getpzjoy(void) { return ReadjoyA(g.pausepad >> 1); }
 
 /* a byte's sign as a high byte */
 static uint8_t sign8(uint8_t b) { return b & 0x80 ? 0xFF : 0; }
@@ -83,107 +85,6 @@ void updatereplay(void)
     g.recsfx2 = 0xFFFF;
 }
 
-/* a nibble of the record as a signed byte (8-15 negative) */
-static uint8_t sx4(uint8_t n) { return n & 8 ? (uint8_t)(n | 0xF0) : n; }
-
-/* Put the replay frame record at a4 back into the objects, the puck, the sounds and the view
- * (through the work RAM port; the view stays when sflags bit 5 is set) */
-void RestoreReplayFrame(uint32_t a4)
-{
-    g.replaynewframe++;
-    io_w16(0x2181, (uint16_t)a4);
-    io_w8(0x2183, (uint8_t)(a4 >> 16));
-    for (int x = 0; x < 0x20; x += 2) {
-        w8(RAM_OFF_Xpos + x, io_r8(WMDATA));
-        uint8_t r3 = io_r8(WMDATA);
-        w8(RAM_OFF_Xpos + 1 + x, sx4(r3 & 0x0F));
-        w8(RAM_OFF_Ypos + x, io_r8(WMDATA));
-        w8(RAM_OFF_Ypos + 1 + x, sx4(r3 >> 4));
-        w8(RAM_OFF_frame + x, io_r8(WMDATA));
-        r3 = io_r8(WMDATA);
-        w8(RAM_OFF_frame + 1 + x, r3 & 0x3F);
-        uint8_t at = r8(RAM_OFF_attribute + 1 + x) & 0xE7;
-        w8(RAM_OFF_attribute + 1 + x, (uint8_t)((r3 >> 3 & 0x18) | at));
-    }
-    for (int x = 0; x < 24; x += 4) {
-        w8(RAM_OFF_rostnum + x, io_r8(WMDATA));
-        w8(RAM_OFF_rostnum + 2 + x, io_r8(WMDATA));
-        w8(RAM_OFF_position + 1 + x, 0);
-        uint8_t r3 = io_r8(WMDATA), a = r3 & 0x0F;
-        if (a == 0x0F) { a = 0xFF; w8(RAM_OFF_position + 1 + x, 0xFF); }
-        w8(RAM_OFF_position + x, a);
-        w8(RAM_OFF_position + 3 + x, 0);
-        a = r3 >> 4;
-        if (a == 0x0F) { a = 0xFF; w8(RAM_OFF_position + 3 + x, 0xFF); }
-        w8(RAM_OFF_position + 2 + x, a);
-    }
-    uint8_t b = io_r8(WMDATA);
-    w8(RAM_OFF_puckz, b);
-    w8(RAM_OFF_puckz + 1, sign8(b));
-    b = io_r8(WMDATA);
-    w8(RAM_OFF_shadowz, b);
-    w8(RAM_OFF_shadowz + 1, sign8(b));
-    w8(RAM_OFF_recsfx, io_r8(WMDATA));
-    w8(RAM_OFF_recsfxpitch, io_r8(WMDATA));
-    w8(RAM_OFF_recsfxpitch + 1, io_r8(WMDATA));
-    w8(RAM_OFF_recsfxvol + 1, io_r8(WMDATA));
-    w8(RAM_OFF_recsfx2, io_r8(WMDATA));
-    w8(RAM_OFF_recsfxpitch2, io_r8(WMDATA));
-    w8(RAM_OFF_recsfxpitch2 + 1, io_r8(WMDATA));
-    w8(RAM_OFF_recsfxvol2 + 1, io_r8(WMDATA));
-    w8(RAM_OFF_d7, io_r8(WMDATA));
-    for (int k = 0; k < 12; k += 4) {
-        uint8_t r3 = io_r8(WMDATA);
-        g.PadControlObj[k] = r3 & 0x0F;
-        g.PadControlObj[k + 2] = r3 >> 4;
-    }
-    w8(RAM_OFF_Crowdlevel, io_r8(WMDATA));
-    w8(RAM_OFF_Crowdlevel + 1, io_r8(WMDATA));
-    b = io_r8(WMDATA);
-    w8(RAM_OFF_PBnum, b);
-    w8(RAM_OFF_PBnum + 1, sign8(b));
-    if (!(g.sflags & 0x20)) {
-        w8(RAM_OFF_Hpos, io_r8(WMDATA));
-        w8(RAM_OFF_Hpos + 1, io_r8(WMDATA));
-        w8(RAM_OFF_Vpos, io_r8(WMDATA));
-        w8(RAM_OFF_Vpos + 1, io_r8(WMDATA));
-    } else {
-        for (int i = 0; i < 4; i++) io_r8(WMDATA);
-    }
-    w8(RAM_OFF_benchframe, io_r8(WMDATA));
-    w8(RAM_OFF_benchframe + 1, io_r8(WMDATA));
-    g.recsfx = (uint16_t)(int8_t)(g.recsfx & 0xFF);
-    g.recsfx2 = (uint16_t)(int8_t)(g.recsfx2 & 0xFF);
-}
-
-/* Move the replay one frame forward from a4 (frames elapsed d7 = 0): not onto the record being
- * written; returns the new a4 */
-uint32_t adda4(uint32_t a4)
-{
-    w16(RAM_OFF_d7, 0);
-    if ((g.sflags & sf2drec) && adda43(a4) == g.ReplayBufferPtr) return a4;
-    if (a4 == g.ReplayBufferPtr) return a4;
-    RestoreReplayFrame(a4);
-    return adda43(a4);
-}
-
-/* Move the replay one frame back from a4: not past the buffer's start unless it has wrapped, nor
- * onto the record being written; returns the new a4 */
-uint32_t suba4(uint32_t a4)
-{
-    if (a4 == ReplayBufferStart) {
-        if (!(g.sflags & sfwrap)) { RestoreReplayFrame(a4); g.d7 = 0; return a4; }
-        a4 = ReplayBufferEnd_addr;
-    }
-    uint32_t lo = (a4 & 0xFFFF) - replaysize, hi = (a4 >> 16) - ((lo >> 16) & 1);
-    a4 = (hi & 0xFFFF) << 16 | (lo & 0xFFFF);
-    if (a4 != g.ReplayBufferPtr) { RestoreReplayFrame(a4); return a4; }
-    a4 = next_record(a4);
-    g.d7 = 0;
-    return a4;
-}
-
-
 #define SPFpuck 396
 
 #define CAM (camobj >> 1)
@@ -207,6 +108,7 @@ static uint16_t clamp_h(uint16_t a)
     if (!((uint16_t)(a - 0x40) & 0x8000)) a = 0x40;
     return a;
 }
+
 /* (ReplayMode: the camera's y, replayVpos, kept to -199 .. 256) */
 static uint16_t clamp_v(uint16_t a)
 {
@@ -455,5 +357,104 @@ out:
     else MusicStart(SYM_MenuSong);
 }
 
-/* ReadjoyA for the controller that owns the pause menu */
-Pad getpzjoy(void) { return ReadjoyA(g.pausepad >> 1); }
+/* Move the replay one frame back from a4: not past the buffer's start unless it has wrapped, nor
+ * onto the record being written; returns the new a4 */
+uint32_t suba4(uint32_t a4)
+{
+    if (a4 == ReplayBufferStart) {
+        if (!(g.sflags & sfwrap)) { RestoreReplayFrame(a4); g.d7 = 0; return a4; }
+        a4 = ReplayBufferEnd_addr;
+    }
+    uint32_t lo = (a4 & 0xFFFF) - replaysize, hi = (a4 >> 16) - ((lo >> 16) & 1);
+    a4 = (hi & 0xFFFF) << 16 | (lo & 0xFFFF);
+    if (a4 != g.ReplayBufferPtr) { RestoreReplayFrame(a4); return a4; }
+    a4 = next_record(a4);
+    g.d7 = 0;
+    return a4;
+}
+
+/* Move the replay one frame forward from a4 (frames elapsed d7 = 0): not onto the record being
+ * written; returns the new a4 */
+uint32_t adda4(uint32_t a4)
+{
+    w16(RAM_OFF_d7, 0);
+    if ((g.sflags & sf2drec) && adda43(a4) == g.ReplayBufferPtr) return a4;
+    if (a4 == g.ReplayBufferPtr) return a4;
+    RestoreReplayFrame(a4);
+    return adda43(a4);
+}
+
+uint32_t adda43(uint32_t a4) { return next_record(a4); }
+
+/* a nibble of the record as a signed byte (8-15 negative) */
+static uint8_t sx4(uint8_t n) { return n & 8 ? (uint8_t)(n | 0xF0) : n; }
+
+/* Put the replay frame record at a4 back into the objects, the puck, the sounds and the view
+ * (through the work RAM port; the view stays when sflags bit 5 is set) */
+void RestoreReplayFrame(uint32_t a4)
+{
+    g.replaynewframe++;
+    io_w16(0x2181, (uint16_t)a4);
+    io_w8(0x2183, (uint8_t)(a4 >> 16));
+    for (int x = 0; x < 0x20; x += 2) {
+        w8(RAM_OFF_Xpos + x, io_r8(WMDATA));
+        uint8_t r3 = io_r8(WMDATA);
+        w8(RAM_OFF_Xpos + 1 + x, sx4(r3 & 0x0F));
+        w8(RAM_OFF_Ypos + x, io_r8(WMDATA));
+        w8(RAM_OFF_Ypos + 1 + x, sx4(r3 >> 4));
+        w8(RAM_OFF_frame + x, io_r8(WMDATA));
+        r3 = io_r8(WMDATA);
+        w8(RAM_OFF_frame + 1 + x, r3 & 0x3F);
+        uint8_t at = r8(RAM_OFF_attribute + 1 + x) & 0xE7;
+        w8(RAM_OFF_attribute + 1 + x, (uint8_t)((r3 >> 3 & 0x18) | at));
+    }
+    for (int x = 0; x < 24; x += 4) {
+        w8(RAM_OFF_rostnum + x, io_r8(WMDATA));
+        w8(RAM_OFF_rostnum + 2 + x, io_r8(WMDATA));
+        w8(RAM_OFF_position + 1 + x, 0);
+        uint8_t r3 = io_r8(WMDATA), a = r3 & 0x0F;
+        if (a == 0x0F) { a = 0xFF; w8(RAM_OFF_position + 1 + x, 0xFF); }
+        w8(RAM_OFF_position + x, a);
+        w8(RAM_OFF_position + 3 + x, 0);
+        a = r3 >> 4;
+        if (a == 0x0F) { a = 0xFF; w8(RAM_OFF_position + 3 + x, 0xFF); }
+        w8(RAM_OFF_position + 2 + x, a);
+    }
+    uint8_t b = io_r8(WMDATA);
+    w8(RAM_OFF_puckz, b);
+    w8(RAM_OFF_puckz + 1, sign8(b));
+    b = io_r8(WMDATA);
+    w8(RAM_OFF_shadowz, b);
+    w8(RAM_OFF_shadowz + 1, sign8(b));
+    w8(RAM_OFF_recsfx, io_r8(WMDATA));
+    w8(RAM_OFF_recsfxpitch, io_r8(WMDATA));
+    w8(RAM_OFF_recsfxpitch + 1, io_r8(WMDATA));
+    w8(RAM_OFF_recsfxvol + 1, io_r8(WMDATA));
+    w8(RAM_OFF_recsfx2, io_r8(WMDATA));
+    w8(RAM_OFF_recsfxpitch2, io_r8(WMDATA));
+    w8(RAM_OFF_recsfxpitch2 + 1, io_r8(WMDATA));
+    w8(RAM_OFF_recsfxvol2 + 1, io_r8(WMDATA));
+    w8(RAM_OFF_d7, io_r8(WMDATA));
+    for (int k = 0; k < 12; k += 4) {
+        uint8_t r3 = io_r8(WMDATA);
+        g.PadControlObj[k] = r3 & 0x0F;
+        g.PadControlObj[k + 2] = r3 >> 4;
+    }
+    w8(RAM_OFF_Crowdlevel, io_r8(WMDATA));
+    w8(RAM_OFF_Crowdlevel + 1, io_r8(WMDATA));
+    b = io_r8(WMDATA);
+    w8(RAM_OFF_PBnum, b);
+    w8(RAM_OFF_PBnum + 1, sign8(b));
+    if (!(g.sflags & 0x20)) {
+        w8(RAM_OFF_Hpos, io_r8(WMDATA));
+        w8(RAM_OFF_Hpos + 1, io_r8(WMDATA));
+        w8(RAM_OFF_Vpos, io_r8(WMDATA));
+        w8(RAM_OFF_Vpos + 1, io_r8(WMDATA));
+    } else {
+        for (int i = 0; i < 4; i++) io_r8(WMDATA);
+    }
+    w8(RAM_OFF_benchframe, io_r8(WMDATA));
+    w8(RAM_OFF_benchframe + 1, io_r8(WMDATA));
+    g.recsfx = (uint16_t)(int8_t)(g.recsfx & 0xFF);
+    g.recsfx2 = (uint16_t)(int8_t)(g.recsfx2 & 0xFF);
+}
