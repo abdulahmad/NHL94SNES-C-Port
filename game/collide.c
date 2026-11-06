@@ -1,80 +1,9 @@
 /* collide: collisions, checks and the players' energy (src/routines/collide). */
 #include "game.h"
 
-/* The energy of player o (getpde leaves the team, nonzero for the visitors, in a2 and the
- * player number * 2 in d1: setpde's arguments) */
-uint16_t getpde(int o)
-{
-    return g.tmpde[(g.pfteam[o] ? 26 : 0) + (g.pnum[o] & 0xFF)];
-}
-
-/* Set the energy of player num2 / 2 of team (nonzero: the visitors) to energy, 0 when negative */
-void setpde(int team, uint16_t num2, uint16_t energy)
-{
-    w16(RAM_OFF_tmpde + (uint16_t)((team ? 0x34 : 0) + num2), energy & 0x8000 ? 0 : energy);   /* (num2 as given: by address) */
-}
-
 #define NEG(a, b) (((uint16_t)((a) - (b))) & 0x8000)   /* cmp, then bmi */
 
 static uint16_t abs16(uint16_t v) { return v & 0x8000 ? (uint16_t)-v : v; }
-
-/* Player o's first assignment, from his position (none off the ice). */
-void Setplass(int o)
-{
-    uint16_t p = (uint16_t)g.position[o];
-    if (p & 0x8000) return;
-    assreplace(o, m8((SYM_Setplass_1 + p) & 0xFFFFFF));
-}
-
-/* The period (gsp, in bits 14-15) and the time into it, for the goal and penalty logs. */
-uint16_t GetPeriodTimeRemaining(void)
-{
-    return (uint16_t)((uint16_t)((g.gsp & 0xFF) << 14 | g.PerTimeTotal) - g.gameclock[0]);
-}
-
-/* Rating a scaled by the energy of player o (a0) (product / $1000); the carry is left clear. */
-uint16_t makepde(uint16_t a, int o)
-{
-    uint32_t p = Mul16S(a, getpde(o));
-    cf = 0;
-    return (uint16_t)(p >> 12);
-}
-
-/* Player o's penalty roll: random below (20 - aggress) * 16, doubled on a pad, halved within 40 of
- * the puck. */
-uint16_t checkagr(int o)
-{
-    uint16_t d0 = (uint16_t)((uint16_t)(0x14 - g.aggress[o]) << 4);
-    if (!(g.playerpad[o] & 0x8000)) d0 = (uint16_t)(d0 << 1);
-    uint16_t v = (uint16_t)(g.Xpos[o] - g.Xpos[14]);
-    if (!NEG(v, 0xFFD7) && NEG(v, 0x29)) {
-        v = (uint16_t)(g.Ypos[o] - g.pucky[0]);
-        if (!NEG(v, 0xFFD7) && NEG(v, 0x29)) d0 >>= 1;
-    }
-    return randomd0(d0);
-}
-
-/* Roster player d0 of team a2 into slot d4 of the list at a4 if he is available (on the ice, on the
- * bench or not yet there, and not in the list): returns him (Z clear), or 0 (*d1 = 0). */
-uint16_t TryAddPlayerToList(uint16_t d0, uint16_t d4, uint16_t a2, uint32_t a4, uint16_t *d1)
-{
-    *d1 = d0;
-    uint16_t k = (uint16_t)(d0 - 1);
-    uint16_t idx = (uint16_t)((a2 ? 0x34 : 0) + (uint16_t)(k << 1) + (k >> 15));   /* (asl's carry into the adc) */
-    uint16_t st = r16(RAM_OFF_tmpdst + idx);
-    if (st && !(st & 0x8000)) goto no;
-    if (st == TMPDOUT || st == rosterNone) goto no;
-    for (int e = 5; e >= 0; e--)
-        if (m8((a4 + e) & 0xFFFFFF) == (d0 & 0xFF)) goto no;
-    {
-        uint32_t a = (a4 + d4) & 0xFFFFFF;
-        if (is_wram(a)) w8(wram_off(a), (uint8_t)d0);
-    }
-    return d0 & 0xFF;
-no:
-    *d1 = 0;
-    return 0;
-}
 
 /* (ResetBench for team a0 = 0 / 2 with box count unit d1: every player counted, and taken off
  * again when on the ice or the bench (who goes to the bench) or injured with no time left) */
@@ -95,25 +24,6 @@ static void rb(uint16_t a0, uint16_t d1)
     }
 }
 
-/* Empty the penalty boxes and put every player on his own bench. */
-void ResetBench(void)
-{
-    g.PBnum = 0;
-    rb(0, 0x10);
-    rb(2, 1);
-}
-
-/* The puck is deflected: loose, a random velocity (x, y within +-$1000, height up to $FFF), spun. */
-void deflect(uint16_t d0)
-{
-    g.puckc = -1;
-    g.puckvy[0] = (int16_t)((RandomWord() & 0x1FFF) - 0x1000);
-    g.puckvx[0] = (int16_t)((RandomWord() & 0x1FFF) - 0x1000);
-    g.puckvz = (int16_t)(RandomWord() & 0xFFF);
-    puckflip(d0);
-}
-
-
 /* (setplayer's rating: 3 bits scaled by 5/2) */
 static uint16_t sp_scale(uint16_t n) { return (uint16_t)((n << 2) + n) >> 1; }
 
@@ -126,129 +36,316 @@ static uint16_t sp_adj(uint16_t a, uint16_t r3, uint16_t k)
     return v;
 }
 
-/* Bring roster player d3 onto the ice as object o: off the injured list, out of the box (assignment
- * $0B) or off the bench ($0A), on the ice; his 12 ratings from his roster record with the power
- * play, penalty kill, home / visitor and late third period bonuses (none for a goalie) and his hot /
- * cold bytes. */
-void setplayer(int o, uint16_t d3)
+/* (checkgoalp: a cosine / sine of the bounce off the goal kept to -$FF .. $FF) */
+static uint16_t clamp_ff(uint16_t v)
 {
-    g.pflags[o] &= (uint16_t)~pf2inj;
-    uint16_t a0 = g.pfteam[o] ? 2 : 0;
-    g.pnum[o] = d3 & 0xFF;
-    d3 = (uint16_t)((d3 & 0xFF) << 1);
-    uint16_t y = (uint16_t)((a0 ? 0x34 : 0) + d3);
-    uint16_t d1 = r16(RAM_OFF_tmpdst + y);
-    uint16_t r3 = (uint16_t)(y * 6);
-    if (!(d1 & 0x8000) || d1 == TMPDBENCH) {
-        assinsert(o, d1 & 0x8000 ? 0xA : 0xB);
-        g.pfalock[o] = 0;
-        g.SPA[o] = 0;
-    }
-    w16(RAM_OFF_tmpdst + (uint16_t)((a0 ? 0x34 : 0) + d3), TMPDICE);
-    d3 >>= 1;
-    uint32_t bank = SYM_TeamList >> 16;
-    uint16_t team = r16(RAM_OFF_tmdata + a0);
-    uint16_t b = (uint16_t)(m16((bank << 16 | team) + 8) + team);   /* (the bonus bytes) */
-    g.PPBonus = 0; g.PKBonus = 0; g.ThirdPBonus = 0; g.HmAwBonus = 0;
-    if (g.position[o]) {
-        if (g.sflags & 0x2000) {
-            uint16_t w = m16((bank << 16 | b) + 1);
-            if (!chkpk2(o)) g.PPBonus = w & 0xF;
-            else g.PKBonus = (int16_t)-(w >> 4 & 0xF);
-        }
-        uint16_t w = m16((bank << 16 | b) + 2);
-        g.HmAwBonus = g.pfteam[o] ? (uint16_t)-(w & 0xF) : (w >> 4 & 0xF);
-        uint16_t p = (uint16_t)(g.gsp - 2);
-        int bonus = 0;
-        if (!(p & 0x8000)) {
-            int score = 1;
-            if (!p) {
-                uint16_t v = (uint16_t)((GetPeriodTime() >> 1) - g.gameclock[0]);
-                score = !v || (v & 0x8000);
-            }
-            if (score) {
-                uint16_t t = (uint16_t)(g.tmscore[0] - g.tmscore[1]);
-                if (t && g.pfteam[o]) t = (uint16_t)-t;
-                bonus = !t || (t & 0x8000);
-            }
-        }
-        if (bonus) g.ThirdPBonus = 2;
-    }
-    uint16_t a = (uint16_t)(m16(bank << 16 | team) + team);   /* (the roster records) */
-    do {
-        uint32_t s = (uint32_t)m16(bank << 16 | a) + a;
-        a = (uint16_t)(s + 8 + (s >> 16 & 1));           /* (the first add's carry into the second) */
-    } while (!((d3 = (uint16_t)(d3 - 1)) & 0x8000));
-    a = (uint16_t)(a - 8);
-#define B(k) m16((bank << 16 | a) + (k))
-    w16(RAM_OFF_rostnum + 2 * o, m8(bank << 16 | a));
-    uint16_t pp = g.PPBonus, pk = (uint16_t)g.PKBonus, ha = g.HmAwBonus, tp = g.ThirdPBonus;
-    g.weight[o] = (B(1) & 0xF0) >> 1;
-    g.legstr[o] = sp_adj(sp_scale(B(1) & 7), r3, 0);
-    g.legspd[o] = sp_adj(sp_scale(B(2) >> 4 & 7), r3, 1);
-    g.aioff[o] = (uint16_t)((sp_adj((uint16_t)(sp_scale(B(2) & 7) + pp + pk + ha + tp), r3, 2) ^ 0xF) + 0xF) >> 1;
-    uint16_t t = sp_adj((uint16_t)(sp_scale(B(3) >> 4 & 7) + ha), r3, 3) ^ 0xF;
-    g.aidef[o] = g.position[o] ? (uint16_t)(t + 7) : (uint16_t)(t + 0xF) >> 1;
-    g.shotspd[o] = sp_adj(sp_scale(B(3) & 7), r3, 4);
-    g.checking[o] = sp_adj((uint16_t)(sp_scale(B(4) >> 4 & 7) + tp), r3, 5);
-    g.attribute[o] &= 0xF7FF;
-    g.handed[o] = (B(4) & 1) ^ 1;
-    if (!g.handed[o]) g.attribute[o] |= 0x0800;
-    g.fighting[o] = B(4) & 0xE;
-    g.stickhand[o] = sp_adj((uint16_t)(sp_scale(B(5) >> 4 & 7) + pp + pk + ha), r3, 6);
-    g.shotacc[o] = sp_adj((uint16_t)(sp_scale(B(5) & 7) + pp + pk + ha), r3, 7);
-    g.endurance[o] = sp_adj(sp_scale(B(6) >> 4 & 7), r3, 8);
-    g.spodds[o] = sp_adj((uint16_t)(sp_scale(B(6) & 7) + tp + tp), r3, 9);
-    g.passacc[o] = sp_adj((uint16_t)(sp_scale(B(7) >> 4 & 7) + pp + ha), r3, 10);
-    g.aggress[o] = sp_adj(sp_scale(B(7) & 7), r3, 11);
-#undef B
+    if (!NEG(v, 0xFF)) v = 0xFF;
+    if (NEG(v, 0xFF01)) v = 0xFF01;
+    return v;
 }
 
-/* At a face off: team a2's six players take their new positions (newpos, a byte) straight away,
- * with their assignments (and a centre the face off one, $12), and their new roster players
- * (newpnum) on the ice. */
-void forcepldata(uint16_t a2)
+/* (checkgoal: the puck's speed on one axis made at least $800 either way) */
+static int16_t at_least_800(int16_t v)
 {
-    uint16_t a3 = r16(RAM_OFF_tmsort + a2);
-    for (int d4 = 5; d4 >= 0; d4--, a3 += 2) {
-        int o = a3 >> 1;
-        uint16_t p = (uint16_t)(int8_t)(uint8_t)g.newpos[o];
-        g.position[o] = (int16_t)p;
-        if (!(p & 0x8000)) {
-            Setplass(o);
-            if (g.position[o] == 4) assinsert(o, 0x12);
-            uint16_t d3 = (uint16_t)(((uint16_t)g.newpnum[o] & 0xFF) << 1);
-            w16(RAM_OFF_tmpdst + (uint16_t)((a2 ? 0x34 : 0) + d3), TMPDICE);
-            setplayer(o, d3 >> 1);
-        }
-        g.newpnum[o] = -1;
-        g.newpos[o] = -1;
-    }
+    if (!NEG((uint16_t)v, 0x800) || NEG((uint16_t)v, 0xF800)) return v;
+    return v < 0 ? (int16_t)0xF800 : 0x800;
 }
 
-
-/* Player a2 is injured: pf2inj, the crowd louder (held 60 frames) and groaning (stream 4), the screen
- * locked on him, his roster slot out of the game (1 in 8 rosterNone, TempPlOffset bit $4000), who it
- * is in TempPlOffset. */
-void setInjuryType(uint16_t a2)
+/* (a coordinate's move this frame from the old position, in 1/256: (pos:frac - old) >> 8) */
+static uint16_t move_hi(uint32_t pos, uint32_t frac, uint32_t opos, uint32_t ofrac)
 {
-    w16(RAM_OFF_pflags + a2, r16(RAM_OFF_pflags + a2) | 0x1000);
-    g.Crowdlevel = (uint16_t)(g.Crowdlevel + 0x12C);
-    g.crowdhold = 0x3C;
-    StreamSfx(4);
-    g.xc1 = (int16_t)r16(RAM_OFF_Xpos + a2);
-    g.yc1 = (int16_t)r16(RAM_OFF_Ypos + a2);
+    uint16_t f = (uint16_t)(r16(frac) - r16(ofrac));
+    unsigned b = r16(frac) < r16(ofrac);
+    uint16_t i = (uint16_t)(r16(pos) - r16(opos) - b);
+    return (uint16_t)((i & 0xFF) << 8 | f >> 8);
+}
+
+/* (checkwallcoll: DivX8S's quotient kept in -$FF..$FF, the lower limit first) */
+static uint16_t clamp_ff2(uint16_t v)
+{
+    if (NEG(v, 0xFF01)) v = 0xFF01;
+    if (!NEG(v, 0xFF)) v = 0xFF;
+    return v;
+}
+
+/* Raise the crowd's excitement CwdExciteLvl by n (a hit, a fall), unless it would go negative */
+static void excite(uint16_t n)
+{
+    uint16_t v = (uint16_t)(g.CwdExciteLvl + n);
+    if (!(v & 0x8000)) g.CwdExciteLvl = v;
+}
+
+/* (checkint's .ci: goalie a2 against player x (a3): with the clock running and x's impact past 26
+ * (past 3 when a3 has the puck), x falls (FallDown by the goalie); a hard hit on the goalie (past
+ * 31) may be interference on x (by his aggression), unless he is out of his crease) */
+static uint16_t check_int(int x, int a2, int a3, uint16_t d4)
+{
+    if (g.position[a2] || g.gmclock) return d4;
+    if (g.puckc != 2 * a3 && ((uint16_t)(g.impact[x] - 0x1A) & 0x8000)) return d4;
+    if ((uint16_t)(g.impact[x] - 3) & 0x8000) return d4;
+    d4 = FallDown(a2, a3, a2, d4);
+    if ((uint16_t)(g.impact[a2] - 0x1F) & 0x8000) return d4;
+    if (g.pflags[a3] & 0x4000) return d4;
+    if (randoma8((uint16_t)(0x14 - g.aggress[a3])) >= 2) return d4;
+    if ((g.gmode & gmhl) || (g.goalieflags[a2] & 4)) return d4;
+    AddPenalty(a3, PenInterference);
+    return d4;
+}
+
+/* (a foul on player a2 when he is the carrier on a breakaway and no shooter is set: a penalty shot
+ * (on x) for him; nonzero then) */
+static int penshot_foul(int x, int a2)
+{
+    if (!PenShotChk((uint16_t)(2 * a2)) || !(g.BA_Sktr_SCnum & 0x8000)) return 0;
+    g.BA_Sktr_SCnum = (uint16_t)(2 * a2);
+    g.pspad[0] = g.playerpad[a2];
+    AddPenalty(x, PenShot);
+    return 1;
+}
+
+/* (checkcheck's .cc: x checking a2: a2 holding or hooking is holdcheck, sweep checking Bcheck;
+ * otherwise x bursting into a2 plays a check by the direction (from the table .4, a shoulder or
+ * hip check, or at random the next one), and a skater a2 hit hard enough (d4, the impact, past
+ * $20) goes down on a roll against x's checking, with charging, roughing or a penalty shot by x's
+ * aggression; returns d4 as left) */
+static uint16_t check_check(int x, int a2, int a3, uint16_t d4)
+{
+    uint16_t s = g.SPA[a2], y, d0;
+    if (s == (uint16_t)SYM_SPAHold || s == (uint16_t)SYM_SPAhook) { holdcheck(x, a2, a3); return d4; }
+    if (s == (uint16_t)SYM_SPAsweepchk) return Bcheck(x, a2, a3, d4);
+    if (g.SPA[x] != (uint16_t)SYM_SPAburst) return d4;
+    if (g.gmclock) { g.impact[x] = 0x100; g.impact[a2] = 0x100; }
+    d0 = vtoa((uint16_t)(g.Xpos[a2] - g.Xpos[x]), (uint16_t)(g.Ypos[a2] - g.Ypos[x]));
+    y = (uint16_t)(((uint16_t)(d0 - g.facedir[x]) & 7) << 1);
+    g.pf2aip[x] = (uint16_t)SYM_checkcheck_4;
+    if (!y) {
+        uint16_t px = (uint16_t)g.Xpos[x], py = (uint16_t)g.Ypos[x];
+        if (!NEG(px, 0x50) || NEG(px, 0xA057) || !NEG(py, 0xF8) || !NEG(py, 0xFF08) ? (g.seed[0] & 0x30) : (g.seed[0] & 0xF0))
+            y += 2;
+    }
+    SetSPAFromA(x, m16(SYM_checkcheck_4 + y));
+    if (!g.position[a2] || ((uint16_t)(d4 - 0x20) & 0x8000)) return d4;
+    d0 = (uint16_t)(((uint16_t)(0x78 - g.weight[x] + g.weight[a2]) >> 1) - g.impact[a2]);
+    if (d0 && !(d0 & 0x8000)) {
+        d0 = randomd0(d0);
+        if (!((uint16_t)(d0 - g.checking[x]) & 0x8000)) {
+            if (checkagr(x) < 1 && !(g.gmode & gmhl)) AddPenalty(x, (uint16_t)((r16(RAM_OFF_seed + 1) & 2) + PenCharging));
+            return d4;
+        }
+    }
+    if (checkagr(x) < 1 && !(g.gmode & gmhl)) AddPenalty(x, (uint16_t)((r16(RAM_OFF_seed + 1) & 2) + PenRoughing));
+    penshot_foul(x, a2);
+    return FallDown(x, a2, a3, d4);
+}
+
+static int in_hold(uint16_t s) { return s >= (uint16_t)SYM_SPAHold2 && s < 0xF46B; }
+
+static int in_sweep(uint16_t s) { return s >= (uint16_t)SYM_SPAsweepchk && s < 0xF343; }
+
+/* (checkplcoll's .t3: players x (a3) and y touch (within $10) while closing in: any hold between
+ * them or their partners is broken; opponents take the impact (the closing speed / 16, at least 5,
+ * half again in a sweep check; the collision sound when hard with the carrier), then checkint and
+ * checkcheck; unless that set collflag, they bounce apart by their weights (+$8C), collflag set) */
+static void pl_pair(int x, int y, int a3)
+{
+    uint16_t d2 = (uint16_t)(g.Xpos[y] - g.Xpos[x]), d3 = (uint16_t)(g.Ypos[y] - g.Ypos[x]);
+    if (!NEG(ApproxLength(d3, d2), 0x10)) return;
+    uint16_t d0 = (uint16_t)(g.Xvel[x] - g.Xvel[y]), d1 = (uint16_t)(g.Yvel[x] - g.Yvel[y]);
+    if (!(d0 | d1)) return;
+    uint16_t v0 = d0, v1 = d1, d4, d5;
+    uint32_t p = Mul16x8S(d1, d3);
+    p = (uint32_t)(Mul16x8S(d0, d2) + p);
+    x = a3;
+    if (p & 0x80000000u) return;
+    if (in_hold(g.SPA[x])) {
+        g.pfalock[x] = 0; g.pf2aip[x] = 0;
+        uint16_t z = (uint16_t)g.impactp[x];
+        if (in_hold(r16(RAM_OFF_SPA + z))) { w16(RAM_OFF_pfalock + z, 0); w16(RAM_OFF_pf2aip + z, 0); }
+    }
+    if (in_hold(g.SPA[y])) {
+        g.pfalock[y] = 0; g.pf2aip[y] = 0;
+        uint16_t z = (uint16_t)g.impactp[y];
+        if (in_hold(r16(RAM_OFF_SPA + z))) { w16(RAM_OFF_pfalock + z, 0); w16(RAM_OFF_pf2aip + z, 0); }
+    }
+    d1 = (uint16_t)(p >> 8);
+    if (g.pfteam[x] != g.pfteam[y]) {
+        d4 = d1 >> 4;
+        if (d4 < 5) d4 = 5;
+        if (in_sweep(g.SPA[x]) || in_sweep(g.SPA[y])) d4 = (uint16_t)((d4 >> 1) + d4 + (d4 & 1));   /* (lsr's carry into the adc) */
+        g.impact[x] = (int16_t)(d4 + g.impact[x]);
+        g.impact[y] = (int16_t)(d4 + g.impact[y]);
+        g.impactp[y] = (int16_t)(2 * x);
+        g.impactp[x] = (int16_t)(2 * y);
+        if (d4 >= 0x14 && (g.puckc == 2 * x || g.puckc == 2 * y)) CollisionSfx(x, y);
+        d4 = checkint(x, y, a3, d4);
+        checkcheck(a3, y, a3, d4);
+    }
+    d4 = d1;
+    d0 = v0; d1 = v1;
+    if (g.collflag & 0x8000) return;
+    p = Mul16x8S(d1, d2);
+    p = (uint32_t)(Mul16x8S(d0, d3) - p);
+    d5 = (uint16_t)(p >> 8);
+    x = a3;
+    d0 = (uint16_t)(g.weight[x] + 0x8C);
+    d1 = (uint16_t)(g.weight[y] + 0x8C + d0);
+    d0 = d1 = Div32S(Mul16x8XS(d4, d0), d1);
+    uint16_t t = (uint16_t)Mul16x8S(d5, d3);
+    g.Xvel[x] = (int16_t)((uint16_t)Mul16x8S(d0, d2) + t + g.Xvel[y]);
+    t = (uint16_t)Mul16x8S(d5, d2);
+    g.Yvel[x] = (int16_t)((uint16_t)Mul16x8S(d0, d3) - t + g.Yvel[y]);
+    g.Xvel[y] = (int16_t)((uint16_t)Mul16x8S(d1, d2) + g.Xvel[y]);
+    g.Yvel[y] = (int16_t)((uint16_t)Mul16x8S(d1, d3) + g.Yvel[y]);
+    g.collflag = 0xFFFF;
+}
+
+/* (checkplcoll: object z of OOlist can touch x, at new x d2: in play, within 15 in x, no flag 15 /
+ * pfnc, a player) */
+static int pl_near(uint16_t z, uint16_t d2)
+{
+    if (r16(RAM_OFF_position + z) & 0x8000) return 0;
+    uint16_t dx = (uint16_t)(r16(RAM_OFF_Xpos + z) - d2);
+    if (NEG(dx, 0xFFF1) || !NEG(dx, 0xF)) return 0;
+    if ((r16(RAM_OFF_pflags + z) & 0x8000) | r16(RAM_OFF_pfnc + z)) return 0;
+    return z < 0x18;
+}
+
+static void inc16(uint32_t off) { w16(off, (uint16_t)(r16(off) + 1)); }
+
+/* Object x moves to d2 / d3 (swapped on the horizontal screen): the walls (at its hot spot, and a
+ * player's stick end too when the body hits none) and the players (checkplcoll), unless it skips
+ * collisions; after a player collision it goes back to its old place (but into the boards);
+ * otherwise it moves along OOlist (kept in y order) and its Ylist y is the new one. */
+void checkcoll(int x, uint16_t d2, uint16_t d3, int a3)
+{
+    g.collflag = 0;
+    if (g.sfhormode) { uint16_t t = d2; d2 = d3; d3 = t; }
+    if (!g.pfnc[x]) {
+        g.wcradiusx = (uint16_t)g.radiusx[x];
+        g.wcradiusy = (uint16_t)g.radiusy[x];
+        checkwallcoll(x, (uint16_t)g.Xpos[x], (uint16_t)g.Ypos[x], a3);
+        if (!(g.Wallcos[x] | g.Wallsin[x]) && x < 12) {
+            int16_t hx, hy;
+            GetHot(x, &hx, &hy);
+            g.wcradiusx = g.wcradiusy = 1;
+            checkwallcoll(x, (uint16_t)(g.Xpos[x] + hx), (uint16_t)(g.Ypos[x] + hy), a3);
+        }
+        if (!(g.position[x] & 0x8000)) checkplcoll(x, d2, d3, a3);
+    }
+    if (g.collflag) {
+        if (g.SPA[x] >= (uint16_t)SYM_SPAboardfront) return;
+        g.Xpos[x] = g.OldXpos[x];
+        g.Ypos[x] = g.OldYpos[x];
+        return;
+    }
+    uint16_t d1 = g.OOlistpos[x], d4;
+    for (; d1 != 0xF; d1++) {
+        d4 = g.OOlist[d1 + 1];
+        uint16_t t = (uint16_t)(d3 - r16(RAM_OFF_Ylist + d4));
+        if (!t || (t & 0x8000)) break;
+        g.OOlistpos[x]++;
+        w16(RAM_OFF_OOlistpos + d4, (uint16_t)(r16(RAM_OFF_OOlistpos + d4) - 1));
+        g.OOlist[d1] = (uint8_t)d4;
+        g.OOlist[d1 + 1] = (uint8_t)(2 * x);
+    }
+    if (g.OOlistpos[x]) {
+        for (d1 = g.OOlistpos[x]; d1; d1--) {
+            d4 = g.OOlist[d1 - 1];
+            if (!((uint16_t)(d3 - r16(RAM_OFF_Ylist + d4)) & 0x8000)) break;
+            g.OOlistpos[x]--;
+            w16(RAM_OFF_OOlistpos + d4, (uint16_t)(r16(RAM_OFF_OOlistpos + d4) + 1));
+            g.OOlist[d1] = (uint8_t)d4;
+            g.OOlist[d1 - 1] = (uint8_t)(2 * x);
+        }
+    }
+    g.Ylist[x] = d3;
+}
+
+/* Object o at d2 / d3 against the rink: in an end zone's corner circle (64 in from the boards, by
+ * its radius) a bounce off the curve (wallcollb, the normal from the circle's centre); between the
+ * corners at the ends the goals (checkgoal); then, when nothing hit, the straight boards. */
+void checkwallcoll(int o, uint16_t d2, uint16_t d3, int a3)
+{
+    uint16_t sy = (uint16_t)(0x12A - g.wcradiusy), sx = (uint16_t)(sideline - g.wcradiusx);
+    uint16_t d5 = (uint16_t)(-sy + 0x40), d4 = (uint16_t)(-sx + 0x40);
+    int x = o;
+    if (NEG((uint16_t)(d3 - 1), d5)) {
+        if (NEG(d2, d4)) goto corner;
+        d4 = (uint16_t)-d4;
+        if (NEG(d4, d2)) goto corner;
+        checkgoal(o, 0x1A, d2, d3, a3);
+        goto boards;
+    }
+    d5 = (uint16_t)-d5;
+    if (!NEG(d5, d3)) goto boards;
+    if (NEG(d2, d4)) goto corner;
+    d4 = (uint16_t)-d4;
+    if (NEG(d4, d2)) goto corner;
+    checkgoal(o, 0x18, d2, d3, a3);
+    goto boards;
+corner:
+    {
+        uint16_t e2 = (uint16_t)(d2 - d4);
+        uint16_t e1 = (uint16_t)-e2;
+        uint16_t t4 = e1 & 0x8000 ? (uint16_t)-e1 : e1;
+        uint16_t e0 = (uint16_t)(d3 - d5);
+        uint16_t cd = e0 & 0x8000 ? (uint16_t)-e0 : e0;
+        w16(RAM_OFF_cornerdy, cd);
+        uint16_t len = cd >= t4 ? (uint16_t)((t4 >> 2) + cd + (t4 >> 1 & 1)) : (uint16_t)((cd >> 2) + t4 + (cd >> 1 & 1));   /* (lsr's carry into the adc) */
+        if (len < 0x41) goto boards;
+        uint16_t c = clamp_ff2(DivX8S((uint16_t)((e0 & 0xFF) << 8), len));
+        uint16_t s = clamp_ff2(DivX8S((uint16_t)((e1 & 0xFF) << 8), len));
+        x = a3;
+        wallcollb(a3, c, s, a3);
+    }
+boards:
+    d4 = sx; d5 = sy;
+    if (r16(RAM_OFF_Wallcos + 2 * x) | r16(RAM_OFF_Wallsin + 2 * x)) return;
+    if (!NEG((uint16_t)(d3 - 1), d5)) { wallcollb(x, 0xFF, 0, a3); return; }
+    if (!NEG((uint16_t)(-d5 - 1), d3)) { wallcollb(x, 0xFF01, 0, a3); return; }
+    if (!NEG((uint16_t)(d2 - 1), d4)) { wallcollb(x, 0, 0xFF01, a3); return; }
+    if (!NEG((uint16_t)(-d4 - 1), d2)) { wallcollb(x, 0, 0xFF, a3); return; }
+}
+
+/* Object o hits a wall (cos / sin, a3 for the bounce): a high puck, or a fast one rising into the
+ * net's top behind the goal, goes over the glass (the shadow's glass animation, stream 6, the crowd)
+ * and out of play; anything else bounces. */
+void wallcollb(int o, uint16_t cos, uint16_t sin, int a3)
+{
+    uint16_t z = (uint16_t)g.puckz, px = (uint16_t)g.Xpos[14];
+    if (o != 14) goto bounce;
+    if (!NEG(z, 0x21)) goto out;
+    if (z < 0x16) goto bounce;
+    if (NEG(g.pucky[0], 0x112)) goto out;
+    if (NEG(px, 0xD) || !NEG(px, 0x10) || NEG(g.puckvy[0], 0xFA0)) goto bounce;
+    g.puckvy[0] = (int16_t)(g.puckvy[0] >> 1);
+    SetSPA(15, (uint16_t)SYM_SPAbglass);
+    StreamSfx(6);
+    g.Crowdlevel = (uint16_t)(g.Crowdlevel + 0x258);
+    g.crowdhold = 0x5A;
+    uint16_t v = (uint16_t)(g.CwdExciteLvl + 0xF);
+    if (!(v & 0x8000)) g.CwdExciteLvl = v;
+out:
+    wallcollb_out();
+    return;
+bounce:
+    wallcoll(o, cos, sin, a3);
+}
+
+/* The puck is out of play: the screen locked, the puck out of collisions (pfnc = $40), flipped at
+ * the bottom end, its shadow gone; with the clock running the last toucher's shootout result
+ * (ShootoutWonBy 6); a penalty shot over. */
+void wallcollb_out(void)
+{
     g.sflags |= 0x40;
-    int team = r16(RAM_OFF_pfteam + a2) != 0;
-    g.TempPlOffset = (uint16_t)((r16(RAM_OFF_pnum + a2) & 0xFF) | (team ? 0x8000 : 0));
-    uint16_t v = (uint16_t)(int8_t)(uint8_t)g.TempPlOffset;
-    uint16_t idx = (uint16_t)((team ? 0x34 : 0) + (uint16_t)(v << 1) + (v >> 15));   /* (asl's carry into the adc) */
-    w16(RAM_OFF_tmpdst + idx, TMPDOUT);
-    if (randoma8(7)) return;
-    w16(RAM_OFF_tmpdst + idx, rosterNone);
-    g.TempPlOffset |= 0x4000;
+    g.pfnc[14] = 0x40;
+    if (g.pucky[0] < 0) g.attribute[14] |= 0x8000;
+    g.frame[15] = 0;
+    if (!g.gmclock) ShootoutWonBy((uint16_t)(g.ltplayer << 1) >> 1, 6);   /* (the last toucher) */
+    EndPenaltyShotPlay(14);                                   /* (X the puck: wallcollb comes here only for it) */
+    g.breakaway = 0;
+    g.onetimer = 0;
 }
-
 
 #define ASR(v, n) ((uint16_t)((int16_t)(v) >> (n)))   /* (lsr n, then the sign put back) */
 #define HI(p) ((uint16_t)((p) >> 8))                  /* (r2+1: the product / 256) */
@@ -294,116 +391,6 @@ done:
     EndPenaltyShotPlay(14);
     g.breakaway = 0;
     g.onetimer = 0;
-}
-
-/* The puck is out of play: the screen locked, the puck out of collisions (pfnc = $40), flipped at
- * the bottom end, its shadow gone; with the clock running the last toucher's shootout result
- * (ShootoutWonBy 6); a penalty shot over. */
-void wallcollb_out(void)
-{
-    g.sflags |= 0x40;
-    g.pfnc[14] = 0x40;
-    if (g.pucky[0] < 0) g.attribute[14] |= 0x8000;
-    g.frame[15] = 0;
-    if (!g.gmclock) ShootoutWonBy((uint16_t)(g.ltplayer << 1) >> 1, 6);   /* (the last toucher) */
-    EndPenaltyShotPlay(14);                                   /* (X the puck: wallcollb comes here only for it) */
-    g.breakaway = 0;
-    g.onetimer = 0;
-}
-
-/* Object o hits a wall (cos / sin, a3 for the bounce): a high puck, or a fast one rising into the
- * net's top behind the goal, goes over the glass (the shadow's glass animation, stream 6, the crowd)
- * and out of play; anything else bounces. */
-void wallcollb(int o, uint16_t cos, uint16_t sin, int a3)
-{
-    uint16_t z = (uint16_t)g.puckz, px = (uint16_t)g.Xpos[14];
-    if (o != 14) goto bounce;
-    if (!NEG(z, 0x21)) goto out;
-    if (z < 0x16) goto bounce;
-    if (NEG(g.pucky[0], 0x112)) goto out;
-    if (NEG(px, 0xD) || !NEG(px, 0x10) || NEG(g.puckvy[0], 0xFA0)) goto bounce;
-    g.puckvy[0] = (int16_t)(g.puckvy[0] >> 1);
-    SetSPA(15, (uint16_t)SYM_SPAbglass);
-    StreamSfx(6);
-    g.Crowdlevel = (uint16_t)(g.Crowdlevel + 0x258);
-    g.crowdhold = 0x5A;
-    uint16_t v = (uint16_t)(g.CwdExciteLvl + 0xF);
-    if (!(v & 0x8000)) g.CwdExciteLvl = v;
-out:
-    wallcollb_out();
-    return;
-bounce:
-    wallcoll(o, cos, sin, a3);
-}
-
-
-/* (checkgoalp: a cosine / sine of the bounce off the goal kept to -$FF .. $FF) */
-static uint16_t clamp_ff(uint16_t v)
-{
-    if (!NEG(v, 0xFF)) v = 0xFF;
-    if (NEG(v, 0xFF01)) v = 0xFF01;
-    return v;
-}
-
-/* Player o (a3 from the first test on) runs into goal a2 at d2 / d3 (wcradius around it): close to
- * its back he bounces off it (wallcoll, the angle from the goal's centre). A bursting player hitting
- * it fast at the front sometimes moves the net (half his speed again, he stops, the screen locks)
- * and with the clock running gets a goalie-holding penalty (PenGhold), which ends this. */
-void checkgoalp(int o, uint16_t a2, uint16_t d2, uint16_t d3, int a3)
-{
-    if ((g.pflags[o] & 0x8000) || 2 * o >= 0x17) return;
-    uint16_t y = a2;
-    if (y != 0x18) { if (!NEG((uint16_t)(d3 - g.wcradiusy), 0xFF16)) return; }
-    else if (NEG((uint16_t)(d3 + g.wcradiusy), 0xEA)) return;
-    uint16_t a = d2 & 0x8000 ? (uint16_t)-d2 : d2;
-    if (!NEG((uint16_t)(a - g.wcradiusx), 0x40)) return;
-    uint16_t dy = (uint16_t)(d3 - r16(RAM_OFF_Ypos + y));
-    uint16_t d0 = (uint16_t)-dy;
-    uint16_t d1 = (uint16_t)(d2 - r16(RAM_OFF_Xpos + y));
-    uint16_t v = Mul8S(d1, d1) >> 2;
-    if (v >= 0x101) return;
-    if ((uint16_t)((uint16_t)(Mul8S(dy, dy) << 1) + v) >= 0x101) return;
-    int x = a3;
-    if (!(g.seed[0] & 0x1C0) && g.SPA[x] == (uint16_t)SYM_SPAburst) {
-        uint16_t py = (uint16_t)(g.pucky[0] - r16(RAM_OFF_Ypos + y));
-        if (!NEG(py, 0xFF80) && NEG(py, 0x80)) {
-            uint16_t e0 = (uint16_t)g.Xvel[x], e1 = (uint16_t)g.Yvel[x];
-            if (NEG(e1, 0xDFFF) || !NEG(e1, 0x2001) || NEG(e0, 0xDFFF) || !NEG(e0, 0x2001)) {
-                e0 = ASR(e0, 3);
-                e0 = (uint16_t)(ASR(e0, 1) + e0);
-                w16(RAM_OFF_Xvel + y, e0);
-                e1 = ASR(e1, 3);
-                e1 = (uint16_t)(ASR(e1, 1) + e1);
-                w16(RAM_OFF_Yvel + y, e1);
-                g.Xvel[x] = 0;
-                g.Yvel[x] = 0;
-                g.sflags |= 0x40;
-                if (!g.gmclock) { AddPenalty2(x, PenGhold); return; }
-                d0 = e0; d1 = e1;
-            }
-        }
-    }
-    uint16_t len = (uint16_t)(ApproxLength(d1, dy) + 1);
-    uint16_t c = clamp_ff(DivX8S((uint16_t)((d0 & 0xFF) << 8), len));
-    uint16_t s = clamp_ff(DivX8S((uint16_t)((d1 & 0xFF) << 8), len));
-    wallcoll(a3, c, s, a3);
-}
-
-
-/* (checkgoal: the puck's speed on one axis made at least $800 either way) */
-static int16_t at_least_800(int16_t v)
-{
-    if (!NEG((uint16_t)v, 0x800) || NEG((uint16_t)v, 0xF800)) return v;
-    return v < 0 ? (int16_t)0xF800 : 0x800;
-}
-
-/* (a coordinate's move this frame from the old position, in 1/256: (pos:frac - old) >> 8) */
-static uint16_t move_hi(uint32_t pos, uint32_t frac, uint32_t opos, uint32_t ofrac)
-{
-    uint16_t f = (uint16_t)(r16(frac) - r16(ofrac));
-    unsigned b = r16(frac) < r16(ofrac);
-    uint16_t i = (uint16_t)(r16(pos) - r16(opos) - b);
-    return (uint16_t)((i & 0xFF) << 8 | f >> 8);
 }
 
 /* Object o meets goal a2 at d2 / d3 (a3 as for wallcoll): players by checkgoalp. A low puck (not
@@ -489,58 +476,151 @@ side:
     wallcoll(x, 0, d1, a3);
 }
 
-/* (checkwallcoll: DivX8S's quotient kept in -$FF..$FF, the lower limit first) */
-static uint16_t clamp_ff2(uint16_t v)
+/* Player o (a3 from the first test on) runs into goal a2 at d2 / d3 (wcradius around it): close to
+ * its back he bounces off it (wallcoll, the angle from the goal's centre). A bursting player hitting
+ * it fast at the front sometimes moves the net (half his speed again, he stops, the screen locks)
+ * and with the clock running gets a goalie-holding penalty (PenGhold), which ends this. */
+void checkgoalp(int o, uint16_t a2, uint16_t d2, uint16_t d3, int a3)
 {
-    if (NEG(v, 0xFF01)) v = 0xFF01;
-    if (!NEG(v, 0xFF)) v = 0xFF;
-    return v;
+    if ((g.pflags[o] & 0x8000) || 2 * o >= 0x17) return;
+    uint16_t y = a2;
+    if (y != 0x18) { if (!NEG((uint16_t)(d3 - g.wcradiusy), 0xFF16)) return; }
+    else if (NEG((uint16_t)(d3 + g.wcradiusy), 0xEA)) return;
+    uint16_t a = d2 & 0x8000 ? (uint16_t)-d2 : d2;
+    if (!NEG((uint16_t)(a - g.wcradiusx), 0x40)) return;
+    uint16_t dy = (uint16_t)(d3 - r16(RAM_OFF_Ypos + y));
+    uint16_t d0 = (uint16_t)-dy;
+    uint16_t d1 = (uint16_t)(d2 - r16(RAM_OFF_Xpos + y));
+    uint16_t v = Mul8S(d1, d1) >> 2;
+    if (v >= 0x101) return;
+    if ((uint16_t)((uint16_t)(Mul8S(dy, dy) << 1) + v) >= 0x101) return;
+    int x = a3;
+    if (!(g.seed[0] & 0x1C0) && g.SPA[x] == (uint16_t)SYM_SPAburst) {
+        uint16_t py = (uint16_t)(g.pucky[0] - r16(RAM_OFF_Ypos + y));
+        if (!NEG(py, 0xFF80) && NEG(py, 0x80)) {
+            uint16_t e0 = (uint16_t)g.Xvel[x], e1 = (uint16_t)g.Yvel[x];
+            if (NEG(e1, 0xDFFF) || !NEG(e1, 0x2001) || NEG(e0, 0xDFFF) || !NEG(e0, 0x2001)) {
+                e0 = ASR(e0, 3);
+                e0 = (uint16_t)(ASR(e0, 1) + e0);
+                w16(RAM_OFF_Xvel + y, e0);
+                e1 = ASR(e1, 3);
+                e1 = (uint16_t)(ASR(e1, 1) + e1);
+                w16(RAM_OFF_Yvel + y, e1);
+                g.Xvel[x] = 0;
+                g.Yvel[x] = 0;
+                g.sflags |= 0x40;
+                if (!g.gmclock) { AddPenalty2(x, PenGhold); return; }
+                d0 = e0; d1 = e1;
+            }
+        }
+    }
+    uint16_t len = (uint16_t)(ApproxLength(d1, dy) + 1);
+    uint16_t c = clamp_ff(DivX8S((uint16_t)((d0 & 0xFF) << 8), len));
+    uint16_t s = clamp_ff(DivX8S((uint16_t)((d1 & 0xFF) << 8), len));
+    wallcoll(a3, c, s, a3);
 }
 
-/* Object o at d2 / d3 against the rink: in an end zone's corner circle (64 in from the boards, by
- * its radius) a bounce off the curve (wallcollb, the normal from the circle's centre); between the
- * corners at the ends the goals (checkgoal); then, when nothing hit, the straight boards. */
-void checkwallcoll(int o, uint16_t d2, uint16_t d3, int a3)
+/* Player x (a3) at his new place d2 / d3 against the players near him in y (OOlist, up then down,
+ * within $0E): pl_pair. */
+void checkplcoll(int x, uint16_t d2, uint16_t d3, int a3)
 {
-    uint16_t sy = (uint16_t)(0x12A - g.wcradiusy), sx = (uint16_t)(sideline - g.wcradiusx);
-    uint16_t d5 = (uint16_t)(-sy + 0x40), d4 = (uint16_t)(-sx + 0x40);
-    int x = o;
-    if (NEG((uint16_t)(d3 - 1), d5)) {
-        if (NEG(d2, d4)) goto corner;
-        d4 = (uint16_t)-d4;
-        if (NEG(d4, d2)) goto corner;
-        checkgoal(o, 0x1A, d2, d3, a3);
-        goto boards;
+    if ((g.pflags[x] & 0x8000) || x >= 12) return;
+    uint16_t d1 = g.OOlistpos[x], z;
+    for (; d1 != 0xF; d1++) {
+        z = g.OOlist[d1 + 1];
+        if (!((uint16_t)(r16(RAM_OFF_Ylist + z) - d3 - 0xE) & 0x8000)) break;
+        if (pl_near(z, d2)) pl_pair(x, z >> 1, a3);
     }
-    d5 = (uint16_t)-d5;
-    if (!NEG(d5, d3)) goto boards;
-    if (NEG(d2, d4)) goto corner;
-    d4 = (uint16_t)-d4;
-    if (NEG(d4, d2)) goto corner;
-    checkgoal(o, 0x18, d2, d3, a3);
-    goto boards;
-corner:
+    if (!g.OOlistpos[x]) return;
+    for (d1 = g.OOlistpos[x]; d1; d1--) {
+        z = g.OOlist[d1 - 1];
+        if (!((uint16_t)(d3 - r16(RAM_OFF_Ylist + z) - 0xE) & 0x8000)) return;
+        if (pl_near(z, d2)) pl_pair(x, z >> 1, a3);
+    }
+}
+
+/* The puck (x, low: under $10) against the objects near it in y (OOlist, up then down, within
+ * $28): checkpuckcoll_ccx for each (a0 as the caller left it, for puckstick). */
+void checkpuckcoll(int x, int a3, uint16_t a0)
+{
+    if (!((uint16_t)(g.puckz - 0x10) & 0x8000)) return;
+    uint16_t d1, z;
+    for (d1 = g.OOlistpos[14]; d1 != 0xF; d1++) {
+        z = g.OOlist[d1 + 1];
+        if (!((uint16_t)(r16(RAM_OFF_Ylist + z) - g.pucky[0] - 0x28) & 0x8000)) break;
+        checkpuckcoll_ccx(x, z >> 1, a3, a0);
+    }
+    for (d1 = g.OOlistpos[14]; d1; d1--) {
+        z = g.OOlist[d1 - 1];
+        if (!((uint16_t)(g.pucky[0] - r16(RAM_OFF_Ylist + z) - 0x28) & 0x8000)) return;
+        checkpuckcoll_ccx(x, z >> 1, a3, a0);
+    }
+}
+
+/* The puck x against player y (a2): unless he carries it, is past the skaters, off the ice or not
+ * colliding. A goalie: within his stick's reach (his stick hot spot, the height by the
+ * checkpuckcoll_ccx_8 table) the stick (puckstick); then his body within 11 (puckgoalie). A skater,
+ * puck low and slow: within $C4 squared of his stick (a quarter while the puck is not to be
+ * touched) the stick; otherwise within 9 and $41 squared his body (puckbody, the original's X
+ * being a3). */
+void checkpuckcoll_ccx(int x, int y, int a3, uint16_t a0)
+{
+    int a2 = y;
+    uint16_t d0, d1, d2, d3, d4;
+    int16_t hx, hy;
+    if (2 * y == g.puckc || y >= 12 || (g.position[y] & 0x8000) || (g.pfnc[y] | g.nopuck[y])) return;
+    if (g.pflags[a2] & 0x1000) goto l5;
+    if (!g.position[a2]) goto l9;
+    if (!((uint16_t)(g.puckz - 5) & 0x8000) || !((uint16_t)(g.puckvz - 0x100) & 0x8000)) goto l5;
+    GetHot(a2, &hx, &hy);
+    d0 = abs16((uint16_t)((uint16_t)hx + g.Xpos[a2] - g.Xpos[14]));
+    if (d0 >= 0xF) goto l5;
+    d1 = abs16((uint16_t)((uint16_t)hy + g.Ypos[a2] - g.pucky[0]));
+    if (d1 >= 0xF) goto l5;
+    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
+    d1 = 0xC4;
+    if (!(g.nopuck[14] & 0x8000) && g.nopuck[14]) d1 >>= 2;
+    if (d1 < d0) goto l5;
+    puckstick(g.curobj >> 1, a2, a3, d0, a0);
+    return;
+l5:
+    if (!g.position[a2]) goto l7;
+    d0 = abs16((uint16_t)(g.Xpos[a2] - g.Xpos[14]));
+    if (d0 >= 9) return;
+    d1 = abs16((uint16_t)(g.Ypos[a2] - g.pucky[0]));
+    if (d1 >= 9) return;
+    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
+    if (d0 >= 0x41) return;
+    puckbody(a3, a2, a3, d0);
+    return;
+l9:
+    GetFrameHot(a2, &d0, &d1);
+    d2 = abs16(d0);
+    d4 = rom16(SYM_checkpuckcoll_ccx_8 + (uint16_t)(d2 << 1));
+    d3 = rom16(SYM_checkpuckcoll_ccx_8 + (uint16_t)(abs16(d1) << 1));
+    x = g.curobj >> 1;
+    GetHot(a2, &hx, &hy);
+    d0 = abs16((uint16_t)((uint16_t)hx + g.Xpos[a2] - g.Xpos[14]));
+    if (d0 >= d2) goto l7;
+    d1 = abs16((uint16_t)((uint16_t)hy + g.Ypos[a2] - g.pucky[0]));
+    if (d1 >= d2) goto l7;
     {
-        uint16_t e2 = (uint16_t)(d2 - d4);
-        uint16_t e1 = (uint16_t)-e2;
-        uint16_t t4 = e1 & 0x8000 ? (uint16_t)-e1 : e1;
-        uint16_t e0 = (uint16_t)(d3 - d5);
-        uint16_t cd = e0 & 0x8000 ? (uint16_t)-e0 : e0;
-        w16(RAM_OFF_cornerdy, cd);
-        uint16_t len = cd >= t4 ? (uint16_t)((t4 >> 2) + cd + (t4 >> 1 & 1)) : (uint16_t)((cd >> 2) + t4 + (cd >> 1 & 1));   /* (lsr's carry into the adc) */
-        if (len < 0x41) goto boards;
-        uint16_t c = clamp_ff2(DivX8S((uint16_t)((e0 & 0xFF) << 8), len));
-        uint16_t s = clamp_ff2(DivX8S((uint16_t)((e1 & 0xFF) << 8), len));
-        x = a3;
-        wallcollb(a3, c, s, a3);
+        uint16_t t = (uint16_t)(d3 + d4);
+        if ((uint16_t)(t - 5) & 0x8000) t = 5;
+        if (t < (uint16_t)g.puckz) goto l7;
+        t = (uint16_t)(d3 - d4);
+        if (!(t & 0x8000) && t >= (uint16_t)g.puckz) goto l7;
     }
-boards:
-    d4 = sx; d5 = sy;
-    if (r16(RAM_OFF_Wallcos + 2 * x) | r16(RAM_OFF_Wallsin + 2 * x)) return;
-    if (!NEG((uint16_t)(d3 - 1), d5)) { wallcollb(x, 0xFF, 0, a3); return; }
-    if (!NEG((uint16_t)(-d5 - 1), d3)) { wallcollb(x, 0xFF01, 0, a3); return; }
-    if (!NEG((uint16_t)(d2 - 1), d4)) { wallcollb(x, 0, 0xFF01, a3); return; }
-    if (!NEG((uint16_t)(-d4 - 1), d2)) { wallcollb(x, 0, 0xFF, a3); return; }
+    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
+    d1 = Mul8U(d2, d2);
+    if (!(g.nopuck[14] & 0x8000) && g.nopuck[14]) d1 >>= 2;
+    if (d1 >= d0) puckstick(x, a2, a3, d0, a0);
+l7:
+    d0 = (uint16_t)(g.Xpos[a2] - g.Xpos[14]);
+    if ((uint16_t)(d0 - 0xFFF5) & 0x8000 || !((uint16_t)(d0 - 0xB) & 0x8000)) return;
+    d1 = (uint16_t)(g.Ypos[a2] - g.pucky[0]);
+    if ((uint16_t)(d1 - 0xFFF5) & 0x8000 || !((uint16_t)(d1 - 0xB) & 0x8000)) return;
+    puckgoalie(x, a2, a3, d0, d1);
 }
 
 /* Player a2 takes the puck (a new carrier: the puck sound 3, a penalty shot over): the other team's
@@ -577,121 +657,6 @@ void puckglue(int o, uint16_t a2)
     if (a2 == g.passReceiverPlayerNum && !((d4 = g.passpad[t]) & 0x8000)) AssignPadIfFree(a2, d4);
     else PuckCarrierPad(a2);
     g.passReceiverPlayerNum = 0xFFFF;
-}
-
-/* The list of the players team a2 wants on the ice now (PlList: six roster numbers, then the six
- * positions they take): from its current line in priolist's order for the men it has (a penalty
- * shot: the shooter and the goalie; no goalie when he is pulled), each one not available replaced
- * by the first available of his position's substitutes (sublist; $80: anyone, from the last
- * roster player down). */
-void SetPlList(uint16_t a2)
-{
-    uint32_t a4 = PlList, a0, a1;
-    uint16_t d0, d1, d3, d4, d5;
-    for (int k = 0; k < 6; k++) mset8(a4 + k, 0);
-    a0 = SYM_priolist;
-    if (g.penshot) {
-        a0 = SYM_priolist + 7;
-        if (a2 == g.BA_Team) a0++;
-    } else if (r16(RAM_OFF_tmgoalie + a2) & 0x8000) a0++;
-    a1 = GetTeamLines(a2);
-    {
-        uint16_t l = r16(RAM_OFF_tmline + a2);
-        d0 = (uint16_t)(l << 3);
-        a1 = (a1 & 0xFF0000) | (uint16_t)(d0 + (uint16_t)a1 + (l >> 13 & 1));   /* (asl's carry into the adc) */
-    }
-    d4 = r16(RAM_OFF_tmap + a2);
-    while (!((d4 = (uint16_t)(d4 - 1)) & 0x8000)) {
-        d5 = m8((a0 + d4) & 0xFFFFFF);
-        mset8(a4 + d4, m8((a1 + d5) & 0xFFFFFF));
-        if (d5 && g.penshot) mset8(a4 + d4, (uint8_t)(g.BA_Skater_Offset + 1));
-        mset8(a4 + d4 + 6, (uint8_t)d5);
-        if (d5) continue;
-        d3 = (uint16_t)(r16(RAM_OFF_tmgoalie + a2) + 1);
-        if (!d3 && g.penshot) d3++;
-        mset8(a4 + d4, (uint8_t)d3);
-    }
-    for (d4 = 5; !(d4 & 0x8000); d4--) {
-        d3 = m8(a4 + d4);
-        if (!d3) continue;
-        d3 = (uint16_t)(((uint16_t)(int8_t)d3 - 1) << 1);
-        uint16_t st = r16(RAM_OFF_tmpdst + (uint16_t)((a2 ? 0x34 : 0) + d3));
-        if (st != 0xFFFD && st != 0xFFFC && ((st & 0x8000) || !st)) continue;
-        a1 = GetTeamLines(a2);
-        d0 = (uint16_t)(m8(a4 + d4 + 6) << 1);
-        a0 = (SYM_sublist & 0xFF0000) | (uint16_t)(rom16(SYM_sublist + d0) + (uint16_t)SYM_sublist);
-        for (;;) {
-            d0 = m8(a0);
-            a0 = (a0 & 0xFF0000) | (uint16_t)(a0 + 1);
-            if (d0 & 0x80) break;
-            d0 = m8((a1 + d0) & 0xFFFFFF);
-            if (TryAddPlayerToList(d0, d4, a2, a4, &d1)) goto next;
-        }
-        d3 = GetPlayerCount(a2);
-        for (;;) {
-            d0 = d3;
-            d3 = (uint16_t)(d3 - 1);
-            if (d3 & 0x8000) break;
-            if (TryAddPlayerToList(d0, d4, a2, a4, &d1)) break;
-        }
-next:;
-    }
-}
-
-/* Put team a2's wanted players (SetPlList) on the ice: the newpos / newpnum requests of its six
- * objects cleared, then a wanted player already on the ice keeps his object, and each other one
- * takes a free object (the last free one found, one in play preferred). (The original leaves X =
- * its caller's a3.) */
-void setpersonel(uint16_t a2)
-{
-    uint16_t x = r16(RAM_OFF_tmsort + a2), a0 = 0, d5;
-    int d3;
-    for (int k = 0; k < 6; k++, x += 2) {
-        w16(RAM_OFF_newpos + x, 0xFFFF);
-        w16(RAM_OFF_newpnum + x, 0xFFFF);
-    }
-    SetPlList(a2);
-    for (int d4 = 5; d4 >= 0; d4--) {
-        d5 = m8(PlList + d4);
-        if (!d5) continue;
-        d5--;
-        x = (uint16_t)(r16(RAM_OFF_tmsort + a2) - 2);
-        for (d3 = 5; d3 >= 0; d3--) {
-            x += 2;
-            if ((d5 & 0xFF) != (r16(RAM_OFF_pnum + x) & 0xFF)) continue;
-            w16(RAM_OFF_newpos + x, (uint16_t)(int8_t)m8(PlList + d4 + 6));
-            w16(RAM_OFF_newpnum + x, (uint16_t)(int8_t)d5);
-            mset8(PlList + d4, 0);
-            break;
-        }
-    }
-    for (int d4 = 5; d4 >= 0; d4--) {
-        d5 = m8(PlList + d4);
-        if (!d5) continue;
-        d5--;
-        x = (uint16_t)(r16(RAM_OFF_tmsort + a2) - 2);
-        d3 = 5;
-        for (;;) {
-            x += 2;
-            if (r16(RAM_OFF_newpnum + x) & 0x80) {
-                a0 = x;
-                if (!(r16(RAM_OFF_position + x) & 0x8000) || --d3 < 0) break;
-                continue;
-            }
-            if (--d3 < 0) break;
-        }
-        w16(RAM_OFF_newpos + a0, (uint16_t)(int8_t)m8(PlList + d4 + 6));
-        w16(RAM_OFF_newpnum + a0, (uint16_t)(int8_t)d5);
-        mset8(PlList + d4, 0);
-    }
-}
-
-
-/* Raise the crowd's excitement CwdExciteLvl by n (a hit, a fall), unless it would go negative */
-static void excite(uint16_t n)
-{
-    uint16_t v = (uint16_t)(g.CwdExciteLvl + n);
-    if (!(v & 0x8000)) g.CwdExciteLvl = v;
 }
 
 /* Player y (a2) falls or stumbles from a hit by x (a3 the hitter after it; the team check counted
@@ -873,58 +838,11 @@ l27:
     goto l16;
 }
 
-/* (checkint's .ci: goalie a2 against player x (a3): with the clock running and x's impact past 26
- * (past 3 when a3 has the puck), x falls (FallDown by the goalie); a hard hit on the goalie (past
- * 31) may be interference on x (by his aggression), unless he is out of his crease) */
-static uint16_t check_int(int x, int a2, int a3, uint16_t d4)
+/* Two players in contact: what happens each way (check_check of a3 on a2, then of a2 on a3). */
+void checkcheck(int x, int a2, int a3, uint16_t d4)
 {
-    if (g.position[a2] || g.gmclock) return d4;
-    if (g.puckc != 2 * a3 && ((uint16_t)(g.impact[x] - 0x1A) & 0x8000)) return d4;
-    if ((uint16_t)(g.impact[x] - 3) & 0x8000) return d4;
-    d4 = FallDown(a2, a3, a2, d4);
-    if ((uint16_t)(g.impact[a2] - 0x1F) & 0x8000) return d4;
-    if (g.pflags[a3] & 0x4000) return d4;
-    if (randoma8((uint16_t)(0x14 - g.aggress[a3])) >= 2) return d4;
-    if ((g.gmode & gmhl) || (g.goalieflags[a2] & 4)) return d4;
-    AddPenalty(a3, PenInterference);
-    return d4;
-}
-
-/* A goalie and another player collide (x and a2 / a3 each way: check_int): the skater falls, and
- * interference may be called. Returns d4 as FallDown left it. */
-uint16_t checkint(int x, int a2, int a3, uint16_t d4)
-{
-    d4 = check_int(x, a2, a3, d4);
-    return check_int(a2, a3, a2, d4);
-}
-
-
-/* (a foul on player a2 when he is the carrier on a breakaway and no shooter is set: a penalty shot
- * (on x) for him; nonzero then) */
-static int penshot_foul(int x, int a2)
-{
-    if (!PenShotChk((uint16_t)(2 * a2)) || !(g.BA_Sktr_SCnum & 0x8000)) return 0;
-    g.BA_Sktr_SCnum = (uint16_t)(2 * a2);
-    g.pspad[0] = g.playerpad[a2];
-    AddPenalty(x, PenShot);
-    return 1;
-}
-
-/* Player a2, sweep checking, body checks x (a3): unless x is locked or a goalie (or, with
- * penalties off, a human checker loses a roll on checking against x's legs), when x is in front
- * of him a3 falls (FallDown by a2), then a penalty shot or (by aggression) tripping; collflag set.
- * Returns d4 as FallDown left it. */
-uint16_t Bcheck(int x, int a2, int a3, uint16_t d4)
-{
-    if (g.pfalock[x] || !g.position[x]) return d4;
-    if (!g.OptPen && !(g.playerpad[a2] & 0x8000)
-        && randoma8((uint16_t)(0x10 + g.checking[a2] - g.legstr[x])) < 0xC) return d4;
-    uint16_t d0 = vtoa((uint16_t)(g.Xpos[x] - g.Xpos[a2]), (uint16_t)(g.Ypos[x] - g.Ypos[a2]));
-    if (((uint16_t)(d0 - g.facedir[a2] + 1) & 7) >= 3) return d4;
-    d4 = FallDown(a2, a3, a2, d4);
-    if (!penshot_foul(a2, a3) && checkagr(a2) < 5) AddPenalty(a2, PenTripping);
-    g.collflag = 0xFFFF;
-    return d4;
+    d4 = check_check(x, a2, a3, d4);
+    check_check(a2, a3, a2, d4);
 }
 
 /* Player a2 holds or hooks x (a3), who is in front of him: a2 turns to him, both take half their
@@ -951,206 +869,66 @@ void holdcheck(int x, int a2, int a3)
     g.collflag = 0xFFFF;
 }
 
-/* (checkcheck's .cc: x checking a2: a2 holding or hooking is holdcheck, sweep checking Bcheck;
- * otherwise x bursting into a2 plays a check by the direction (from the table .4, a shoulder or
- * hip check, or at random the next one), and a skater a2 hit hard enough (d4, the impact, past
- * $20) goes down on a roll against x's checking, with charging, roughing or a penalty shot by x's
- * aggression; returns d4 as left) */
-static uint16_t check_check(int x, int a2, int a3, uint16_t d4)
+/* A goalie and another player collide (x and a2 / a3 each way: check_int): the skater falls, and
+ * interference may be called. Returns d4 as FallDown left it. */
+uint16_t checkint(int x, int a2, int a3, uint16_t d4)
 {
-    uint16_t s = g.SPA[a2], y, d0;
-    if (s == (uint16_t)SYM_SPAHold || s == (uint16_t)SYM_SPAhook) { holdcheck(x, a2, a3); return d4; }
-    if (s == (uint16_t)SYM_SPAsweepchk) return Bcheck(x, a2, a3, d4);
-    if (g.SPA[x] != (uint16_t)SYM_SPAburst) return d4;
-    if (g.gmclock) { g.impact[x] = 0x100; g.impact[a2] = 0x100; }
-    d0 = vtoa((uint16_t)(g.Xpos[a2] - g.Xpos[x]), (uint16_t)(g.Ypos[a2] - g.Ypos[x]));
-    y = (uint16_t)(((uint16_t)(d0 - g.facedir[x]) & 7) << 1);
-    g.pf2aip[x] = (uint16_t)SYM_checkcheck_4;
-    if (!y) {
-        uint16_t px = (uint16_t)g.Xpos[x], py = (uint16_t)g.Ypos[x];
-        if (!NEG(px, 0x50) || NEG(px, 0xA057) || !NEG(py, 0xF8) || !NEG(py, 0xFF08) ? (g.seed[0] & 0x30) : (g.seed[0] & 0xF0))
-            y += 2;
-    }
-    SetSPAFromA(x, m16(SYM_checkcheck_4 + y));
-    if (!g.position[a2] || ((uint16_t)(d4 - 0x20) & 0x8000)) return d4;
-    d0 = (uint16_t)(((uint16_t)(0x78 - g.weight[x] + g.weight[a2]) >> 1) - g.impact[a2]);
-    if (d0 && !(d0 & 0x8000)) {
-        d0 = randomd0(d0);
-        if (!((uint16_t)(d0 - g.checking[x]) & 0x8000)) {
-            if (checkagr(x) < 1 && !(g.gmode & gmhl)) AddPenalty(x, (uint16_t)((r16(RAM_OFF_seed + 1) & 2) + PenCharging));
-            return d4;
-        }
-    }
-    if (checkagr(x) < 1 && !(g.gmode & gmhl)) AddPenalty(x, (uint16_t)((r16(RAM_OFF_seed + 1) & 2) + PenRoughing));
-    penshot_foul(x, a2);
-    return FallDown(x, a2, a3, d4);
+    d4 = check_int(x, a2, a3, d4);
+    return check_int(a2, a3, a2, d4);
 }
 
-/* Two players in contact: what happens each way (check_check of a3 on a2, then of a2 on a3). */
-void checkcheck(int x, int a2, int a3, uint16_t d4)
+/* Player a2, sweep checking, body checks x (a3): unless x is locked or a goalie (or, with
+ * penalties off, a human checker loses a roll on checking against x's legs), when x is in front
+ * of him a3 falls (FallDown by a2), then a penalty shot or (by aggression) tripping; collflag set.
+ * Returns d4 as FallDown left it. */
+uint16_t Bcheck(int x, int a2, int a3, uint16_t d4)
 {
-    d4 = check_check(x, a2, a3, d4);
-    check_check(a2, a3, a2, d4);
-}
-
-static int in_hold(uint16_t s) { return s >= (uint16_t)SYM_SPAHold2 && s < 0xF46B; }
-static int in_sweep(uint16_t s) { return s >= (uint16_t)SYM_SPAsweepchk && s < 0xF343; }
-
-/* (checkplcoll's .t3: players x (a3) and y touch (within $10) while closing in: any hold between
- * them or their partners is broken; opponents take the impact (the closing speed / 16, at least 5,
- * half again in a sweep check; the collision sound when hard with the carrier), then checkint and
- * checkcheck; unless that set collflag, they bounce apart by their weights (+$8C), collflag set) */
-static void pl_pair(int x, int y, int a3)
-{
-    uint16_t d2 = (uint16_t)(g.Xpos[y] - g.Xpos[x]), d3 = (uint16_t)(g.Ypos[y] - g.Ypos[x]);
-    if (!NEG(ApproxLength(d3, d2), 0x10)) return;
-    uint16_t d0 = (uint16_t)(g.Xvel[x] - g.Xvel[y]), d1 = (uint16_t)(g.Yvel[x] - g.Yvel[y]);
-    if (!(d0 | d1)) return;
-    uint16_t v0 = d0, v1 = d1, d4, d5;
-    uint32_t p = Mul16x8S(d1, d3);
-    p = (uint32_t)(Mul16x8S(d0, d2) + p);
-    x = a3;
-    if (p & 0x80000000u) return;
-    if (in_hold(g.SPA[x])) {
-        g.pfalock[x] = 0; g.pf2aip[x] = 0;
-        uint16_t z = (uint16_t)g.impactp[x];
-        if (in_hold(r16(RAM_OFF_SPA + z))) { w16(RAM_OFF_pfalock + z, 0); w16(RAM_OFF_pf2aip + z, 0); }
-    }
-    if (in_hold(g.SPA[y])) {
-        g.pfalock[y] = 0; g.pf2aip[y] = 0;
-        uint16_t z = (uint16_t)g.impactp[y];
-        if (in_hold(r16(RAM_OFF_SPA + z))) { w16(RAM_OFF_pfalock + z, 0); w16(RAM_OFF_pf2aip + z, 0); }
-    }
-    d1 = (uint16_t)(p >> 8);
-    if (g.pfteam[x] != g.pfteam[y]) {
-        d4 = d1 >> 4;
-        if (d4 < 5) d4 = 5;
-        if (in_sweep(g.SPA[x]) || in_sweep(g.SPA[y])) d4 = (uint16_t)((d4 >> 1) + d4 + (d4 & 1));   /* (lsr's carry into the adc) */
-        g.impact[x] = (int16_t)(d4 + g.impact[x]);
-        g.impact[y] = (int16_t)(d4 + g.impact[y]);
-        g.impactp[y] = (int16_t)(2 * x);
-        g.impactp[x] = (int16_t)(2 * y);
-        if (d4 >= 0x14 && (g.puckc == 2 * x || g.puckc == 2 * y)) CollisionSfx(x, y);
-        d4 = checkint(x, y, a3, d4);
-        checkcheck(a3, y, a3, d4);
-    }
-    d4 = d1;
-    d0 = v0; d1 = v1;
-    if (g.collflag & 0x8000) return;
-    p = Mul16x8S(d1, d2);
-    p = (uint32_t)(Mul16x8S(d0, d3) - p);
-    d5 = (uint16_t)(p >> 8);
-    x = a3;
-    d0 = (uint16_t)(g.weight[x] + 0x8C);
-    d1 = (uint16_t)(g.weight[y] + 0x8C + d0);
-    d0 = d1 = Div32S(Mul16x8XS(d4, d0), d1);
-    uint16_t t = (uint16_t)Mul16x8S(d5, d3);
-    g.Xvel[x] = (int16_t)((uint16_t)Mul16x8S(d0, d2) + t + g.Xvel[y]);
-    t = (uint16_t)Mul16x8S(d5, d2);
-    g.Yvel[x] = (int16_t)((uint16_t)Mul16x8S(d0, d3) - t + g.Yvel[y]);
-    g.Xvel[y] = (int16_t)((uint16_t)Mul16x8S(d1, d2) + g.Xvel[y]);
-    g.Yvel[y] = (int16_t)((uint16_t)Mul16x8S(d1, d3) + g.Yvel[y]);
+    if (g.pfalock[x] || !g.position[x]) return d4;
+    if (!g.OptPen && !(g.playerpad[a2] & 0x8000)
+        && randoma8((uint16_t)(0x10 + g.checking[a2] - g.legstr[x])) < 0xC) return d4;
+    uint16_t d0 = vtoa((uint16_t)(g.Xpos[x] - g.Xpos[a2]), (uint16_t)(g.Ypos[x] - g.Ypos[a2]));
+    if (((uint16_t)(d0 - g.facedir[a2] + 1) & 7) >= 3) return d4;
+    d4 = FallDown(a2, a3, a2, d4);
+    if (!penshot_foul(a2, a3) && checkagr(a2) < 5) AddPenalty(a2, PenTripping);
     g.collflag = 0xFFFF;
+    return d4;
 }
 
-/* (checkplcoll: object z of OOlist can touch x, at new x d2: in play, within 15 in x, no flag 15 /
- * pfnc, a player) */
-static int pl_near(uint16_t z, uint16_t d2)
+/* Player o's penalty roll: random below (20 - aggress) * 16, doubled on a pad, halved within 40 of
+ * the puck. */
+uint16_t checkagr(int o)
 {
-    if (r16(RAM_OFF_position + z) & 0x8000) return 0;
-    uint16_t dx = (uint16_t)(r16(RAM_OFF_Xpos + z) - d2);
-    if (NEG(dx, 0xFFF1) || !NEG(dx, 0xF)) return 0;
-    if ((r16(RAM_OFF_pflags + z) & 0x8000) | r16(RAM_OFF_pfnc + z)) return 0;
-    return z < 0x18;
+    uint16_t d0 = (uint16_t)((uint16_t)(0x14 - g.aggress[o]) << 4);
+    if (!(g.playerpad[o] & 0x8000)) d0 = (uint16_t)(d0 << 1);
+    uint16_t v = (uint16_t)(g.Xpos[o] - g.Xpos[14]);
+    if (!NEG(v, 0xFFD7) && NEG(v, 0x29)) {
+        v = (uint16_t)(g.Ypos[o] - g.pucky[0]);
+        if (!NEG(v, 0xFFD7) && NEG(v, 0x29)) d0 >>= 1;
+    }
+    return randomd0(d0);
 }
 
-/* Player x (a3) at his new place d2 / d3 against the players near him in y (OOlist, up then down,
- * within $0E): pl_pair. */
-void checkplcoll(int x, uint16_t d2, uint16_t d3, int a3)
+/* Player a2 is injured: pf2inj, the crowd louder (held 60 frames) and groaning (stream 4), the screen
+ * locked on him, his roster slot out of the game (1 in 8 rosterNone, TempPlOffset bit $4000), who it
+ * is in TempPlOffset. */
+void setInjuryType(uint16_t a2)
 {
-    if ((g.pflags[x] & 0x8000) || x >= 12) return;
-    uint16_t d1 = g.OOlistpos[x], z;
-    for (; d1 != 0xF; d1++) {
-        z = g.OOlist[d1 + 1];
-        if (!((uint16_t)(r16(RAM_OFF_Ylist + z) - d3 - 0xE) & 0x8000)) break;
-        if (pl_near(z, d2)) pl_pair(x, z >> 1, a3);
-    }
-    if (!g.OOlistpos[x]) return;
-    for (d1 = g.OOlistpos[x]; d1; d1--) {
-        z = g.OOlist[d1 - 1];
-        if (!((uint16_t)(d3 - r16(RAM_OFF_Ylist + z) - 0xE) & 0x8000)) return;
-        if (pl_near(z, d2)) pl_pair(x, z >> 1, a3);
-    }
+    w16(RAM_OFF_pflags + a2, r16(RAM_OFF_pflags + a2) | 0x1000);
+    g.Crowdlevel = (uint16_t)(g.Crowdlevel + 0x12C);
+    g.crowdhold = 0x3C;
+    StreamSfx(4);
+    g.xc1 = (int16_t)r16(RAM_OFF_Xpos + a2);
+    g.yc1 = (int16_t)r16(RAM_OFF_Ypos + a2);
+    g.sflags |= 0x40;
+    int team = r16(RAM_OFF_pfteam + a2) != 0;
+    g.TempPlOffset = (uint16_t)((r16(RAM_OFF_pnum + a2) & 0xFF) | (team ? 0x8000 : 0));
+    uint16_t v = (uint16_t)(int8_t)(uint8_t)g.TempPlOffset;
+    uint16_t idx = (uint16_t)((team ? 0x34 : 0) + (uint16_t)(v << 1) + (v >> 15));   /* (asl's carry into the adc) */
+    w16(RAM_OFF_tmpdst + idx, TMPDOUT);
+    if (randoma8(7)) return;
+    w16(RAM_OFF_tmpdst + idx, rosterNone);
+    g.TempPlOffset |= 0x4000;
 }
-
-/* Object x moves to d2 / d3 (swapped on the horizontal screen): the walls (at its hot spot, and a
- * player's stick end too when the body hits none) and the players (checkplcoll), unless it skips
- * collisions; after a player collision it goes back to its old place (but into the boards);
- * otherwise it moves along OOlist (kept in y order) and its Ylist y is the new one. */
-void checkcoll(int x, uint16_t d2, uint16_t d3, int a3)
-{
-    g.collflag = 0;
-    if (g.sfhormode) { uint16_t t = d2; d2 = d3; d3 = t; }
-    if (!g.pfnc[x]) {
-        g.wcradiusx = (uint16_t)g.radiusx[x];
-        g.wcradiusy = (uint16_t)g.radiusy[x];
-        checkwallcoll(x, (uint16_t)g.Xpos[x], (uint16_t)g.Ypos[x], a3);
-        if (!(g.Wallcos[x] | g.Wallsin[x]) && x < 12) {
-            int16_t hx, hy;
-            GetHot(x, &hx, &hy);
-            g.wcradiusx = g.wcradiusy = 1;
-            checkwallcoll(x, (uint16_t)(g.Xpos[x] + hx), (uint16_t)(g.Ypos[x] + hy), a3);
-        }
-        if (!(g.position[x] & 0x8000)) checkplcoll(x, d2, d3, a3);
-    }
-    if (g.collflag) {
-        if (g.SPA[x] >= (uint16_t)SYM_SPAboardfront) return;
-        g.Xpos[x] = g.OldXpos[x];
-        g.Ypos[x] = g.OldYpos[x];
-        return;
-    }
-    uint16_t d1 = g.OOlistpos[x], d4;
-    for (; d1 != 0xF; d1++) {
-        d4 = g.OOlist[d1 + 1];
-        uint16_t t = (uint16_t)(d3 - r16(RAM_OFF_Ylist + d4));
-        if (!t || (t & 0x8000)) break;
-        g.OOlistpos[x]++;
-        w16(RAM_OFF_OOlistpos + d4, (uint16_t)(r16(RAM_OFF_OOlistpos + d4) - 1));
-        g.OOlist[d1] = (uint8_t)d4;
-        g.OOlist[d1 + 1] = (uint8_t)(2 * x);
-    }
-    if (g.OOlistpos[x]) {
-        for (d1 = g.OOlistpos[x]; d1; d1--) {
-            d4 = g.OOlist[d1 - 1];
-            if (!((uint16_t)(d3 - r16(RAM_OFF_Ylist + d4)) & 0x8000)) break;
-            g.OOlistpos[x]--;
-            w16(RAM_OFF_OOlistpos + d4, (uint16_t)(r16(RAM_OFF_OOlistpos + d4) + 1));
-            g.OOlist[d1] = (uint8_t)d4;
-            g.OOlist[d1 - 1] = (uint8_t)(2 * x);
-        }
-    }
-    g.Ylist[x] = d3;
-}
-
-
-/* The puck (x, low: under $10) against the objects near it in y (OOlist, up then down, within
- * $28): checkpuckcoll_ccx for each (a0 as the caller left it, for puckstick). */
-void checkpuckcoll(int x, int a3, uint16_t a0)
-{
-    if (!((uint16_t)(g.puckz - 0x10) & 0x8000)) return;
-    uint16_t d1, z;
-    for (d1 = g.OOlistpos[14]; d1 != 0xF; d1++) {
-        z = g.OOlist[d1 + 1];
-        if (!((uint16_t)(r16(RAM_OFF_Ylist + z) - g.pucky[0] - 0x28) & 0x8000)) break;
-        checkpuckcoll_ccx(x, z >> 1, a3, a0);
-    }
-    for (d1 = g.OOlistpos[14]; d1; d1--) {
-        z = g.OOlist[d1 - 1];
-        if (!((uint16_t)(g.pucky[0] - r16(RAM_OFF_Ylist + z) - 0x28) & 0x8000)) return;
-        checkpuckcoll_ccx(x, z >> 1, a3, a0);
-    }
-}
-
 
 /* The puck x hits player a2's body (d0 the squared distance from ccx): unless it is low and off
  * by $10's remainder, he touches it with the puck sound 8 (the original compares a2touchpuck's A,
@@ -1188,52 +966,6 @@ int puckbody(int x, int a2, int a3, uint16_t d0)
     g.pf2aip[a2] = 1;
     SetSPAFromA(a2, (uint16_t)SYM_SPAcatch);
     return a3;
-}
-
-/* The puck x hits player a2's stick (d0 the squared distance, a0 the carrier as the original has
- * it: what a2touchpuck left there, the carrier's team offset; read as the original leaves it, as an earlier
- * puckstick of the same checkpuckcoll may have changed it). With the puck carried by the other
- * team (close, under $25): a skater may poke it loose on a roll by both players' stick handling
- * (energy-scaled), both lose the puck for a while; with the puck loose he takes it (puckglue)
- * unless it is too fast for his stick handling (with a pass to him or for a goalie, slower), when
- * it deflects off his stick. */
-void puckstick(int x, int a2, int a3, uint16_t d0, uint16_t a0)
-{
-    if (!g.position[a2] && (g.gmode & gmhl)) return;
-    g.pflags[a2] &= 0xFFFE;
-    uint16_t y = (uint16_t)g.puckc, c;
-    if (!(y & 0x8000)) {
-        if (r16(RAM_OFF_pfteam + y) == g.pfteam[a2] || d0 >= 0x25) return;
-        if (g.position[a2]) {
-            if (!r16(RAM_OFF_position + a0)) return;
-            c = makepde(r16(RAM_OFF_stickhand + a0), a0 >> 1);
-            if (randomd0A((uint16_t)(c - makepde(g.stickhand[a2], a2) + 0x24)) >= 3) return;
-        }
-        c = makepde(r16(RAM_OFF_stickhand + a0), a0 >> 1);
-        w16(RAM_OFF_nopuck + a0, (uint16_t)(c + 0x14 + cf));   /* (adc: makepde's carry) */
-        d0 = makepde(g.stickhand[a2], a2);
-        g.nopuck[a2] = (uint16_t)(d0 + 0x14 + cf);
-        g.lastplayer[0] = a0 >> 1;
-        g.sflags &= 0xFFF3;
-        goto l3;
-    }
-    {
-        uint16_t d2 = d0;
-        uint32_t s = Mul16S((uint16_t)g.puckvx[0], (uint16_t)g.puckvx[0]);
-        s = (uint32_t)(Mul16S((uint16_t)g.puckvy[0], (uint16_t)g.puckvy[0]) + s);
-        d0 = (uint16_t)s;
-        uint16_t d1 = 0;
-        if (!(g.sflags & 0x1000)) d1 = (uint16_t)Mul16x8U(0x2BC, g.stickhand[a2]);
-        uint32_t a = (uint32_t)d1 + 0x2710;
-        if (!g.position[x] || 2 * x == g.passReceiverPlayerNum) a = (a & 0xFFFF) + 0xBB8 + (a >> 16);   /* (adc: the carry of the add) */
-        if (Mul16U((uint16_t)a, (uint16_t)a) >= s) { puckglue(x, (uint16_t)(2 * a2)); return; }
-        if (g.position[x] && d2 >= 0x25) return;
-        g.nopuck[a2] = 8;
-    }
-l3:
-    PuckSfx(3);
-    a2touchpuck((uint16_t)(2 * a2), a3, x, &d0);
-    deflect(d0);
 }
 
 /* The puck x hits goalie a2 (d0 / d1 its offset from ccx): the save rating of the side it comes
@@ -1303,45 +1035,6 @@ void puckgoalie(int x, int a2, int a3, uint16_t d0, uint16_t d1)
     w8(RAM_OFF_Yvel + 2 * x + 1, (uint8_t)d1);
     puckflip(d0);
 }
-
-/* Set up a penalty shot: the puck at centre ice and still; each skater of the shooting team
- * (BA_Team) takes assignment $10 eight times over (puckc him meanwhile); with manual goalies the
- * other team's pad takes its goalie; the shooting team's touches cleared, the crowd excited; the
- * shooter (BA_Sktr_SCnum) has the puck (and the pad pspad); PenShotActive, penshotlive, the time
- * limit pstimer 1000; the penalty buffer cleared. */
-void SetupPenaltyShot(void)
-{
-    g.Xpos[14] = 0;
-    g.pucky[0] = 0;
-    g.puckz = 0;
-    g.puckvx[0] = 0;
-    g.puckvy[0] = 0;
-    g.puckvz = 0;
-    uint16_t x = g.BA_Team ? 0xC : 0, d4 = g.BA_Team ? 0 : 2;
-    for (int k = 0; k < 6; k++, x += 2) {
-        g.puckc = (int16_t)x;
-        for (int n = 0; n < 8; n++) assinsert(x >> 1, 0x10);
-    }
-    if (r16(RAM_OFF_teampads + d4) && r16(RAM_OFF_goaliemode1 + d4)) {
-        for (uint16_t y = 0; y < 0xA; y += 2) {
-            uint16_t s = r16(RAM_OFF_padside + y);
-            if (!(s & 0x8000) && s == d4) { PadTakeGoalie(y); break; }
-        }
-    }
-    uint16_t y = g.BA_Team;
-    w16(RAM_OFF_tmtouch1 + y, 0xFFFF);
-    w16(RAM_OFF_tmtouch2 + y, 0xFFFF);
-    w16(RAM_OFF_tmtouch3 + y, 0xFFFF);
-    excite(0x14);
-    g.puckc = (int16_t)g.BA_Sktr_SCnum;
-    if (!(g.pspad[0] & 0x8000)) w16(RAM_OFF_playerpad + g.BA_Sktr_SCnum, g.pspad[0]);
-    g.PenShotActive = 1;
-    g.penshotlive = 1;
-    g.pstimer = 0x3E8;
-    ClearPenaltyBuffer();
-}
-
-static void inc16(uint32_t off) { w16(off, (uint16_t)(r16(off) + 1)); }
 
 /* The puck is in the net (o, the puck): the score and team stats, the siren and the crowd, the score
  * summary and the players' goals and assists, the scoreboard, the scorers celebrate, the puck pops up at
@@ -1454,68 +1147,367 @@ void Goal(int o)
     AddPenalty2(r16(RAM_OFF_tmsort + a2) >> 1, PenGoal);
 }
 
-/* The puck x against player y (a2): unless he carries it, is past the skaters, off the ice or not
- * colliding. A goalie: within his stick's reach (his stick hot spot, the height by the
- * checkpuckcoll_ccx_8 table) the stick (puckstick); then his body within 11 (puckgoalie). A skater,
- * puck low and slow: within $C4 squared of his stick (a quarter while the puck is not to be
- * touched) the stick; otherwise within 9 and $41 squared his body (puckbody, the original's X
- * being a3). */
-void checkpuckcoll_ccx(int x, int y, int a3, uint16_t a0)
+/* The puck x hits player a2's stick (d0 the squared distance, a0 the carrier as the original has
+ * it: what a2touchpuck left there, the carrier's team offset; read as the original leaves it, as an earlier
+ * puckstick of the same checkpuckcoll may have changed it). With the puck carried by the other
+ * team (close, under $25): a skater may poke it loose on a roll by both players' stick handling
+ * (energy-scaled), both lose the puck for a while; with the puck loose he takes it (puckglue)
+ * unless it is too fast for his stick handling (with a pass to him or for a goalie, slower), when
+ * it deflects off his stick. */
+void puckstick(int x, int a2, int a3, uint16_t d0, uint16_t a0)
 {
-    int a2 = y;
-    uint16_t d0, d1, d2, d3, d4;
-    int16_t hx, hy;
-    if (2 * y == g.puckc || y >= 12 || (g.position[y] & 0x8000) || (g.pfnc[y] | g.nopuck[y])) return;
-    if (g.pflags[a2] & 0x1000) goto l5;
-    if (!g.position[a2]) goto l9;
-    if (!((uint16_t)(g.puckz - 5) & 0x8000) || !((uint16_t)(g.puckvz - 0x100) & 0x8000)) goto l5;
-    GetHot(a2, &hx, &hy);
-    d0 = abs16((uint16_t)((uint16_t)hx + g.Xpos[a2] - g.Xpos[14]));
-    if (d0 >= 0xF) goto l5;
-    d1 = abs16((uint16_t)((uint16_t)hy + g.Ypos[a2] - g.pucky[0]));
-    if (d1 >= 0xF) goto l5;
-    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
-    d1 = 0xC4;
-    if (!(g.nopuck[14] & 0x8000) && g.nopuck[14]) d1 >>= 2;
-    if (d1 < d0) goto l5;
-    puckstick(g.curobj >> 1, a2, a3, d0, a0);
-    return;
-l5:
-    if (!g.position[a2]) goto l7;
-    d0 = abs16((uint16_t)(g.Xpos[a2] - g.Xpos[14]));
-    if (d0 >= 9) return;
-    d1 = abs16((uint16_t)(g.Ypos[a2] - g.pucky[0]));
-    if (d1 >= 9) return;
-    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
-    if (d0 >= 0x41) return;
-    puckbody(a3, a2, a3, d0);
-    return;
-l9:
-    GetFrameHot(a2, &d0, &d1);
-    d2 = abs16(d0);
-    d4 = rom16(SYM_checkpuckcoll_ccx_8 + (uint16_t)(d2 << 1));
-    d3 = rom16(SYM_checkpuckcoll_ccx_8 + (uint16_t)(abs16(d1) << 1));
-    x = g.curobj >> 1;
-    GetHot(a2, &hx, &hy);
-    d0 = abs16((uint16_t)((uint16_t)hx + g.Xpos[a2] - g.Xpos[14]));
-    if (d0 >= d2) goto l7;
-    d1 = abs16((uint16_t)((uint16_t)hy + g.Ypos[a2] - g.pucky[0]));
-    if (d1 >= d2) goto l7;
-    {
-        uint16_t t = (uint16_t)(d3 + d4);
-        if ((uint16_t)(t - 5) & 0x8000) t = 5;
-        if (t < (uint16_t)g.puckz) goto l7;
-        t = (uint16_t)(d3 - d4);
-        if (!(t & 0x8000) && t >= (uint16_t)g.puckz) goto l7;
+    if (!g.position[a2] && (g.gmode & gmhl)) return;
+    g.pflags[a2] &= 0xFFFE;
+    uint16_t y = (uint16_t)g.puckc, c;
+    if (!(y & 0x8000)) {
+        if (r16(RAM_OFF_pfteam + y) == g.pfteam[a2] || d0 >= 0x25) return;
+        if (g.position[a2]) {
+            if (!r16(RAM_OFF_position + a0)) return;
+            c = makepde(r16(RAM_OFF_stickhand + a0), a0 >> 1);
+            if (randomd0A((uint16_t)(c - makepde(g.stickhand[a2], a2) + 0x24)) >= 3) return;
+        }
+        c = makepde(r16(RAM_OFF_stickhand + a0), a0 >> 1);
+        w16(RAM_OFF_nopuck + a0, (uint16_t)(c + 0x14 + cf));   /* (adc: makepde's carry) */
+        d0 = makepde(g.stickhand[a2], a2);
+        g.nopuck[a2] = (uint16_t)(d0 + 0x14 + cf);
+        g.lastplayer[0] = a0 >> 1;
+        g.sflags &= 0xFFF3;
+        goto l3;
     }
-    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
-    d1 = Mul8U(d2, d2);
-    if (!(g.nopuck[14] & 0x8000) && g.nopuck[14]) d1 >>= 2;
-    if (d1 >= d0) puckstick(x, a2, a3, d0, a0);
-l7:
-    d0 = (uint16_t)(g.Xpos[a2] - g.Xpos[14]);
-    if ((uint16_t)(d0 - 0xFFF5) & 0x8000 || !((uint16_t)(d0 - 0xB) & 0x8000)) return;
-    d1 = (uint16_t)(g.Ypos[a2] - g.pucky[0]);
-    if ((uint16_t)(d1 - 0xFFF5) & 0x8000 || !((uint16_t)(d1 - 0xB) & 0x8000)) return;
-    puckgoalie(x, a2, a3, d0, d1);
+    {
+        uint16_t d2 = d0;
+        uint32_t s = Mul16S((uint16_t)g.puckvx[0], (uint16_t)g.puckvx[0]);
+        s = (uint32_t)(Mul16S((uint16_t)g.puckvy[0], (uint16_t)g.puckvy[0]) + s);
+        d0 = (uint16_t)s;
+        uint16_t d1 = 0;
+        if (!(g.sflags & 0x1000)) d1 = (uint16_t)Mul16x8U(0x2BC, g.stickhand[a2]);
+        uint32_t a = (uint32_t)d1 + 0x2710;
+        if (!g.position[x] || 2 * x == g.passReceiverPlayerNum) a = (a & 0xFFFF) + 0xBB8 + (a >> 16);   /* (adc: the carry of the add) */
+        if (Mul16U((uint16_t)a, (uint16_t)a) >= s) { puckglue(x, (uint16_t)(2 * a2)); return; }
+        if (g.position[x] && d2 >= 0x25) return;
+        g.nopuck[a2] = 8;
+    }
+l3:
+    PuckSfx(3);
+    a2touchpuck((uint16_t)(2 * a2), a3, x, &d0);
+    deflect(d0);
+}
+
+/* The puck is deflected: loose, a random velocity (x, y within +-$1000, height up to $FFF), spun. */
+void deflect(uint16_t d0)
+{
+    g.puckc = -1;
+    g.puckvy[0] = (int16_t)((RandomWord() & 0x1FFF) - 0x1000);
+    g.puckvx[0] = (int16_t)((RandomWord() & 0x1FFF) - 0x1000);
+    g.puckvz = (int16_t)(RandomWord() & 0xFFF);
+    puckflip(d0);
+}
+
+/* The period (gsp, in bits 14-15) and the time into it, for the goal and penalty logs. */
+uint16_t GetPeriodTimeRemaining(void)
+{
+    return (uint16_t)((uint16_t)((g.gsp & 0xFF) << 14 | g.PerTimeTotal) - g.gameclock[0]);
+}
+
+/* Set up a penalty shot: the puck at centre ice and still; each skater of the shooting team
+ * (BA_Team) takes assignment $10 eight times over (puckc him meanwhile); with manual goalies the
+ * other team's pad takes its goalie; the shooting team's touches cleared, the crowd excited; the
+ * shooter (BA_Sktr_SCnum) has the puck (and the pad pspad); PenShotActive, penshotlive, the time
+ * limit pstimer 1000; the penalty buffer cleared. */
+void SetupPenaltyShot(void)
+{
+    g.Xpos[14] = 0;
+    g.pucky[0] = 0;
+    g.puckz = 0;
+    g.puckvx[0] = 0;
+    g.puckvy[0] = 0;
+    g.puckvz = 0;
+    uint16_t x = g.BA_Team ? 0xC : 0, d4 = g.BA_Team ? 0 : 2;
+    for (int k = 0; k < 6; k++, x += 2) {
+        g.puckc = (int16_t)x;
+        for (int n = 0; n < 8; n++) assinsert(x >> 1, 0x10);
+    }
+    if (r16(RAM_OFF_teampads + d4) && r16(RAM_OFF_goaliemode1 + d4)) {
+        for (uint16_t y = 0; y < 0xA; y += 2) {
+            uint16_t s = r16(RAM_OFF_padside + y);
+            if (!(s & 0x8000) && s == d4) { PadTakeGoalie(y); break; }
+        }
+    }
+    uint16_t y = g.BA_Team;
+    w16(RAM_OFF_tmtouch1 + y, 0xFFFF);
+    w16(RAM_OFF_tmtouch2 + y, 0xFFFF);
+    w16(RAM_OFF_tmtouch3 + y, 0xFFFF);
+    excite(0x14);
+    g.puckc = (int16_t)g.BA_Sktr_SCnum;
+    if (!(g.pspad[0] & 0x8000)) w16(RAM_OFF_playerpad + g.BA_Sktr_SCnum, g.pspad[0]);
+    g.PenShotActive = 1;
+    g.penshotlive = 1;
+    g.pstimer = 0x3E8;
+    ClearPenaltyBuffer();
+}
+
+/* Empty the penalty boxes and put every player on his own bench. */
+void ResetBench(void)
+{
+    g.PBnum = 0;
+    rb(0, 0x10);
+    rb(2, 1);
+}
+
+/* At a face off: team a2's six players take their new positions (newpos, a byte) straight away,
+ * with their assignments (and a centre the face off one, $12), and their new roster players
+ * (newpnum) on the ice. */
+void forcepldata(uint16_t a2)
+{
+    uint16_t a3 = r16(RAM_OFF_tmsort + a2);
+    for (int d4 = 5; d4 >= 0; d4--, a3 += 2) {
+        int o = a3 >> 1;
+        uint16_t p = (uint16_t)(int8_t)(uint8_t)g.newpos[o];
+        g.position[o] = (int16_t)p;
+        if (!(p & 0x8000)) {
+            Setplass(o);
+            if (g.position[o] == 4) assinsert(o, 0x12);
+            uint16_t d3 = (uint16_t)(((uint16_t)g.newpnum[o] & 0xFF) << 1);
+            w16(RAM_OFF_tmpdst + (uint16_t)((a2 ? 0x34 : 0) + d3), TMPDICE);
+            setplayer(o, d3 >> 1);
+        }
+        g.newpnum[o] = -1;
+        g.newpos[o] = -1;
+    }
+}
+
+/* Player o's first assignment, from his position (none off the ice). */
+void Setplass(int o)
+{
+    uint16_t p = (uint16_t)g.position[o];
+    if (p & 0x8000) return;
+    assreplace(o, m8((SYM_Setplass_1 + p) & 0xFFFFFF));
+}
+
+/* Bring roster player d3 onto the ice as object o: off the injured list, out of the box (assignment
+ * $0B) or off the bench ($0A), on the ice; his 12 ratings from his roster record with the power
+ * play, penalty kill, home / visitor and late third period bonuses (none for a goalie) and his hot /
+ * cold bytes. */
+void setplayer(int o, uint16_t d3)
+{
+    g.pflags[o] &= (uint16_t)~pf2inj;
+    uint16_t a0 = g.pfteam[o] ? 2 : 0;
+    g.pnum[o] = d3 & 0xFF;
+    d3 = (uint16_t)((d3 & 0xFF) << 1);
+    uint16_t y = (uint16_t)((a0 ? 0x34 : 0) + d3);
+    uint16_t d1 = r16(RAM_OFF_tmpdst + y);
+    uint16_t r3 = (uint16_t)(y * 6);
+    if (!(d1 & 0x8000) || d1 == TMPDBENCH) {
+        assinsert(o, d1 & 0x8000 ? 0xA : 0xB);
+        g.pfalock[o] = 0;
+        g.SPA[o] = 0;
+    }
+    w16(RAM_OFF_tmpdst + (uint16_t)((a0 ? 0x34 : 0) + d3), TMPDICE);
+    d3 >>= 1;
+    uint32_t bank = SYM_TeamList >> 16;
+    uint16_t team = r16(RAM_OFF_tmdata + a0);
+    uint16_t b = (uint16_t)(m16((bank << 16 | team) + 8) + team);   /* (the bonus bytes) */
+    g.PPBonus = 0; g.PKBonus = 0; g.ThirdPBonus = 0; g.HmAwBonus = 0;
+    if (g.position[o]) {
+        if (g.sflags & 0x2000) {
+            uint16_t w = m16((bank << 16 | b) + 1);
+            if (!chkpk2(o)) g.PPBonus = w & 0xF;
+            else g.PKBonus = (int16_t)-(w >> 4 & 0xF);
+        }
+        uint16_t w = m16((bank << 16 | b) + 2);
+        g.HmAwBonus = g.pfteam[o] ? (uint16_t)-(w & 0xF) : (w >> 4 & 0xF);
+        uint16_t p = (uint16_t)(g.gsp - 2);
+        int bonus = 0;
+        if (!(p & 0x8000)) {
+            int score = 1;
+            if (!p) {
+                uint16_t v = (uint16_t)((GetPeriodTime() >> 1) - g.gameclock[0]);
+                score = !v || (v & 0x8000);
+            }
+            if (score) {
+                uint16_t t = (uint16_t)(g.tmscore[0] - g.tmscore[1]);
+                if (t && g.pfteam[o]) t = (uint16_t)-t;
+                bonus = !t || (t & 0x8000);
+            }
+        }
+        if (bonus) g.ThirdPBonus = 2;
+    }
+    uint16_t a = (uint16_t)(m16(bank << 16 | team) + team);   /* (the roster records) */
+    do {
+        uint32_t s = (uint32_t)m16(bank << 16 | a) + a;
+        a = (uint16_t)(s + 8 + (s >> 16 & 1));           /* (the first add's carry into the second) */
+    } while (!((d3 = (uint16_t)(d3 - 1)) & 0x8000));
+    a = (uint16_t)(a - 8);
+#define B(k) m16((bank << 16 | a) + (k))
+    w16(RAM_OFF_rostnum + 2 * o, m8(bank << 16 | a));
+    uint16_t pp = g.PPBonus, pk = (uint16_t)g.PKBonus, ha = g.HmAwBonus, tp = g.ThirdPBonus;
+    g.weight[o] = (B(1) & 0xF0) >> 1;
+    g.legstr[o] = sp_adj(sp_scale(B(1) & 7), r3, 0);
+    g.legspd[o] = sp_adj(sp_scale(B(2) >> 4 & 7), r3, 1);
+    g.aioff[o] = (uint16_t)((sp_adj((uint16_t)(sp_scale(B(2) & 7) + pp + pk + ha + tp), r3, 2) ^ 0xF) + 0xF) >> 1;
+    uint16_t t = sp_adj((uint16_t)(sp_scale(B(3) >> 4 & 7) + ha), r3, 3) ^ 0xF;
+    g.aidef[o] = g.position[o] ? (uint16_t)(t + 7) : (uint16_t)(t + 0xF) >> 1;
+    g.shotspd[o] = sp_adj(sp_scale(B(3) & 7), r3, 4);
+    g.checking[o] = sp_adj((uint16_t)(sp_scale(B(4) >> 4 & 7) + tp), r3, 5);
+    g.attribute[o] &= 0xF7FF;
+    g.handed[o] = (B(4) & 1) ^ 1;
+    if (!g.handed[o]) g.attribute[o] |= 0x0800;
+    g.fighting[o] = B(4) & 0xE;
+    g.stickhand[o] = sp_adj((uint16_t)(sp_scale(B(5) >> 4 & 7) + pp + pk + ha), r3, 6);
+    g.shotacc[o] = sp_adj((uint16_t)(sp_scale(B(5) & 7) + pp + pk + ha), r3, 7);
+    g.endurance[o] = sp_adj(sp_scale(B(6) >> 4 & 7), r3, 8);
+    g.spodds[o] = sp_adj((uint16_t)(sp_scale(B(6) & 7) + tp + tp), r3, 9);
+    g.passacc[o] = sp_adj((uint16_t)(sp_scale(B(7) >> 4 & 7) + pp + ha), r3, 10);
+    g.aggress[o] = sp_adj(sp_scale(B(7) & 7), r3, 11);
+#undef B
+}
+
+/* Put team a2's wanted players (SetPlList) on the ice: the newpos / newpnum requests of its six
+ * objects cleared, then a wanted player already on the ice keeps his object, and each other one
+ * takes a free object (the last free one found, one in play preferred). (The original leaves X =
+ * its caller's a3.) */
+void setpersonel(uint16_t a2)
+{
+    uint16_t x = r16(RAM_OFF_tmsort + a2), a0 = 0, d5;
+    int d3;
+    for (int k = 0; k < 6; k++, x += 2) {
+        w16(RAM_OFF_newpos + x, 0xFFFF);
+        w16(RAM_OFF_newpnum + x, 0xFFFF);
+    }
+    SetPlList(a2);
+    for (int d4 = 5; d4 >= 0; d4--) {
+        d5 = m8(PlList + d4);
+        if (!d5) continue;
+        d5--;
+        x = (uint16_t)(r16(RAM_OFF_tmsort + a2) - 2);
+        for (d3 = 5; d3 >= 0; d3--) {
+            x += 2;
+            if ((d5 & 0xFF) != (r16(RAM_OFF_pnum + x) & 0xFF)) continue;
+            w16(RAM_OFF_newpos + x, (uint16_t)(int8_t)m8(PlList + d4 + 6));
+            w16(RAM_OFF_newpnum + x, (uint16_t)(int8_t)d5);
+            mset8(PlList + d4, 0);
+            break;
+        }
+    }
+    for (int d4 = 5; d4 >= 0; d4--) {
+        d5 = m8(PlList + d4);
+        if (!d5) continue;
+        d5--;
+        x = (uint16_t)(r16(RAM_OFF_tmsort + a2) - 2);
+        d3 = 5;
+        for (;;) {
+            x += 2;
+            if (r16(RAM_OFF_newpnum + x) & 0x80) {
+                a0 = x;
+                if (!(r16(RAM_OFF_position + x) & 0x8000) || --d3 < 0) break;
+                continue;
+            }
+            if (--d3 < 0) break;
+        }
+        w16(RAM_OFF_newpos + a0, (uint16_t)(int8_t)m8(PlList + d4 + 6));
+        w16(RAM_OFF_newpnum + a0, (uint16_t)(int8_t)d5);
+        mset8(PlList + d4, 0);
+    }
+}
+
+/* The list of the players team a2 wants on the ice now (PlList: six roster numbers, then the six
+ * positions they take): from its current line in priolist's order for the men it has (a penalty
+ * shot: the shooter and the goalie; no goalie when he is pulled), each one not available replaced
+ * by the first available of his position's substitutes (sublist; $80: anyone, from the last
+ * roster player down). */
+void SetPlList(uint16_t a2)
+{
+    uint32_t a4 = PlList, a0, a1;
+    uint16_t d0, d1, d3, d4, d5;
+    for (int k = 0; k < 6; k++) mset8(a4 + k, 0);
+    a0 = SYM_priolist;
+    if (g.penshot) {
+        a0 = SYM_priolist + 7;
+        if (a2 == g.BA_Team) a0++;
+    } else if (r16(RAM_OFF_tmgoalie + a2) & 0x8000) a0++;
+    a1 = GetTeamLines(a2);
+    {
+        uint16_t l = r16(RAM_OFF_tmline + a2);
+        d0 = (uint16_t)(l << 3);
+        a1 = (a1 & 0xFF0000) | (uint16_t)(d0 + (uint16_t)a1 + (l >> 13 & 1));   /* (asl's carry into the adc) */
+    }
+    d4 = r16(RAM_OFF_tmap + a2);
+    while (!((d4 = (uint16_t)(d4 - 1)) & 0x8000)) {
+        d5 = m8((a0 + d4) & 0xFFFFFF);
+        mset8(a4 + d4, m8((a1 + d5) & 0xFFFFFF));
+        if (d5 && g.penshot) mset8(a4 + d4, (uint8_t)(g.BA_Skater_Offset + 1));
+        mset8(a4 + d4 + 6, (uint8_t)d5);
+        if (d5) continue;
+        d3 = (uint16_t)(r16(RAM_OFF_tmgoalie + a2) + 1);
+        if (!d3 && g.penshot) d3++;
+        mset8(a4 + d4, (uint8_t)d3);
+    }
+    for (d4 = 5; !(d4 & 0x8000); d4--) {
+        d3 = m8(a4 + d4);
+        if (!d3) continue;
+        d3 = (uint16_t)(((uint16_t)(int8_t)d3 - 1) << 1);
+        uint16_t st = r16(RAM_OFF_tmpdst + (uint16_t)((a2 ? 0x34 : 0) + d3));
+        if (st != 0xFFFD && st != 0xFFFC && ((st & 0x8000) || !st)) continue;
+        a1 = GetTeamLines(a2);
+        d0 = (uint16_t)(m8(a4 + d4 + 6) << 1);
+        a0 = (SYM_sublist & 0xFF0000) | (uint16_t)(rom16(SYM_sublist + d0) + (uint16_t)SYM_sublist);
+        for (;;) {
+            d0 = m8(a0);
+            a0 = (a0 & 0xFF0000) | (uint16_t)(a0 + 1);
+            if (d0 & 0x80) break;
+            d0 = m8((a1 + d0) & 0xFFFFFF);
+            if (TryAddPlayerToList(d0, d4, a2, a4, &d1)) goto next;
+        }
+        d3 = GetPlayerCount(a2);
+        for (;;) {
+            d0 = d3;
+            d3 = (uint16_t)(d3 - 1);
+            if (d3 & 0x8000) break;
+            if (TryAddPlayerToList(d0, d4, a2, a4, &d1)) break;
+        }
+next:;
+    }
+}
+
+/* Roster player d0 of team a2 into slot d4 of the list at a4 if he is available (on the ice, on the
+ * bench or not yet there, and not in the list): returns him (Z clear), or 0 (*d1 = 0). */
+uint16_t TryAddPlayerToList(uint16_t d0, uint16_t d4, uint16_t a2, uint32_t a4, uint16_t *d1)
+{
+    *d1 = d0;
+    uint16_t k = (uint16_t)(d0 - 1);
+    uint16_t idx = (uint16_t)((a2 ? 0x34 : 0) + (uint16_t)(k << 1) + (k >> 15));   /* (asl's carry into the adc) */
+    uint16_t st = r16(RAM_OFF_tmpdst + idx);
+    if (st && !(st & 0x8000)) goto no;
+    if (st == TMPDOUT || st == rosterNone) goto no;
+    for (int e = 5; e >= 0; e--)
+        if (m8((a4 + e) & 0xFFFFFF) == (d0 & 0xFF)) goto no;
+    {
+        uint32_t a = (a4 + d4) & 0xFFFFFF;
+        if (is_wram(a)) w8(wram_off(a), (uint8_t)d0);
+    }
+    return d0 & 0xFF;
+no:
+    *d1 = 0;
+    return 0;
+}
+
+/* The energy of player o (getpde leaves the team, nonzero for the visitors, in a2 and the
+ * player number * 2 in d1: setpde's arguments) */
+uint16_t getpde(int o)
+{
+    return g.tmpde[(g.pfteam[o] ? 26 : 0) + (g.pnum[o] & 0xFF)];
+}
+
+/* Set the energy of player num2 / 2 of team (nonzero: the visitors) to energy, 0 when negative */
+void setpde(int team, uint16_t num2, uint16_t energy)
+{
+    w16(RAM_OFF_tmpde + (uint16_t)((team ? 0x34 : 0) + num2), energy & 0x8000 ? 0 : energy);   /* (num2 as given: by address) */
+}
+
+/* Rating a scaled by the energy of player o (a0) (product / $1000); the carry is left clear. */
+uint16_t makepde(uint16_t a, int o)
+{
+    uint32_t p = Mul16S(a, getpde(o));
+    cf = 0;
+    return (uint16_t)(p >> 12);
 }
