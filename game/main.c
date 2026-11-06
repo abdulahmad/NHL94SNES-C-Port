@@ -1,12 +1,8 @@
 /* main: the reset, power on and the PAL check (src/routines/main). */
 #include "game.h"
 
-/* The frame time step for a 50 Hz console (STAT78 bit 4; the 16-bit read takes APUIO0 too) */
-void CheckPAL(void)
-{
-    g.vcountstep = 0;
-    if (io_r16(0x213F) & 0x0010) g.vcountstep = 0x3333;
-}
+/* The reset vector (native mode, the stack at $1FFF, the direct page 0: the machine's) */
+void Start(void) { Reset_Fast(); }
 
 /* The reset: the PPU's registers cleared (the mode 7 matrix the identity, colour math $30 / $E0),
  * VRAM cleared, the sound driver uploaded, all of WRAM cleared, the RAM tags, sprite masks and
@@ -59,5 +55,9 @@ void Reset_Fast(void)
     Opening();
 }
 
-/* The reset vector (native mode, the stack at $1FFF, the direct page 0: the machine's) */
-void Start(void) { Reset_Fast(); }
+/* The frame time step for a 50 Hz console (STAT78 bit 4; the 16-bit read takes APUIO0 too) */
+void CheckPAL(void)
+{
+    g.vcountstep = 0;
+    if (io_r16(0x213F) & 0x0010) g.vcountstep = 0x3333;
+}
