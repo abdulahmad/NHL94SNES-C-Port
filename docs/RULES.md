@@ -9,7 +9,7 @@ What decides each kind of name and place in the C ports. Workers and the splitte
 | Function name of an original routine | The current label in [NHL94SNES](https://github.com/abdulahmad/NHL94SNES). Old names reach it through that repository's `docs/name_map.csv` (`tools/check_names.py` follows the chain) |
 | Asm local (`Parent.x`) | The C function `Parent_x`, `static` in the parent's file where nothing else calls it |
 | Helper (a piece split off a routine, or the C's own) | `<Routine>_<what>`, `static` where possible; listed as a helper in docs/ROUTINES.md |
-| C file | One file per asm module, named after it (`src/routines/collide/` is `collide.c`). `game/system/snes.c` holds only the port's glue (no asm module) |
+| C file | One file per asm module, named after it (`src/routines/collide/` is `game/collide.c`). `game/snes.c` holds only the port's glue (no asm module) |
 | Order inside a file | ROM order, as the asm |
 | RAM names (`ram.h`) | The asm RAM equates (`src/ram94s.asm`) |
 | First comment line of a routine | its asm file and label (`collide94.asm:checkcoll.`) |
@@ -37,3 +37,4 @@ at other cartridge addresses than the asm's `Parent.t1`/`.t2` (`GetFrameTiles_dr
 * 2026-11-03: re-cut tools: `tools/recut_module.py SRC DST MODULE` moves a module's routines and resolves the helpers they need (moved along, or shared through the source's header); `tools/move_functions.py` moves named functions; `tools/merge_files.py` merges whole files. Gate after each unit: 0 warnings, `test/check.sh` 7 of 7, clock table 851, names gate.
 * 2026-11-04: CONTRIBUTING.md must not contradict History: lineage lives only in the asm repositories' `docs/name_map.csv`, never in source comments. (CONTRIBUTING rewrite vs RULES History row)
 * 2026-11-06 leftover recut: C files follow current NHL94SNES folders (`print.c`, `title.c`; `ManualGoalieMenu` in `period.c`). Names follow cleaned 94S (`Reset` is `Start`, `NMI_Fast` is `VBlank`, stub returns are `TitleScreen_ret` / `PlayShootout_ret` / `Reset_Fast_ret`). Six parked locals stay: C `SYM_*_t1`/`_t2` sit at other cartridge addresses than the asm's `Parent.t1`/`.t2`. Missing hooks have no asm label; they sit with their parent. Recut of a helper used before its definition must place the static above its first call. Static state and macros (`bt`, `introbuf24`, `SCOUT_INC`, `SPFpad`) hitchhike with the routines; recut_module.py only moves functions.
+* 2026-11-06 flatten: original-routine files live at `game/<module>.c` (one file per 94S `src/routines/<module>/`). Host glue `snes.c`, `ram.c`, `rom.c` flatten with them. Makefile `GAME` / `GAMEH` are `game/*.c` and `game/*.h`. Do not keep an extra `play/` `menus/` `screen/` `sound/` `system/` level.

@@ -1,15 +1,40 @@
 # The routines
 
-Every function in `game/`, by folder and file: the C name, the original routine it is (the
+Every function in `game/`, by file: the C name, the original routine it is (the
 disassembly's label of the same name and its cartridge address), and what it does. Generated from
 the code's own comments by `tools/routines.py`. A helper is a piece split out of an original
 routine, a part a routine shares with others, or a small function of the C's own.
 
 880 functions: 702 original routines, 178 helpers.
 
-## Play: the game on the ice (the game loop, skating, the AI, checks, the puck, goalies, penalties, the shootout)
+### `game/cards.c` (22)
 
-### `game/play/collide.c` (47)
+| Function | Original | What it does |
+|---|---|---|
+| `picboxmap_add` | (a helper) | Add base to every word of the map unpacked at picboxmap (its width and height first, the words from +6) |
+| `card_starters` | (a helper) | The six starters' roster bytes of team a2 (its team data + the word at +$C) |
+| `card_starter` | (a helper) | (PlayerCards: whether roster player p is one of the six starters at a3, whose cards come first) |
+| `CalcAttrib` | `$9F992E` | The rating (0-100) of player d0 of team a2 (0 home, 2 visitors) from the attributes of mask d4+2 (bit 15: the weighted overall rating, r2 = 0 skater / 16 goalie weights; otherwise the one attribute), with the hot / cold table when usehotcold is set. |
+| `PrintCentered` | `$9FF345` | Print string a1 centred on column 16; returns a1 past it |
+| `pic_not_starter` | (a helper) | (.9: 0 when curplayer is one of the six players of team a2's first line (team data +12), else 1) |
+| `pic_mirrored` | (a helper) | (.6: whether the picture is mirrored: a first line player never; else bit 0 of his overall rating (column 4 for a goalie, 5 for a skater; inverted for a goalie)) |
+| `paste_mirrored` | (a helper) | (.5: paste map [p0] into the map at [p1] (r7 entries a row) at column x, row y, mirrored (each row from the right, the flip bit set), adding a to each entry) |
+| `pic_map_and_colours` | (a helper) | (DrawPlayerPicture: the photo map in the text map at x, y (tiles from picchars, the visitors' $30 on), then the team's photo palette (colours $50 home, $10 visitors)) |
+| `DrawPlayerPicture` | `$9DC9A8` | Draw the picture of player d0 of team a2 at column x, row y: his photo (PlayerPhotoTable, 26 a team) unpacked and made planar in the team's picture buffer ($7F6F00 home, $7F6900 visitors), mirrored for some players; with matchupphotos the matchup photos (LoadMatchupPhotos) instead |
+| `card_print` | (a helper) | (print string a1 centred on column 16 at row y; a1 past it) |
+| `card_strengths` | (a helper) | (DrawPlayerCard: the strengths label, then the names (from list a1) of up to three strengths, the second and third only when rated 80 or more) |
+| `DrawPlayerCard` | `$9DBE79` | Draw the current card of team a2: curitem 0 the team card (the team name, the six line slots and the team rating), 1-6 a line slot's player, 7 and up roster player curitem - 7 (the number and name, the position group, the strengths and the overall rating); then the picture and the card colours |
+| `SetCardTeamColours` | `$9DC2DE` | Copy the card team's two colours (a2 nonzero: colours $67-$68, else $77-$78) to colours $4E-$4F |
+| `DrawLogoSprite` | `$9DDFBF` | Draw the logo of team a as sprites at x, y with its LogoPaletteTable palette |
+| `PrintSmallLetterSprites` | `$9C9590` | Draw string [a1] with the small letter sprites from x, y: letters, digits and '.' (2 wide), a space 3 wide, other characters skipped |
+| `PrintLineSlotName` | `$9DC2B8` | The short name of team a2's player in line slot y (a3) in small letter sprites centred on x, at printy |
+| `LoadPlayerCardScreen` | `$9DC697` | The player card screen's graphics: the team logo sprites, the screen registers, the fonts (remapped), the team block, card back and frame tiles to VRAM, the card picture map, the card back map into text map 2, the palettes, the "switch cards" text, the sprites and the scroll |
+| `PlayerCards` | `$9DBD4F` | The player cards of the pausing team: right / left the next / previous card (the team card, the six line slots, then the roster without the starters), Y the other team, Start leaves |
+| `AddStrength` | `$9DC3DB` | Insert rating column d1 of player curplayer of team a2 (GetPlayerRating) into the best-three list strengths (column, rating pairs) |
+| `FindSkaterStrengths` | `$9DC2FB` | The player card strengths of skater curplayer of team a2: the best three of eleven rating columns |
+| `FindGoalieStrengths` | `$9DC374` | The player card strengths of goalie curplayer of team a2: the best three goalie rating columns (columns 8 and 9, or 7 and 10 when column 4 is under 50) |
+
+### `game/collide.c` (47)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -61,7 +86,33 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `Goal` | `$9EF319` | The puck is in the net (o, the puck): the score and team stats, the siren and the crowd, the score summary and the players' goals and assists, the scoreboard, the scorers celebrate, the puck pops up at the goal line and the goal whistle. |
 | `checkpuckcoll_ccx` | `$9E97DD` | The puck x against player y (a2): unless he carries it, is past the skaters, off the ice or not colliding. |
 
-### `game/play/hockey.c` (46)
+### `game/crowd.c` (7)
+
+| Function | Original | What it does |
+|---|---|---|
+| `Create_HotCold_Table` | `$9FE0E8` | Fill the hot / cold table (both teams, 624 bytes, from the end down) with random values -12 to 12: a random 0-13 limited to 12, negative when bit 4 of the seed is clear after it |
+| `StartBenchCheer` | `$9C9FD5` | Start bench a cheering, unless one already is |
+| `InitCrowdExcite` | `$9B9B6B` | At a period start (not overtime): crowd excitement $10 per playoff stage |
+| `LowerHotColdTable` | `$9BA89F` | While HotColdRaised is not 0: the first four bytes of each of the 52 hot / cold entries go down by 2 |
+| `UpdateBenchCheer` | `$9C9FED` | Each frame: step the cheering bench through its frames, and end it ($FFFF) after its rounds |
+| `Crowd_Noise_meter` | `$9B9BA5` | The crowd meter (d0): sqrt(CwdExciteLvl * 4) + 65, at most 128; the peak and the running average |
+| `Crowd_Noise` | `$9B9BF8` | The crowd meter into CurCrowdMeter: 110 dB or more sets CrowdLoud; under 105 dB a loud crowd's raised hot / cold values come down |
+
+### `game/decompress.c` (9)
+
+| Function | Original | What it does |
+|---|---|---|
+| `DecompressRLE` | `$80C2F3` | Run-length data at y (data bank db; its header word at +3 is $0101 for bytes, else byte pairs) to WRAM through the port: a negative count n copies ~n + 1 literals, a positive one repeats the next byte (pair) n + 1 times, 0 ends |
+| `lz_lit` | (a helper) | LZ data at [p0] (its commands from +5) to WRAM through the port (LZOutAddr follows it, from p1; copies come from the WRAM already written, at LZCopySrc). |
+| `lz_copy` | (a helper) | (DecompressLZ: a copy of n bytes to the port from the output already written, at LZCopySrc) |
+| `lz_from` | (a helper) | (DecompressLZ: a copy's distance into LZDistance, and its source LZCopySrc dist + 1 bytes back from LZOutAddr) |
+| `DecompressLZ` | `$80B8DB` | Decompress's format $FB10: the LZ data at [p0] to WRAM at p1, command by command until the end run |
+| `DecompressPairs` | `$80BA63` | Decompress's format $FB46: y the data after the format word (from y+3 the escape code, the pair count and the pairs: code, first, second; then the packed bytes), expanded to WRAM |
+| `hf_number` | (a helper) | (.149 / .150: a number of the stream: 1 and 2 bits (0-3), or k zeros, a 1 and k + 3 bits over the base of .151; HuffBits the window after it) |
+| `DecompressHuffman` | `$80BBB3` | Huffman data at (p0) + 5 in data bank db to WRAM at p1 through the port. |
+| `Decompress` | `$80C373` | Unpack the data at [p0] to WRAM at [p1] (through the WRAM port, once the DMA queue is empty) by its format word: $FB10 LZ, $FB46 pairs, $FB30 Huffman, $FB7A run-length; the unpacked size from the header (its big-endian word at +3), or 1 for an unknown format |
+
+### `game/hockey.c` (46)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -112,7 +163,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `StartGame_scout` | `$9F8334` | A new game from the hot / cold table and the scouting report on |
 | `StartGame` | `$9F8330` | A new game: the playoff screen, the scouting report, then the first period |
 
-### `game/play/logic.c` (160)
+### `game/logic.c` (160)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -277,7 +328,119 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `updateplayers` | `$9F8686` | Every object's frame: first (from the last object) the animation, the counts, the velocity decay and the move by it (the puck's height with gravity and its bounce sound), the distance and direction to the puck, the nearest player of each team, the icing waved off; the nets kept in their ends; then (from the first) each player's pad input and assignment, goalies kept out of the goal posts, collisions (players crossing the goal line beside the net put back) and the impact decay (an absent object's impact = its position); the puck kept within the boards |
 | `SetSPAUpdate` | `$9EA403` | Start sprite animation anim on object o (as SetSPAFromA) and update it at once |
 
-### `game/play/penalty.c` (69)
+### `game/main.c` (2)
+
+| Function | Original | What it does |
+|---|---|---|
+| `CheckPAL` | `$9B8000` | The frame time step for a 50 Hz console (STAT78 bit 4; the 16-bit read takes APUIO0 too) |
+| `Reset_Fast` | `$80802A` | The reset: the PPU's registers cleared (the mode 7 matrix the identity, colour math $30 / $E0), VRAM cleared, the sound driver uploaded, all of WRAM cleared, the RAM tags, sprite masks and hooks set, the sprites and the sound started, the screen black, then the game (Opening) |
+
+### `game/middle.c` (71)
+
+| Function | Original | What it does |
+|---|---|---|
+| `randomd0A` | `$9BB370` | A random number from 0 to limit-1 |
+| `Mod100` | `$9F9E15` | d0 mod 100 |
+| `randomd0s` | `$9BB3B0` | randomas with the range in d0: a random number from -d0 to d0-1 (clears the carry) |
+| `PushNumberWidth` | `$9FC63B` | d0 as d1 digits, right aligned with leading blanks, in PushWidthBuf (more digits run on to the left); returns a1, the string, and in *a the last quotient (0) |
+| `PushNumberWrap` | `$9FC623` | PushNumberWidth, with d0 taken mod 100 when the width d1 is 2 |
+| `FramerRow` | `$9D804F` | One row of a frame into the text map at printx / printy: the corner [p0], d0 - 2 of the middle tile [p0+2], the corner [p0+4], each plus tmp0; printy steps down. |
+| `framer_box` | (a helper) | a d0 by d1 frame of the map at map (+6 the top row, +12 the middle, +18 the bottom) with tile base tmp0, the changed range of the text map kept (Framer and its kin) |
+| `FramerNineTile` | `$9D8091` | Framer with the nine-tile box (FramerNineTileMap) of tile set ninetilechars |
+| `FramerOutline` | `$9D80DD` | Framer with the outline box (FramerOutlineMap) of tile set outlinechars |
+| `ReadPads` | `$9B8017` | Once per frame: each pad's direction (PadDirection of its pad bits), changed buttons and new presses |
+| `ProcessInputWithRepeat` | `$9B852C` | Key repeat: held buttons d3 repeat (into d1) after a delay; a change d2 restarts it. |
+| `Readjoy1` | `$9B84F5` | Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held |
+| `WeightedRandomSelect` | `$9D9CD2` | A random index 0 ... |
+| `remap` | `$9B854B` | Send d0 tiles from [a0] to video memory, each pixel's colour remapped through the table [a1]; returns a0 advanced past them |
+| `Sroot` | `$9BB3BE` | The square root of the 32-bit d0 (a binary search, the range narrowed first) |
+| `forceblack` | `$8086A9` | Turn the screen black: fade out (when lit), forced blank, PPU registers reset |
+| `QueueTextDMA` | `$9FBF75` | Queue the changed part of the text map (textdirtylo to textdirtyhi) for transfer to video memory |
+| `waitx` | `$9FA5EA` | Wait d0 + 1 frames (drawing each one) or until a pad with a team holds a button (ReadjoyA's d3); returns the pad read last (zero when no pad has a team: the direct page's d0-d3 as they were) |
+| `Mul8XS` | `$808F5D` | 8 x 8 bits into 16 (A), X signed: A times X's magnitude, negated for a negative X (the carry set, or for a negative X set only when the product is 0) |
+| `Mul8S` | `$808F7D` | 8 x 8 bits into 16 (A), both signed: the magnitudes multiplied, negated when the signs differ (two negatives leave the carry as it came) |
+| `Mul16x8U` | `$808F98` | X (16 bits) x A (its low byte) into r2 ($08-$0B): unsigned; X signed; both signed. |
+| `Mul16x8XS` | `$808FC9` | X x A (low byte) into r2, X signed: X's magnitude times A, negated for a negative X |
+| `Mul16x8S` | `$808FEB` | X x A (low byte) into r2, both signed: the magnitudes multiplied, negated when the signs differ |
+| `Mul16U` | `$809099` | A x X into r2 ($08-$0B): unsigned; X signed; both signed (the carry as for Mul16x8U) |
+| `Mul16XS` | `$809080` | A x X into r2, X signed: A times X's magnitude, negated for a negative X |
+| `Mul16S` | `$809062` | A x X into r2, both signed: the magnitudes multiplied, negated when the signs differ |
+| `Mul16x8HiXS` | `$809032` | X x A (low byte) / 256, X signed: the product of X's magnitude / 256, negated for a negative X (so it rounds toward 0) |
+| `Mul16x8HiS` | `$80904B` | X x A (low byte) / 256, both signed: the magnitudes' product / 256, negated when signs differ |
+| `Div32U` | `$80923F` | r2 ($08-$0B) / r1 ($04) into r0, unsigned. |
+| `Div32S` | `$8091FC` | r2 / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF -> $8001) |
+| `Div16S` | `$809197` | r2 (16 bits) / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF for 0, $8001 when negated) |
+| `DivX8S` | `$809327` | X / A (low byte) into A, X signed: X's magnitude divided by the unsigned byte, negated for a negative X (the collision and hat trick speeds: a distance over a length or a frame count) |
+| `RandomWord` | `$808658` | A random word: the sum of two 16-bit shift-register generators (seeded $A5A5 / $B4B4 at 0) |
+| `ApproxLength` | `$9CA554` | The approximate length of (x, y): the longer side plus a quarter of the shorter, or, when the shorter is more than half the longer, plus 3/8 of it (in 16-bit words, unsigned) |
+| `ApproxLength_abs` | `$9CA568` | ApproxLength's second half, for x and y already positive (entered directly by the puck distance and the replay, which have the magnitudes) |
+| `ReadjoyA` | `$9B84DC` | Pad n: direction, new presses, changed buttons, buttons held |
+| `WaitSidePadsRelease` | `$9B866C` | Wait until every pad that has a side (cont1team) has no button down |
+| `WaitPadsRelease` | `$9B8682` | Wait until every standard pad (low nibble 0) has no button down |
+| `MemCopy` | `$808F2F` | Copy x bytes from [p0] to [p1], from the top down (an odd byte first); x = 2 or 3 goes round the whole 64 KB |
+| `DisposePtrHandle` | `$809D69` | Free handle a unless it is a heap block (bank $7E or $7F) |
+| `DerefHandle` | `$809F5B` | Handle a's address (low word) and bank (high word); 0 for a bad handle |
+| `FindHandle` | `$809F83` | The handle of address a in bank x, 0 if none |
+| `NewPtrHandle` | `$809D3C` | A handle for fixed memory at a in bank x; 0 if none is free |
+| `HeapFreeBank` | `$809FCB` | sum plus the sizes of the free blocks (flags 0) of the heap chain in p0's bank from block y (a header: size, flags, next) |
+| `WaitNoButtons` | `$8085FF` | Wait until no button is held on pad 1 |
+| `GetNewPresses` | `$9B8472` | For each of the 5 pads: the buttons that changed, those newly pressed, then the buttons held |
+| `MemFill` | `$808EDF` | Fill x bytes at [p1] with the word a (from the top down; x = 2 goes round the 64 KB); _t1 adds a to each word |
+| `MemFill_t1` | `$808EEB` | MemFill's second entry: add the word a to each word of x bytes at [p1] (from the top down) |
+| `MemOr` | `$808F03` | OR the word a into x bytes at [p1]; _t1 ANDs it |
+| `MemOr_t1` | `$808F19` | MemOr's second entry: AND the word a into x bytes at [p1] |
+| `Sin` | `$80954D` | sin / cos of a (1024 steps a circle, $0100 = 1), from the quarter-wave SineTable |
+| `Div32x32U` | `$8091CA` | n / d into the result (32 bits), the remainder in *rem, unsigned, by shift and subtract (the divisor is first shifted until its top bit is set: d = 0 never ends) |
+| `HeapInit` | `$809932` | The heaps: start them at x in bank $7E (at least $E68C) and y in bank $7F, one free block each (a header: size, flags, next, previous), all handles free |
+| `HeapFree` | `$809FAA` | The free bytes of both heaps (X high word, A low) |
+| `handle_block` | (a helper) | Handle a's block header (8 bytes before its address) in its heap's chain: *p0 the bank and the header's offset, 0 when not a heap handle or not in the chain |
+| `LockHandle` | `$809CA4` | Set / clear the locked bit ($4000) of handle a's block (a free block is left alone; clearing keeps only the used bit) |
+| `UnlockHandle` | `$809CF0` | Clear the locked bit of handle a's block, keeping only the used bit ($8000) |
+| `MulFrac16` | `$809144` | a * y (y a byte) / 128 into the result and MulProd+1: the mode 7 multiplier, or with bit 6 of Mode7InUse a shift-and-add of 7 steps (the 16-bit MulPlier: its high byte shifts down too) |
+| `MulFrac8` | `$8090ED` | c's low byte times its high byte (7 bits) / 128: the mode 7 multiplier, or with bit 6 of Mode7InUse a shift-and-add (each set bit adds the multiplicand and the carry, 1). |
+| `HeapAllocBlock` | `$809A33` | The first free block of at least want bytes in the heap chain of bank (bank << 16) from header y, taken with flags \| $8000 (split when 16 bytes or more are left: the new free block's header after the data, its next the old next; the old next's previous is not updated); its data address, $FFFF for none |
+| `PrintLetterSprites` | `$9C936C` | Draw string [a1] (its length + 2 at +0, the characters from +2) with the letter sprites at x, y: letters and digits, a space 6 pixels, other characters nothing |
+| `DisposeHandle` | `$809AAB` | Free handle a and its block (8 bytes before its address in the heap of its bank), joined with a free block after it, then with a free block before it |
+| `HeapCompactBank` | `$809BA5` | Join the free blocks of the chain in bank (bank << 16) from header y and move each used unlocked block after a free one down into it (its data by an ascending byte move), the free space moving up; the handle whose address word is the old data address points at the new one (whatever its bank) |
+| `HeapCompact` | `$809B84` | HeapCompactBank for both banks |
+| `NewHandle` | `$80999B` | A handle for a block of x bytes (a's bit 14: locked) in bank y ($7E or $7F; any other: either), compacting the heaps when it does not fit at first; 0 when no handle or no room |
+| `SetHandleSize` | `$809D8E` | Resize handle a's block to x bytes: in place when it can (shrinking by 9 or more: the rest a free block, joined with a free block after it; growing into a free block after it), else in a new block (NewHandle, either bank, not locked) that the old data (its size + 1 bytes) is moved to, the old one freed and the handle kept |
+| `Multi5ConnectCheck` | `$9B83BE` | Look for a multitap on each port: one when the first 8 signature bits are all 1 and the next 8 are not |
+| `Multi5Init` | `$9B8358` | Check for the multitap, then clear the multitap pads and state |
+| `mp5_sig` | (a helper) | Read the five pads: pads 1 and 2 from the auto read, pads 3 to 5 through the multitap on port 2 when mp5present is set (pads 4 and 5 only every 30 frames while nobody uses them); a port line change runs Multi5ConnectCheck for 16 frames; pads without the standard signature read $000F; with a warning every pad flashes $1000 / 0. |
+| `Multi5Bios` | `$9B80AB` | The pads' read of each frame, run by the NMI after the frame hook: JoyPad[0-4], with the multitap's check and warnings |
+| `PrintScrollArrows` | `$9B9AB2` | The scroll arrows beside a summary list (right while rows are below the five shown, left while rows are above), or blanks in their place; then the text map queued |
+
+### `game/optsetup.c` (24)
+
+| Function | Original | What it does |
+|---|---|---|
+| `opt_row` | (a helper) | (a row's entry in .13, by play mode: 1 shown, $FFFF the playoff name, 0 not shown; asl's carry added as adc does) |
+| `setoptions_7` | `$9DA8B8` | Setup: change the option of row d7 by d2 (a team row, or the mode, also restarts the matchup pictures), within .14's choices (team rows: $1A in the playoff modes), wrapping round; a2 left at OptPlayMode |
+| `setoptions_9` | `$9DA921` | Setup: d3 + d2, below d5 (signed) to d4 - 1, from d4 on to d5 |
+| `setoptions_10` | `$9DA973` | Setup: the option rows: the teams (setteams) when they changed, then each row the play mode shows, its name and choice (the row at d7 highlighted, the team rows by name) |
+| `setoptions_t1xxxxxxxxxxx` | `$9DAC22` | Setup: team x's matchup player's short name; the home one's (x = 0) copied to $0A5C |
+| `setoptions_t2xxx` | `$9DABC1` | Setup: the next matchup (0-5, then 6 the logos): the sides showing a team turn to the matchup player's picture and name |
+| `setoptions_11` | `$9DAA83` | Setup, each pass: the team pictures (a blank box when the mode has no such team row); every $78 passes the next matchup, its title, team blocks or player names and pictures |
+| `setoptions_12` | `$9DAC4F` | Setup: the cursor row d7 moved by d0 to the next row the play mode shows (kept at the ends) |
+| `setoptions` | `$9DA5CA` | The game setup screen: up and down pick a row, left and right change it, Start goes on (the password screen in play mode 1, new playoffs in 2 and 3), then the player select screen; left alone long enough it starts the demo with random teams. |
+| `LoadTeamLines` | `$9B9334` | Copy team a2's lines ($38 bytes at its team data's offset +6) into its RAM lines, then without line changes the 8 bytes at offset +$0C over their start |
+| `PrintSelectLeft` | `$9BCA7A` | Print the Select Left hint on the password screen, d4 columns on |
+| `ClearBigText` | `$9DAF5B` | Clear the big text letter tiles (bigtextbuf+1, $300 bytes) and part of its map (screenmap+$28C) |
+| `InitSetupChars` | `$9DE074` | The setup screen's tiles: the blank tile $200, the small font after it (unpacked, its VRAM cleared first), the frame tiles after the font and the score tiles 4 further |
+| `SendBigText` | `$9DB0AB` | Send the big text map (screenmap from +6: a 32 x 2 part at row printy) and the letter tiles to VRAM |
+| `Multi5MouseMsg` | `$9DB058` | The MultiPlayer 5 warnings: the mouse, the Super Scope, the socket |
+| `Multi5ScopeMsg` | `$9DB005` | The warning that the MultiPlayer 5 is not designed for use with the Super Scope |
+| `Multi5SocketMsg` | `$9DAFB2` | The warning that the MultiPlayer 5 must be connected to controller socket 2 |
+| `LoadMatchupPhotos` | `$9DCC36` | Unpack the six matchup players' photos of team x (0 home, 2 visitors) into the $7F photo buffer (visitors at $2D00, home at $5100, each at its MatchupPhotoOffsets place), unless that team's are already there |
+| `DrawSelectTeam` | `$9DAE6D` | Team d1 on the player select screen at printx: its palette (colours $70 for the home team, unless both teams are the same, else $60), its block map (with redrawblocks) and its city name in the big font |
+| `bigsprite_letter` | (a helper) | The width of letter c (and its frame, f; -1 for a space) in the big sprite font |
+| `PrintTeamSprites_go` | `$9C9479` | The letter loop of PrintTeamSprites: the width of string s (to its 0; a space first has none; '.' is 3 wide), letterx moved to centre it (r3h 0 or a2 negative), or to end at $F8 (a2 0), then each letter drawn (palette $3800, on the horizontal blocks $3E00 home / $3C00 visitors) |
+| `PrintTeamSprites` | `$9C943E` | Draw the place name of team d1, or string [a1] (made to end at its length) when d1 is negative, as big letter sprites at x / y |
+| `RedrawPlayerSelect` | `$9DAF84` | Clear the message rows and redraw the PlayerSelectAlt title and the team pictures |
+| `PlayerSelect` | `$9DA0D5` | The player select screen after the game setup: each pad moves its icon under the visitors or home team (cont1team-cont5team), Start goes on. |
+
+### `game/penalty.c` (69)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -351,7 +514,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `Intermission` | `$9FA2A6` | Between periods: both teams set up, the ticker started, the pause controller the first pad with a team (none: 0), the scoreboard and the pause menu until it is left |
 | `SetHor_rink` | `$9FC896` | Clear the text screen and draw the horizontal rink's scoreboard background: the screen erased between its two print positions, the two halves of the rink map (rinkmapbuf, columns 0 and $10 of row $55, 32 by 28) to the screen maps at $0400 and $0800, then USBoard. |
 
-### `game/play/period.c` (12)
+### `game/period.c` (12)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -368,67 +531,23 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `PeriodStatsScreen` | `$9F8000` | The period stats screen: Y switches goals / shots, Start leaves |
 | `updatePPTeamTime` | `$9EB1C9` | The team with more players on the ice gets one more tick of power play time |
 
-### `game/play/shootout.c` (14)
+### `game/print.c` (11)
 
 | Function | Original | What it does |
 |---|---|---|
-| `InitShooters` | `$80CDC8` | Shootout: the 8 bytes of team a2's starters list (team data + its word at +$0C) as its shooter list |
-| `SetShooter` | `$80D2BD` | Put the player at the cursor in shooter row curitem of team a2's list; if he is already in rows 1-6, the player the row had takes his place |
-| `ShootoutWonBy` | `$80C943` | "<team> Wins!" once the shootout is decided (a 6-row frame centred on the name); then the whistle (PenNoText; $0A while undecided, outside a shootout the caller's d0) on player o |
-| `DrawShootersBack` | `$80CB5C` | The shooters screen: the top cleared, the frame outline with "Lineup", the background map into text map 2 |
-| `ShootersBackground` | `$80CC1B` | The shooters screen's title: the background redrawn (drawlinesback, then the band IRQ line back), the label, team a2's block and the pictures |
-| `ShootersSetup` | `$80CAE1` | The shooters screen's top: cleared, the frame outline with "Lineup", the title |
-| `PrintShooterNames` | `$80CC89` | Team a2's shootout list: the goalie then the five shooters, a row each with its mark, the cursor row (curitem) highlighted and its player the home matchup picture (for teams from $18 the frame of the direct page's p1 freed); then the title |
-| `PrintShooterRows` | `$80D21C` | The pick list's rows: nine players from picktop + 1 (eight from line 6), the cursor's highlighted, each with attribute d4 of mask (goalies' from the goalie list) |
-| `PrintShooterList` | `$80D004` | The shooter pick list: the attribute column's title (DispAttribCtr, kept inside the columns), the scroll arrows, the rows |
-| `ShooterSelectList` | `$80CE41` | Pick a player for shooter row curitem of team a2 from the skaters, nine at a time (up / down move the cursor and scroll, left / right the attribute shown); A / B take him (SetShooter), Start cancels |
-| `PickShooterRow` | `$80CE0A` | Shooter row curitem of team a2 picked: the goalie row steps to the next goalie (after the last the first), a shooter row opens the pick list |
-| `ShootoutShooters` | `$80CA0B` | The shootout lineup of the pausing team (when a pad plays it): up / down the row, A / B pick for it, Start leaves (the goalie set from the list) |
-| `PlayShootout_t1` | `$80C898` | A shootout turn of team a2: a period started for it, the pad that plays its shooter, the penalty shot with this round's shooter from its list (rounds past five from the top again), then the game loop until the turn is over |
-| `PlayShootout` | `$80C81C` | The shootout (line changes off): both shooter lists, then a turn for each team (visitors first) every round, five rounds and then on until the score differs |
+| `appstring` | `$9ECFA5` | Append string [a1] to string [a3] (each a length word, then the bytes; a word is stored per byte) |
+| `PushNumber` | `$9FC5EB` | d0 as a decimal string ending at mesareaEnd, no leading zeros; returns a1, the string |
+| `eraser` | `$9FBD9C` | Fill a d0 by d1 rectangle of the text map at printx / printy with tile d2 (plus the font set) |
+| `PushTime` | `$9FA3D7` | The time d0 (seconds) as a minutes:seconds string ending at mesareaEnd; returns a1, the string |
+| `print_control` | (a helper) | a control record (the negated byte n): palette and priority into printa, the font set, the map |
+| `print_dirty` | (a helper) | the changed range of the text map: entry e (the map word index) |
+| `print_pos` | (a helper) | the text map entry of the print position, and the carry the 65816 leaves (print's .1) |
+| `print` | `$9EC7BE` | Print string [a1] (a length word, then bytes: bit 7 a control record followed by printx and printy, $40 a blank, others SmallFontMap tiles) into the text map at printx / printy; returns a1 advanced past it |
+| `big_tile` | (a helper) | a big font tile: the map word at BigFontMap + off, its tile bases and printa |
+| `printbig` | `$9ECE15` | Print string [a1] with the big font (2 by 2 tiles a character, narrow ones 1 wide; lower case as upper case, a space a blank block) at printx / printy |
+| `Framer` | `$9D8000` | Draw a d0 by d1 frame (FramerMap: corners, edges, the fill) at printx / printy, the changed range of the text map kept |
 
-## Screen: the picture (printing, the rink, sprites, the camera, replays, the crowd, cards, the scouting report)
-
-### `game/screen/cards.c` (22)
-
-| Function | Original | What it does |
-|---|---|---|
-| `picboxmap_add` | (a helper) | Add base to every word of the map unpacked at picboxmap (its width and height first, the words from +6) |
-| `card_starters` | (a helper) | The six starters' roster bytes of team a2 (its team data + the word at +$C) |
-| `card_starter` | (a helper) | (PlayerCards: whether roster player p is one of the six starters at a3, whose cards come first) |
-| `CalcAttrib` | `$9F992E` | The rating (0-100) of player d0 of team a2 (0 home, 2 visitors) from the attributes of mask d4+2 (bit 15: the weighted overall rating, r2 = 0 skater / 16 goalie weights; otherwise the one attribute), with the hot / cold table when usehotcold is set. |
-| `PrintCentered` | `$9FF345` | Print string a1 centred on column 16; returns a1 past it |
-| `pic_not_starter` | (a helper) | (.9: 0 when curplayer is one of the six players of team a2's first line (team data +12), else 1) |
-| `pic_mirrored` | (a helper) | (.6: whether the picture is mirrored: a first line player never; else bit 0 of his overall rating (column 4 for a goalie, 5 for a skater; inverted for a goalie)) |
-| `paste_mirrored` | (a helper) | (.5: paste map [p0] into the map at [p1] (r7 entries a row) at column x, row y, mirrored (each row from the right, the flip bit set), adding a to each entry) |
-| `pic_map_and_colours` | (a helper) | (DrawPlayerPicture: the photo map in the text map at x, y (tiles from picchars, the visitors' $30 on), then the team's photo palette (colours $50 home, $10 visitors)) |
-| `DrawPlayerPicture` | `$9DC9A8` | Draw the picture of player d0 of team a2 at column x, row y: his photo (PlayerPhotoTable, 26 a team) unpacked and made planar in the team's picture buffer ($7F6F00 home, $7F6900 visitors), mirrored for some players; with matchupphotos the matchup photos (LoadMatchupPhotos) instead |
-| `card_print` | (a helper) | (print string a1 centred on column 16 at row y; a1 past it) |
-| `card_strengths` | (a helper) | (DrawPlayerCard: the strengths label, then the names (from list a1) of up to three strengths, the second and third only when rated 80 or more) |
-| `DrawPlayerCard` | `$9DBE79` | Draw the current card of team a2: curitem 0 the team card (the team name, the six line slots and the team rating), 1-6 a line slot's player, 7 and up roster player curitem - 7 (the number and name, the position group, the strengths and the overall rating); then the picture and the card colours |
-| `SetCardTeamColours` | `$9DC2DE` | Copy the card team's two colours (a2 nonzero: colours $67-$68, else $77-$78) to colours $4E-$4F |
-| `DrawLogoSprite` | `$9DDFBF` | Draw the logo of team a as sprites at x, y with its LogoPaletteTable palette |
-| `PrintSmallLetterSprites` | `$9C9590` | Draw string [a1] with the small letter sprites from x, y: letters, digits and '.' (2 wide), a space 3 wide, other characters skipped |
-| `PrintLineSlotName` | `$9DC2B8` | The short name of team a2's player in line slot y (a3) in small letter sprites centred on x, at printy |
-| `LoadPlayerCardScreen` | `$9DC697` | The player card screen's graphics: the team logo sprites, the screen registers, the fonts (remapped), the team block, card back and frame tiles to VRAM, the card picture map, the card back map into text map 2, the palettes, the "switch cards" text, the sprites and the scroll |
-| `PlayerCards` | `$9DBD4F` | The player cards of the pausing team: right / left the next / previous card (the team card, the six line slots, then the roster without the starters), Y the other team, Start leaves |
-| `AddStrength` | `$9DC3DB` | Insert rating column d1 of player curplayer of team a2 (GetPlayerRating) into the best-three list strengths (column, rating pairs) |
-| `FindSkaterStrengths` | `$9DC2FB` | The player card strengths of skater curplayer of team a2: the best three of eleven rating columns |
-| `FindGoalieStrengths` | `$9DC374` | The player card strengths of goalie curplayer of team a2: the best three goalie rating columns (columns 8 and 9, or 7 and 10 when column 4 is under 50) |
-
-### `game/screen/crowd.c` (7)
-
-| Function | Original | What it does |
-|---|---|---|
-| `Create_HotCold_Table` | `$9FE0E8` | Fill the hot / cold table (both teams, 624 bytes, from the end down) with random values -12 to 12: a random 0-13 limited to 12, negative when bit 4 of the seed is clear after it |
-| `StartBenchCheer` | `$9C9FD5` | Start bench a cheering, unless one already is |
-| `InitCrowdExcite` | `$9B9B6B` | At a period start (not overtime): crowd excitement $10 per playoff stage |
-| `LowerHotColdTable` | `$9BA89F` | While HotColdRaised is not 0: the first four bytes of each of the 52 hot / cold entries go down by 2 |
-| `UpdateBenchCheer` | `$9C9FED` | Each frame: step the cheering bench through its frames, and end it ($FFFF) after its rounds |
-| `Crowd_Noise_meter` | `$9B9BA5` | The crowd meter (d0): sqrt(CwdExciteLvl * 4) + 65, at most 128; the peak and the running average |
-| `Crowd_Noise` | `$9B9BF8` | The crowd meter into CurCrowdMeter: 110 dB or more sets CrowdLoud; under 105 dB a loud crowd's raised hot / cold values come down |
-
-### `game/screen/replay.c` (10)
+### `game/replay.c` (10)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -443,7 +562,14 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `replay_sound` | (a helper) | (ReplayMode: replay recorded sound s (its low byte, $FF none): a streamed one from $16 on, else queued with its volume, and a voice it starts in ADSR gets the recorded pitch) |
 | `ReplayMode` | `$9BAA60` | The instant replay: from the start of the recorded play (half way back to where the replay buffer's frames restart), frame by frame with the control panel. |
 
-### `game/screen/scout.c` (23)
+### `game/rom.c` (2)
+
+| Function | Original | What it does |
+|---|---|---|
+| `rom_set` | (a helper) | The cartridge from bytes (copied, a copier header skipped); 0 when shorter than one bank |
+| `rom_load` | (a helper) | The cartridge from the ROM file at path (rom_set); 0 when unreadable |
+
+### `game/scout.c` (23)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -471,167 +597,7 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `ShowMatchups` | `$9D8489` | The matchups box of the scouting report: both team blocks; for the line slot curitem (0 the teams) the two players' pictures, ratings and names (or the teams' logos and overall ratings), then the slot's name and who has the advantage (arrows up / down for the visitors, or none) |
 | `LoadScoutingScreen` | `$9D87D7` | Set up the scouting report screen: fade out (the team logo sprites unpacked meanwhile), the PPU's maps and sprites, the small font, framer, team block, outline, menu back and Ron Barr tiles, the menu back and Ron Barr maps in text map 2, the palettes, a clear text map, the sprites and the picture map |
 
-### `game/screen/title.c` (31)
-
-| Function | Original | What it does |
-|---|---|---|
-| `TitleDelay` | `$9DB884` | A busy loop of x passes, none once a pad press has ended the title (titleskip) |
-| `StartCredits` | `$9DB9F7` | Reset the credits state |
-| `TitlePathY` | `$9DB934` | The y scroll of title path step a: $1B0 - (a * $50 / 256) / 5 |
-| `TitlePathScale` | `$9DB8A1` | The mode 7 scale of title path step a |
-| `ShuffleTitleTeams` | `$9DBCF8` | Fill titleteams with the 26 team numbers in random order |
-| `NextTitleTeam` | `$9DBD36` | The next team of the shuffled title list, shuffling again after the 26th |
-| `TitleZoomIn` | `$9DB7A0` | Title: the mode 7 scale down to $100 a step at a time |
-| `TitleWindowWipe` | `$9DBCB3` | Title: count BG1HScroll down, moving the window edges each step, then close them |
-| `title_zoom_out` | (a helper) | Title: the mode 7 scale up to $200 while the BG1 scroll moves to ($1E8 / $120, $140) |
-| `TitleWait` | `$9DBCEB` | Wait x frames, unless a pad press has ended the title |
-| `DrawTitleSprite` | `$9DB754` | Draw sprite a of the title set at its position from the _1 / _2 tables |
-| `TitlePathX` | `$9DB8E6` | The x offset of title path step a: sin(a) times a growing amplitude (a * 10 / $50 + 1), then a straight run |
-| `PrintStringSprites` | `$9C9415` | Draw string a1 (from its first byte) as big letter sprites centred on x, at y |
-| `titlelogo_map` | (a helper) | The title logo's map header at titlelogobuf from the map at p0 (width, height, $10, then each tile + 1, palette bits $70 when a tile's attribute byte has bits $1C, else $60); *w / *h its size |
-| `titlelogo_tiles` | (a helper) | The title logo's graphics: n bytes at unpackbuf to a byte per pixel (palette bits added) from titlelogobuf+$40, 32 source bytes at a time; the bytes to send |
-| `LoadTitleLogo` | `$9DBB14` | The centre ice logo of team a in the title's mode 7 map: the map buffer sent, then the logo's map centred at ($42, $40), its graphics unpacked, converted and sent |
-| `TitleBlankSprites` | `$9DB891` | Title: an empty sprite frame, then a 35-frame wait |
-| `BuildTitlePath` | `$9DBC8B` | The title logo path, $500 steps: each step's mode 7 scale, x offset and y scroll |
-| `DrawLicenceNHL` | `$9DB983` | The licence screen: the NHL shield, the NHLPA logo and the NHL line at y $B0 |
-| `DrawLicenceNHLPA` | `$9DB9B4` | The licence screen with the NHL line moved up and "Players Association" under it |
-| `PrintCopyright` | `$9DB954` | The two copyright lines |
-| `RollCredits` | `$9DBA13` | The credits, a step when its wait is over: the title and name scroll up, hold, then the next name (or title, or the end) |
-| `TitleScreen_5` | `$9DB430` | Title: the next team's logo when the logo path has ended |
-| `TitleScreen_6` | `$9DB44B` | Title: the logo along its path (frame hook): $C00 a frame, $500 steps, then the other side; the step's scale and offsets from BuildTitlePath's tables |
-| `TitleScreen_7` | `$9DB5B6` | Title: the palettes, the licence and logo tiles, the maps and the sprites |
-| `TitleScreen_9` | `$9DB73F` | Title: sprite a alone for 4 frames |
-| `TitleScreen` | `$9DB118` | The title screen with its music: the logo zooms in, the licence screens with the team logos along their path, then the credits, until they end or a button |
-| `title_irq_next` | (a helper) | (the title's next IRQ hook, its bank stored as a word: the byte after IRQHook's, seed's low byte, cleared) |
-| `TitleScreen_framehook` | `$9DB4B2` | Title frame hook: a press of TitleSkipMask ends the title (titleskip), then the top band's display registers, .irq1 at line $46 and the logo along its path |
-| `TitleScreen_irq1` | `$9DB50C` | Title IRQ hooks: the WH3 window edge, then .irq2; the mode 7 band's matrix and scroll, then .irq3; BG1 on the main screen |
-| `TitleScreen_irq2` | `$9DB52F` | The title's second IRQ: mode 7 for the logo band (its matrix, centre and scroll), then .irq3 at line $B0 |
-
-### `game/screen/video.c` (88)
-
-| Function | Original | What it does |
-|---|---|---|
-| `hat_move` | (a helper) | One frame of hat k's flight: it moves; in the air it falls (hatvz, its own: launching clears only the first hat's); on the ice it slides, slowing by a sixteenth, until it stops |
-| `updatesound` | `$9C9930` | The crowd noise voice's gain and pitch from Crowdlevel (at most $380) |
-| `showclock` | `$9FA078` | Print the game clock (m:ss, at 3, 24; on the horizontal rink at 13, 11, but not in period 4) unless a replay is playing. |
-| `addframe` | `$9BBFB9` | Draw sprite frame sprframe (at most $3D0) at sprx / spry, flipped by sprhflip / sprvflip |
-| `setffo` | `$9FBC5F` | Draw the markers of the pad-controlled players (PadControlObj's slots 6 to 0): the slot's star, and below it the player's number in the small font and, but in the shootout, his pad's button label |
-| `showzam` | `$9FA5AD` | Draw the zamboni moving across the horizontal rink during the intermission (x from the frames since vcountmark, less the borrow c leaves: the caller's carry) |
-| `checkfo` | `$9FB1FD` | Draw the big faceoff sprites (both centres and the ref) while a faceoff is set up on the vertical rink |
-| `setsortcords` | `$9CA054` | Draw the bench cheer, then the sorted objects (OOlist) in display order, hiding ones off the screen: penalized players over the boards, flips from the attributes (none for the bench and boards frames), palette $2200 for attribute bit 0, the cup over the cup frames |
-| `crowd_frame` | (a helper) | (showcrowd's .7: crowd slot x shows step crowdanimstep of its sequence p0 (of animation p1) for its time (3 * word 6): the frame's tiles sent to VRAM (word 0 the tiles a row, word 4 the first, word 2 the VRAM row); unless the sequence has ended. |
-| `puck_in` | (a helper) | (showcrowd's test of a slot's puck window: the puck above height $1A, its screen height (3 puckz + pucky) within [lo, lo + 8) and puckx within [xlo, xhi)) |
-| `showcrowd` | `$9B9FAF` | Animate the crowd sprites (slots $22 down to 0, from $28 in Montreal when its fans or song are on): a running sequence steps on when its time runs out (at its end: a cheer goes back to the fans' animation, the others to $0C, then now and then $0E, then off); an idle slot starts by chance when the crowd is loud enough for it, the goal-end slots $22 / $20 when the puck flies into their window; the hat trick hats first. |
-| `setvideo_t1` | `$9FBB50` | setvideo's .t1: the arrow r0 (3 frames: up / down, the side, a corner) of the player pad y controls when he is off the screen, at the screen's edge toward him |
-| `setvideo_t3` | `$9FBB01` | setvideo's .t3: the off-screen arrows of the five pads (not in the pregame pause or with sflags bit 11) |
-| `setvideo` | `$9FBAAA` | Once per game frame: build the sprite table for the next vblank (the rink, faceoff sprites, the off-screen arrows, the sorted objects, pad markers, clock, zamboni, crowd, referee, the rink rows, on the horizontal rink the team blocks) and queue the changed text |
-| `SetFrameHook` | `$80855E` | Run the routine at hook (bank << 16 \| address) as the frame hook of the next NMI |
-| `ClearNMIHook` | `$808569` | Set the NMI hook back to the empty routine |
-| `WaitFrame` | `$808583` | Wait for the next frame (FrameCount changes: the NMI increments it) |
-| `SetIRQ` | `$808520` | Turn on an IRQ at line y with the routine at hook (bank << 16 \| address): NMITIMEN $81 while the hook is changed, then a frame later $B1 (NMI, pads and the H/V IRQ) |
-| `IRQOff` | `$808507` | Turn the IRQ off (NMI and pad reading on) and the IRQ hook to IRQHook_Off |
-| `BrightnessHook` | `$9C9971` | NMI hook: the fade brightness to INIDISP unless the screen is blanked |
-| `IRQ_StatsScroll1` | `$9BCE21` | Stats screen split 1 (at irqline1): BG1VOFS = irqvscroll1, then IRQ_StatsScroll2 at irqline2; scrollirqdone set for the frame |
-| `IRQ_StatsScroll2` | `$9BCE44` | Stats screen split 2 (at irqline2): BG1VOFS = irqvscroll2, then IRQ_StatsScroll3 at irqline3 |
-| `IRQ_StatsScroll3` | `$9BCE61` | Stats screen split 3 (at irqline3): BG1VOFS = irqvscroll3, then IRQ_StatsScroll1 again (the NMI sets VTIME back to irqline1) |
-| `IRQ_BandStart` | `$9DCD0F` | Top of the band (at irqline1): BG1 scrolled to ($FFFC, $FFFB), then IRQ_BandEnd at irqline2 |
-| `IRQ_BandEnd` | `$9DCD34` | Bottom of the band (at irqline2): BG1 scrolled back to (0, $FFFF), then IRQ_BandStart at irqline1 |
-| `IRQ_BG1Scroll` | `$9B93C1` | A two-part BG1 split: BG1VOFS = BG3VScroll, then IRQ_BG1Scroll_t1 at line $30 |
-| `IRQ_BG1Scroll_t1` | `$9B93DE` | IRQ_BG1Scroll's second part (at line $30): BG1VOFS back to $FFFF, then IRQ_BG1Scroll again |
-| `SetColours` | `$9DE0BD` | Copy x colours from [p0] into the colour buffer from colour y |
-| `WaitFrames` | `$80858F` | Wait x frames, y counting the rounds of 65536 (WaitFrames_Inc adds 1 to y first) |
-| `WaitFadeOut` | `$9F9708` | Wait until the fade has reached black |
-| `SetupBandIRQ` | `$9DCCF5` | The band IRQ pair (lines a and x) that shifts the BG1 scroll |
-| `SetupScrollIRQ` | `$9BCDF8` | The split scroll of a stats screen: the IRQ lines a, x, y, the three scrolls $FFFF |
-| `ResetPPURegs` | `$8086D5` | Reset the scroll, window and colour math registers and their copies |
-| `SpriteFrameEnd` | `$80AFDE` | Move the unused OAM entries off screen (Y = $E1), swap the OAM buffers and set OAMReady |
-| `QueueVRAMDMA` | `$808950` | Add a DMA of x bytes from [p0] to video memory at y to the NMI's transfer list, in pieces of $1000 bytes at most; the VRAM address after it is returned and *p0 moves past the source (its low word: the second add takes the first's carry) |
-| `ScreenOn` | `$8086BD` | Full brightness (fading in unless already there), no forced blank |
-| `BlankScreen` | `$808684` | Wait for a frame, set the default hooks, turn the IRQ off, force blank (a frame later HDMA off) and drop the DMA queue |
-| `DMAToVRAM` | `$80891F` | DMA x bytes from [p0] to video memory at y (negative: where it is, r3 as the caller left it): at once with the screen blanked, else queued for the NMI (QueueVRAMDMA, which moves *p0). |
-| `DMAToVRAMHigh` | `$80899B` | DMA x bytes from [p0] to the high bytes of video memory at y. |
-| `FillVRAM` | `$8087EA` | Fill x bytes of video memory at y (negative: where it is, r3 as the caller left it) with the word a, the DMA's fixed source at $0016 (r3+2, which holds a): at once with the screen blanked, else queued in $1000-byte pieces (type 9). |
-| `WaitDMAQueue` | `$80859A` | Wait until the DMA queue is empty (the NMI moves its head up to the tail) |
-| `PasteMap` | `$808E2D` | Copy map [*p0] (width, height, then the entries from +6) into the map at [*p1] (r7 entries a row), column x, row y, adding a to each entry; *p0 and *p1 end past the last row (their low words, with the carries of the original's adds) |
-| `PasteMapPart` | `$808E7C` | Copy a part of map [*p0] (its width at +0, entries from +6): r4 entries by r4+2 rows from column r6, row r6+2, into the map at [*p1] (r7 entries a row) at column x, row y, adding a to each entry; *p0 and *p1 end past the last row (their low words, with the original's carries) |
-| `PasteMapPart_t1` | `$808ED2` | Fill y bytes at [p1] with the byte a, from the top down (y = 1 goes round the 64 KB) |
-| `InitSprites` | `$80AEE1` | Start the sprites: sprite tile 0 at VRAM a, x OAM entries reserved, y tiles (at least $1C0, else $1A0, in 32s) for the 16x16 blocks; the block and tile allocators empty, the frame cache clear, the OAM buffers reset and an empty frame ended |
-| `FillVRAMSplit` | `$808862` | Fill x VRAM words at y with the word a, the low bytes (from $0016) then the high bytes ($0017): at once with the screen blanked, else queued in pairs of $1000-byte pieces (types $FD, $FC). |
-| `cache_add` | (a helper) | (record the frame in the tile cache: its entry number by frame number, address, bank, number, allocation, first tile; the entry's VRAM address, tile * 16 + SpriteVRAM with the carry of the last shift) |
-| `dma_entry` | (a helper) | (LoadFrameTiles: DMA queue entry x, type 1 (DMAP), len bytes from bank:src; the caller stores the VRAM address at +6) |
-| `split_run` | (a helper) | (split run x of length len at need: the rest a free run after it, which points back at x, and the run after the rest at the rest; the second add takes the first's carry) |
-| `LoadFrameTiles` | `$80B3E1` | Allocate sprite VRAM for the frame at [p0] (p0 the direct page's 4 bytes: the cache keeps the word at p0+2), queue the DMA of its tiles (one or two rows: PieceX / PieceY bytes) and add a tile cache entry: its entry * 2, $FFFF when there is no room or all 128 entries are in use, x when the frame has no pieces. |
-| `FindCachedFrame` | `$80B3CE` | The tile cache entry (* 2) of the frame at [p0], searching y entries from x; else LoadFrameTiles |
-| `GetFrameTiles` | `$80B01E` | The first VRAM tile of the frame at [p0] (its entry by frame number with FrameByNumber, else by address), loaded now if needed (x as the original's X there), its use mark refreshed; FrameTilesFail and $FFFF when there is no room |
-| `piece_entry` | (a helper) | (one OAM entry for the current piece at (px, py), if on screen: the tile word (piece tile + first tile, xor r3) and the high table's size and X bits; mode: 0 plain, 1 mirrored, 2 flipped (x mirrored too when r3 has $4000)) |
-| `draw_pieces` | (a helper) | (DrawSprite_draw's piece loop: an OAM entry for each of the r0 pieces of the frame at [p0], 7 bytes each from +$16 (X, Y, tile, size), while sprites are left) |
-| `DrawSprite_draw` | `$80B0B0` | Draw the frame at [p0] at (r5, r5h), r3 xored into each tile word (bit 15: flipped, the pieces' positions mirrored, DrawSpritePieces; bit 14: mirrored); x is the original's X at the tile cache lookup |
-| `DrawSprite` | `$80B08D` | Draw frame `frame` of the sprite set at [p1] (p1 the direct page's 4 bytes) at (x, y), a xored into the tile and attribute word |
-| `FreeCacheEntry_go` | `$80B77B` | Free tile cache entry x: the last entry moves into its slot (its frame pointed at it), and its VRAM run is given back, joined with a free run after it (blocks: in the same row of 8) and with a free run before it |
-| `FreeCacheEntry` | `$80B772` | Free entry x of frame number y (its FrameCacheOf slot cleared); _A: the entry in a's high byte |
-| `FreeFrameTiles` | `$80B719` | Free the VRAM tiles of the frame at [p0] (by its number with FrameByNumber); not cached: nothing. |
-| `FreeFrameTiles_t1` | `$80B724` | (unused entries) FreeFrameTiles for frame a of the sprite set at [p1]; the sum of the free block run lengths, walking from index SpriteBlockTiles |
-| `FreeFrameTiles_t2` | `$80B8AE` | (unused entry) The sum of the free block run lengths, walking BlockRuns from SpriteBlockTiles (after a free run the step is the sum so far, as the original) |
-| `SpriteFrameStart` | `$80AF7B` | Start filling OAMDrawBuf after the reserved entries (the high table's shift from the byte offset, as the original); age the tile cache's use marks and free the entries not drawn since |
-| `DMAToCGRAM` | `$808723` | DMA x colours from [p0] to CGRAM at colour y: at once with the screen blanked (none for x = 0; y is a byte there, CGADD), else left for the NMI (CGDMALen etc.; the colour word as y is) |
-| `DMAToCGRAM_t3` | `$808766` | (unused entry) x colours from colour y of [p0] into [p1]: a = 0 fills them with y * 2 (the index, as the original leaves it in A), $0100 copies them, else scales each component by the byte a / 256 (the multiplier) |
-| `PulseColour` | `$9D96A9` | Store at y:x the colour of this moment (vcount) of a 60-frame pulse: white to $7E10 and back, each component interpolated over 30 frames (the divides' remainders as the divider leaves them) |
-| `map_addr` | (a helper) | (the screen map in VRAM: the word address of column c, row r) |
-| `map_dma_now` | (a helper) | (MapToVRAM with the screen blanked: channel 1's size n, source src and VMADD vram for a row; the caller starts the DMA) |
-| `MapToVRAM` | `$808ADF` | Copy map [p0] (width, height, then the entries from +6) into the screen map in VRAM at column x, row y, a row at a time (a row crossing column 32 in two, the rest on the next screen); at once with the screen blanked, else queued |
-| `MapPartToVRAM` | `$808BED` | Copy a part of map [p0] (its width at +0): r4 entries by r4+2 rows from column r7, row r7+2, into the screen map at column x (32 or more: the next screen), row y; at once or queued as MapToVRAM |
-| `MapPartToVRAMOffset` | `$808A11` | The same into VRAM through VMDATA with the screen blanked (it waits for that), adding a and ORing r3 into each entry |
-| `IRQ_Fast` | `$8084E9` | The IRQ: acknowledge TIMEUP and run the hook at IRQHook |
-| `LinearToPlanar` | `$9B85C2` | Convert linear 4bpp tiles at p0 (r0 bytes: r0 / 4 + 1 rows of 8 pixels, one row more than the bytes) to SNES planar into p1 (a 16-bit address in p0's bank): each row's two words, a nibble per pixel (a zero word skips its 4 pixels), into the row's plane words at +0 / +$10 of its tile |
-| `Mode7MapToVRAM` | `$808D43` | Copy byte map [p0] (width, height, then the bytes from +6) into the mode 7 map at column x, row y (128 bytes a row), a row at a time: at once with the screen blanked (VMAIN 0, the low bytes), else queued (type $FB) |
-| `Mode7MapToVRAM_t1` | `$808DED` | (unused entry) paste r6+2 bytes of [p0] into the map at [p1] (r7 entries a row) at column x, row y as words + a; a 0 byte ends the string, the rest of the count filled with $20 + a |
-| `NMI` | `$808147` | The NMI vector: VBlank, then NMI_FrameHookReturn unless NMISkip was set when it came |
-| `VBlank` | `$80814B` | The NMI: nothing while NMISkip is set (the 16-bit RDNMI read takes TIMEUP too), else the DMA budget for the frame, the NMI hook (NMIHookNext taken when set), then NMI_HookReturn. |
-| `nmi_dma` | (a helper) | (a DMA of channel 0 for a queue entry: its source and size from the entry, to VRAM at +6, if the budget left covers cost + its size; 0 when not) |
-| `NMI_HookReturn` | `$808186` | The NMI after its hook: the IRQ timers, INIDISP, the six BG scroll registers, the colour DMA left by DMAToCGRAM, then the DMA queue while the frame's budget lasts (entry types: a DMAP value; $FE $FF one or two words written through VMDATA; $FD / $FC low / high byte fills; $FB low bytes; the rest high bytes), then NMI_SendOAM (NMI_Tick when the budget ran out) |
-| `NMI_SendOAM` | `$8083A5` | The NMI: the queue head at x; the sprite table to OAM when it is ready and the budget has $26E left; then NMI_Tick |
-| `NMI_Tick` | `$8083DD` | The NMI's frame work: vcount (with the 50 Hz fraction's carry), a step of the fade (in after the fadestep delay, out with $FFFF; not on the frames STAT77 bit 7 is set), FrameCount (unless held), then the frame hook (FrameHookNext taken when set) |
-| `NMI_FrameHookReturn` | `$808469` | The NMI after the frame hook: the pads (Multi5Bios; b the accumulator's high byte the hook leaves), SoundUpdate, the sound stream, NMISkip cleared |
-| `DrawSpritePieces_cacheat` | `$80B389` | (unused entry) The tile cache entry * 2 of the frame at [p0], found by its number with FrameByNumber, else by its address; LoadFrameTiles when it is not cached |
-| `DrawSpritePieces_cacheframe` | `$80B394` | (unused entry) DrawSpritePieces_cacheat for frame a of the sprite set at [p1] (DrawFrameNum = a) |
-| `updatescroll` | `$9FBC41` | Set the rink scroll from the camera position (horizontal mode has its own) |
-| `find3d` | `$9BC10F` | Project rink position d0 / d1 (height d2) to the screen: d0 = x, d1 = y ($4E20 off the screen) |
-| `updatescroll_rows` | `$9FBFA0` | Queue the rink map rows that the vertical scroll brought on screen (at most $1D: the whole screen) into the BG2 ring of rows, and set BG2's scroll |
-| `UpdateHatTrick` | `$9BA1A1` | While the hat trick is on (not on the horizontal rink or in a replay): the ten hats, each launched at random (a chance in 32 a frame) on an arc onto the ice, animated, moved timestep frames and drawn with its shadow |
-| `DrawHorTeams` | `$9F9E24` | Horizontal rink: both team blocks (home at column $14, visitors at 3, row 2) and their palette rows |
-
-## Menus: setup, the options, rosters and lines
-
-### `game/menus/optsetup.c` (24)
-
-| Function | Original | What it does |
-|---|---|---|
-| `opt_row` | (a helper) | (a row's entry in .13, by play mode: 1 shown, $FFFF the playoff name, 0 not shown; asl's carry added as adc does) |
-| `setoptions_7` | `$9DA8B8` | Setup: change the option of row d7 by d2 (a team row, or the mode, also restarts the matchup pictures), within .14's choices (team rows: $1A in the playoff modes), wrapping round; a2 left at OptPlayMode |
-| `setoptions_9` | `$9DA921` | Setup: d3 + d2, below d5 (signed) to d4 - 1, from d4 on to d5 |
-| `setoptions_10` | `$9DA973` | Setup: the option rows: the teams (setteams) when they changed, then each row the play mode shows, its name and choice (the row at d7 highlighted, the team rows by name) |
-| `setoptions_t1xxxxxxxxxxx` | `$9DAC22` | Setup: team x's matchup player's short name; the home one's (x = 0) copied to $0A5C |
-| `setoptions_t2xxx` | `$9DABC1` | Setup: the next matchup (0-5, then 6 the logos): the sides showing a team turn to the matchup player's picture and name |
-| `setoptions_11` | `$9DAA83` | Setup, each pass: the team pictures (a blank box when the mode has no such team row); every $78 passes the next matchup, its title, team blocks or player names and pictures |
-| `setoptions_12` | `$9DAC4F` | Setup: the cursor row d7 moved by d0 to the next row the play mode shows (kept at the ends) |
-| `setoptions` | `$9DA5CA` | The game setup screen: up and down pick a row, left and right change it, Start goes on (the password screen in play mode 1, new playoffs in 2 and 3), then the player select screen; left alone long enough it starts the demo with random teams. |
-| `LoadTeamLines` | `$9B9334` | Copy team a2's lines ($38 bytes at its team data's offset +6) into its RAM lines, then without line changes the 8 bytes at offset +$0C over their start |
-| `PrintSelectLeft` | `$9BCA7A` | Print the Select Left hint on the password screen, d4 columns on |
-| `ClearBigText` | `$9DAF5B` | Clear the big text letter tiles (bigtextbuf+1, $300 bytes) and part of its map (screenmap+$28C) |
-| `InitSetupChars` | `$9DE074` | The setup screen's tiles: the blank tile $200, the small font after it (unpacked, its VRAM cleared first), the frame tiles after the font and the score tiles 4 further |
-| `SendBigText` | `$9DB0AB` | Send the big text map (screenmap from +6: a 32 x 2 part at row printy) and the letter tiles to VRAM |
-| `Multi5MouseMsg` | `$9DB058` | The MultiPlayer 5 warnings: the mouse, the Super Scope, the socket |
-| `Multi5ScopeMsg` | `$9DB005` | The warning that the MultiPlayer 5 is not designed for use with the Super Scope |
-| `Multi5SocketMsg` | `$9DAFB2` | The warning that the MultiPlayer 5 must be connected to controller socket 2 |
-| `LoadMatchupPhotos` | `$9DCC36` | Unpack the six matchup players' photos of team x (0 home, 2 visitors) into the $7F photo buffer (visitors at $2D00, home at $5100, each at its MatchupPhotoOffsets place), unless that team's are already there |
-| `DrawSelectTeam` | `$9DAE6D` | Team d1 on the player select screen at printx: its palette (colours $70 for the home team, unless both teams are the same, else $60), its block map (with redrawblocks) and its city name in the big font |
-| `bigsprite_letter` | (a helper) | The width of letter c (and its frame, f; -1 for a space) in the big sprite font |
-| `PrintTeamSprites_go` | `$9C9479` | The letter loop of PrintTeamSprites: the width of string s (to its 0; a space first has none; '.' is 3 wide), letterx moved to centre it (r3h 0 or a2 negative), or to end at $F8 (a2 0), then each letter drawn (palette $3800, on the horizontal blocks $3E00 home / $3C00 visitors) |
-| `PrintTeamSprites` | `$9C943E` | Draw the place name of team d1, or string [a1] (made to end at its length) when d1 is negative, as big letter sprites at x / y |
-| `RedrawPlayerSelect` | `$9DAF84` | Clear the message rows and redraw the PlayerSelectAlt title and the team pictures |
-| `PlayerSelect` | `$9DA0D5` | The player select screen after the game setup: each pad moves its icon under the visitors or home team (cont1team-cont5team), Start goes on. |
-
-### `game/menus/setup.c` (114)
+### `game/setup.c` (114)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -750,7 +716,91 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `IntroSequence_framehook` | `$9FFA17` | The intro's frame hook: the jobs of introHookFlags, $80 the map block to VRAM (.28), else $08 the palette tmp2/3 (colour tmp0, tmp1 of them; with $200 the second one, introPal2Src); $10 the BG1 scroll; $40 the mode 7 matrix A and D |
 | `IntroSequence_t1xxxxxxxxxxxx` | `$9FF94F` | Intro: DMA channel 0, a bytes from p0 to VRAM address x |
 
-### `game/menus/stats.c` (63)
+### `game/shootout.c` (14)
+
+| Function | Original | What it does |
+|---|---|---|
+| `InitShooters` | `$80CDC8` | Shootout: the 8 bytes of team a2's starters list (team data + its word at +$0C) as its shooter list |
+| `SetShooter` | `$80D2BD` | Put the player at the cursor in shooter row curitem of team a2's list; if he is already in rows 1-6, the player the row had takes his place |
+| `ShootoutWonBy` | `$80C943` | "<team> Wins!" once the shootout is decided (a 6-row frame centred on the name); then the whistle (PenNoText; $0A while undecided, outside a shootout the caller's d0) on player o |
+| `DrawShootersBack` | `$80CB5C` | The shooters screen: the top cleared, the frame outline with "Lineup", the background map into text map 2 |
+| `ShootersBackground` | `$80CC1B` | The shooters screen's title: the background redrawn (drawlinesback, then the band IRQ line back), the label, team a2's block and the pictures |
+| `ShootersSetup` | `$80CAE1` | The shooters screen's top: cleared, the frame outline with "Lineup", the title |
+| `PrintShooterNames` | `$80CC89` | Team a2's shootout list: the goalie then the five shooters, a row each with its mark, the cursor row (curitem) highlighted and its player the home matchup picture (for teams from $18 the frame of the direct page's p1 freed); then the title |
+| `PrintShooterRows` | `$80D21C` | The pick list's rows: nine players from picktop + 1 (eight from line 6), the cursor's highlighted, each with attribute d4 of mask (goalies' from the goalie list) |
+| `PrintShooterList` | `$80D004` | The shooter pick list: the attribute column's title (DispAttribCtr, kept inside the columns), the scroll arrows, the rows |
+| `ShooterSelectList` | `$80CE41` | Pick a player for shooter row curitem of team a2 from the skaters, nine at a time (up / down move the cursor and scroll, left / right the attribute shown); A / B take him (SetShooter), Start cancels |
+| `PickShooterRow` | `$80CE0A` | Shooter row curitem of team a2 picked: the goalie row steps to the next goalie (after the last the first), a shooter row opens the pick list |
+| `ShootoutShooters` | `$80CA0B` | The shootout lineup of the pausing team (when a pad plays it): up / down the row, A / B pick for it, Start leaves (the goalie set from the list) |
+| `PlayShootout_t1` | `$80C898` | A shootout turn of team a2: a period started for it, the pad that plays its shooter, the penalty shot with this round's shooter from its list (rounds past five from the top again), then the game loop until the turn is over |
+| `PlayShootout` | `$80C81C` | The shootout (line changes off): both shooter lists, then a turn for each team (visitors first) every round, five rounds and then on until the score differs |
+
+### `game/snes.c` (3)
+
+| Function | Original | What it does |
+|---|---|---|
+| `wait_r16` | (a helper) | (the loops that wait for an interrupt to change WRAM: read it afresh, and between two reads let the interrupt run) |
+| `mset8` | (a helper) | a byte stored at a 24-bit address: WRAM, or the console's registers ($2100-$21FF, $4000-$43FF) in the banks that have them; the cartridge ignores it |
+| `call_long` | (a helper) | Call the hook routine at addr (bank << 16 \| address), as the original's jml through the hook |
+
+### `game/sound.c` (52)
+
+| Function | Original | What it does |
+|---|---|---|
+| `SPCSendSample` | `$8095C6` | Sound driver command 3: send the n (X) bytes of the sample at [p0] to the sound CPU, loop point (the next sample slot) y, each byte through APUIO2 with its count on APUIO1 echoed back |
+| `StreamSfx` | `$9C9A7F` | Ask for streamed sound effect a (1-6): a different stream playing (3 and up) has its sound stopped, and the stream starts over; a different stream 1 or 2 keeps playing |
+| `SPCTitleToMenu` | `$9C9891` | Turn the title sample set into the menu set: the last three samples dropped (command 4), the four of the menu set after its first 12 sent |
+| `StartSoundVoice` | `$80A697` | Put the note of track x / 2 (CurTrack; TrackInst its entry, EventCode the note, EventData1 the velocity, EventData2 the length) on a free voice with its pitch, volumes and envelope, sent by SeqCmd07; nothing without an entry, a voice, or a length for two special entries. |
+| `UpdateSfxVoices` | `$80AC7B` | Each frame, each voice in use: a sound effect voice (track $10 and up) counted down (UpdateVoice); its age counted up, and between the entry's vibrato start and end ages, when the vibrato counter runs out, its rate, depth and speed stepped and the vibrato offset moved (only then added to the pitch sent); then by its state at the start: 2 the pitch (SeqCmd0B), 4 the gain lowered by entry byte $10 (stopped below 0), others gain and pitch |
+| `PlaySoundEntry` | `$80A226` | The start shared by QueueSound and PlaySound (InstPtr the entry, track $10, X = $20): the note, its length and the track's bend range and volumes from the entry (the bend range and bend stored at the track's offset $20 as an index: past their lists), the velocity SfxVelocity's high byte; StartSoundVoice's accumulator |
+| `PlaySound` | `$80A200` | Play sound a (a byte) at once on the sound effect track: no replay record, no test of a voice playing it already |
+| `QueueSound` | `$80A17D` | Start sound a on a sound effect voice (none when a voice plays it already); outside a replay it is kept in recsfx for the replay record, the one before moved to recsfx2. |
+| `sfx` | `$9C9AD0` | Play sound a with the velocity vx / vy: the loudness from their high bytes, (x^2 + y^2) / 8 (at most $70) into SfxVelocity's high byte, the pitch the entry's times $C0-$FF (seed) / 256; a voice QueueSound just started in state 2 takes the pitch, state 3. |
+| `PuckSfx` | `$9C9ABC` | Play sound a with half the puck's velocity (Y as sfx leaves it) |
+| `CollisionSfx` | `$9E9B0E` | Play the collision sound ($0F) with the doubled velocity of the faster of objects x and y, so meant: the second's length is compared with its own shorter side (ApproxLength leaves it in r3 over the first length), so it is y's but for a length that wraps |
+| `stream_sfx` | (a helper) | Each frame: the streamed sound effect streamsfx (but while the sound is locked or the menu set is loaded; with no game clock and no song, cursong cleared). |
+| `UpdateStreamSfx` | `$9C9981` | Each frame: the streamed sound effect's sample sent to the sound CPU a block at a time, then played (stream_sfx) |
+| `sample_upload` | (a helper) | (a sample set upload: the screen black, sndbank set, the sample area emptied (command 1), the player reset on the sound table, then the n bytes of 4-byte long pointers of the list sent) |
+| `SPCGameUpload` | `$9C98DF` | Switch the sound driver to the in-game sample set, unless it is loaded |
+| `SPCIntroUpload` | `$9C97E9` | The intro sample set (marked as the game set), unless the game set's mark is there; no team song |
+| `SPCTitleUpload` | `$9C983D` | The title sample set (the menu table, marked as the game set), unless the game set's mark is there; no team song |
+| `SPCMenuUpload` | `$9C978E` | The menu sample set, unless it is loaded; no team song, no streamed sample loaded either way |
+| `spc_send` | (a helper) | (the SPCCmd routines' send: cmd to APUIO0, then wait for the driver to echo it back) |
+| `spc_ack` | (a helper) | Sound driver commands $07 (voice x: volume, sample, ADSR from [p0]), $08 (main volume, pitch modulation, noise, echo, FLG), $09 (echo), $0A (the echo filter: 8 bytes), each in two or three sends |
+| `SPCSetVolume` | `$8097B7` | Command $0E: the volume of voice x, a the left (APUIO2) and y the right (APUIO3) |
+| `SPCStatus` | `$80959A` | Command $02: the sample count (the result, a byte) and the free sound RAM pointer (*x, a word: APUIO1 and APUIO2) |
+| `SeqCmd0B` | `$80A4FD` | Sequencer: command $0B, the pitch SendPitch of voice y (APUIO2 and APUIO3) |
+| `SeqCmd08Init` | `$80A3F5` | Sequencer: clear the command $08 values (after keying every voice off), then send command $08 (the volume and pitch modulation) and $82 (noise and echo voices) |
+| `SeqCmd08Init_send` | `$80A40F` | Send command $08 (SoundVolume's high byte as both sides' main volume, PitchModVoices) and $82 (NoiseVoices, EchoVoices) as they stand: SeqCmd08Init's second half, entered too by SeqCmd08, the volume fade and the events that change one of them |
+| `ClearTracks` | `$80A3D8` | Clear the track pointers and waits of tracks y up to x (8-bit counters: y = x goes all round) |
+| `StopVoice` | `$80ABC7` | Stop voice y (x = 2 * y): a streamed effect's stream state cleared, the voice free, owned by no track, and a gain $9F sent |
+| `ReadVarLen` | `$80A568` | A variable length number (7 bits a byte, top bit = more) from the track at [EventPtr] (its low word steps; the 16-bit reads take the byte after too, the 8-bit X only the byte) |
+| `SPCSetVoice` | `$809649` | Command $07: voice x's volume, sample and ADSR, 5 bytes from [p0] in two sends ($07, $81) |
+| `SPCSetFIR` | `$80970C` | Command $0A: the 8 echo filter coefficients from [p0], in three sends ($0A, $84, $85) |
+| `SPCDownload` | `$8098BF` | Sound driver command $11: x bytes of sound RAM from address y to [p0], a byte a handshake on APUIO1 |
+| `SoundVoicesOff` | `$80A3C1` | Release every voice (the sound locked meanwhile) |
+| `MusicStop` | `$80A349` | Stop the song: release the voices of its tracks (below $10) and clear its tracks |
+| `StopSound` | `$80A2A8` | Stop every voice that plays sound a (its entry through SoundTable; after the first stop the comparisons are a byte: StopVoice returns with 8-bit registers) |
+| `ReleaseVoice` | `$80ABF7` | Put voice y (x = 2 * y) into its release: state 4, its gain word from the instrument's byte $15, and a release gain by the instrument's byte $11 (a voice in state 1 just stops) |
+| `UpdateVoice` | `$80A51C` | Voice y (x = 2 * y): count its length down; at 0 release it unless it is releasing already or its track holds the sustain pedal (a negative length: no limit) |
+| `SoundInit` | `$80A380` | Silence everything and reset the player: every voice released, the sound RAM from SongUnused on cleared, SoundVolume $5000, the tracks cleared, command $08 sent, TempoTick $12 |
+| `MusicStart` | `$80A2E0` | Start the song at [p0]: the tempo from its second byte (DivX8U leaves the 16-bit accumulator, so TempoTick's store takes the byte after it too, and EventPtr+2 the word at p0+2: p0 here is the direct page's 4 bytes), the tracks from its offset list at +8, the track count from +6 |
+| `SeqCmd07` | `$80A465` | Sequencer: command $07 (the voice's volume and the instrument's sample and ADSR, bytes $14-$16), $06 (its pitch) and, unless ADSR is on (byte $15 bit 7), $0C (its start gain); Y = the voice |
+| `SeqCmd08` | `$80ADE9` | Sequencer: command $08 (volume, pitch modulation, noise and echo voices) and, with echo voices, $09 (echo volume, feedback, buffer at $E0, delay) |
+| `FindFreeVoice` | `$80A610` | A voice for the sound at InstPtr (byte 0: the voices it may use, $2A: its priority): a free one from after the last used (VoiceRotor), else the usable one of no higher priority with the highest state, then age (the ages are read from voice 7 down whatever voice is tested; the 16-bit best age takes InstVolL and VoiceVolL), which is cut (command $0C; $FF none) |
+| `SPCStreamStart` | `$8097D9` | Sound driver command $0F: start streaming a sample of x bytes from [StreamSrc] with loop point y, sending its first block ($8A bytes, or $73 when STAT78's version bits are 0); a byte a handshake on APUIO1. |
+| `SPCStreamNext` | `$80983E` | Sound driver command $10: the next block of the stream ($8A bytes, or $73 when STAT78 bit 4 is clear; the rest when it is the last, 0 = 65536); the bytes still left |
+| `SPCUpload` | `$80AE7B` | Send the stream at [p0] through the sound CPU's boot loader: blocks of length, sound RAM address and data, a length of 0 ending it with the start address (each block's kick value the last index + 4, never 0) |
+| `ReadTrackEvent` | `$80A58E` | Read the next event of the track at CurTrackPtr: its delta (ReadVarLen, not kept), its code into EventCode and its data into EventData1 / EventData2 by the code (a note: the key and its length; $E7 skips a block) |
+| `UpdateVoices` | `$80A549` | Update each voice in use that belongs to a music track (below $10), CurVoice and VoiceOfs the voice |
+| `PlayTeamSong` | `$9C9B5F` | Play song slot a of the home team (TeamSongs), or a random DefaultSongs song when it has none, unless a song plays; cursong = a + 1 |
+| `StepTrack` | `$80A86F` | Track t: count its wait down, or play its events until one gives a wait (notes start voices, $D9 and up are commands: $D9/$DA stop the song, $E2/$DB loop (from the pointer the track's events started at), $DD tempo, $DE volume, $DF controllers, $E5 pitch bend (the pitches it sets take the tuning of the entry at InstPtr, whichever it is), $DC program change); returns CurTrack |
+| `SequencerTick` | `$80AC4A` | The tempo: TempoAcc + $40, and while it reaches TempoTick (less it each time) a tick: the music voices updated and, unless the music is paused, every track stepped (from the last; none when the song stops, and no more ticks without tracks) |
+| `SoundUpdate` | `$80AD9D` | Each frame, unless the sound is locked: the fade (SoundVolume less SoundFadeSpeed, the sound reset below 0, else the volume sent), the sound effect voices and the song's ticks (the pause's mute of the volume is undone at once) |
+| `SPCUploadBlock` | `$809906` | SPCSendSample of the sample at [p0]: its loop point and length (big-endian words), then the BRR blocks from +4 (the sound locked meanwhile) |
+| `spc_cmd5` | (a helper) | (SPCSetMaster and SPCSetEcho: 5 bytes from [p0] in two sends, cmd with the first three, cmd2 with the last two) |
+
+### `game/stats.c` (63)
 
 | Function | Original | What it does |
 |---|---|---|
@@ -818,191 +868,131 @@ routine, a part a routine shares with others, or a small function of the C's own
 | `GetGoalieCount` | `$9ED300` | The number of goalies of team a2: the nibbles of its goalie odds word (byte-swapped) until the rest is zero. |
 | `PrintGameInfo` | `$9FA586` | One ticker line at column px (NewTicker3's, on the stack): team d0's name, its score d1 at px + $17 |
 
-## Sound: the sound CPU's uploads and the sound effects
-
-### `game/sound/sound.c` (52)
+### `game/title.c` (31)
 
 | Function | Original | What it does |
 |---|---|---|
-| `SPCSendSample` | `$8095C6` | Sound driver command 3: send the n (X) bytes of the sample at [p0] to the sound CPU, loop point (the next sample slot) y, each byte through APUIO2 with its count on APUIO1 echoed back |
-| `StreamSfx` | `$9C9A7F` | Ask for streamed sound effect a (1-6): a different stream playing (3 and up) has its sound stopped, and the stream starts over; a different stream 1 or 2 keeps playing |
-| `SPCTitleToMenu` | `$9C9891` | Turn the title sample set into the menu set: the last three samples dropped (command 4), the four of the menu set after its first 12 sent |
-| `StartSoundVoice` | `$80A697` | Put the note of track x / 2 (CurTrack; TrackInst its entry, EventCode the note, EventData1 the velocity, EventData2 the length) on a free voice with its pitch, volumes and envelope, sent by SeqCmd07; nothing without an entry, a voice, or a length for two special entries. |
-| `UpdateSfxVoices` | `$80AC7B` | Each frame, each voice in use: a sound effect voice (track $10 and up) counted down (UpdateVoice); its age counted up, and between the entry's vibrato start and end ages, when the vibrato counter runs out, its rate, depth and speed stepped and the vibrato offset moved (only then added to the pitch sent); then by its state at the start: 2 the pitch (SeqCmd0B), 4 the gain lowered by entry byte $10 (stopped below 0), others gain and pitch |
-| `PlaySoundEntry` | `$80A226` | The start shared by QueueSound and PlaySound (InstPtr the entry, track $10, X = $20): the note, its length and the track's bend range and volumes from the entry (the bend range and bend stored at the track's offset $20 as an index: past their lists), the velocity SfxVelocity's high byte; StartSoundVoice's accumulator |
-| `PlaySound` | `$80A200` | Play sound a (a byte) at once on the sound effect track: no replay record, no test of a voice playing it already |
-| `QueueSound` | `$80A17D` | Start sound a on a sound effect voice (none when a voice plays it already); outside a replay it is kept in recsfx for the replay record, the one before moved to recsfx2. |
-| `sfx` | `$9C9AD0` | Play sound a with the velocity vx / vy: the loudness from their high bytes, (x^2 + y^2) / 8 (at most $70) into SfxVelocity's high byte, the pitch the entry's times $C0-$FF (seed) / 256; a voice QueueSound just started in state 2 takes the pitch, state 3. |
-| `PuckSfx` | `$9C9ABC` | Play sound a with half the puck's velocity (Y as sfx leaves it) |
-| `CollisionSfx` | `$9E9B0E` | Play the collision sound ($0F) with the doubled velocity of the faster of objects x and y, so meant: the second's length is compared with its own shorter side (ApproxLength leaves it in r3 over the first length), so it is y's but for a length that wraps |
-| `stream_sfx` | (a helper) | Each frame: the streamed sound effect streamsfx (but while the sound is locked or the menu set is loaded; with no game clock and no song, cursong cleared). |
-| `UpdateStreamSfx` | `$9C9981` | Each frame: the streamed sound effect's sample sent to the sound CPU a block at a time, then played (stream_sfx) |
-| `sample_upload` | (a helper) | (a sample set upload: the screen black, sndbank set, the sample area emptied (command 1), the player reset on the sound table, then the n bytes of 4-byte long pointers of the list sent) |
-| `SPCGameUpload` | `$9C98DF` | Switch the sound driver to the in-game sample set, unless it is loaded |
-| `SPCIntroUpload` | `$9C97E9` | The intro sample set (marked as the game set), unless the game set's mark is there; no team song |
-| `SPCTitleUpload` | `$9C983D` | The title sample set (the menu table, marked as the game set), unless the game set's mark is there; no team song |
-| `SPCMenuUpload` | `$9C978E` | The menu sample set, unless it is loaded; no team song, no streamed sample loaded either way |
-| `spc_send` | (a helper) | (the SPCCmd routines' send: cmd to APUIO0, then wait for the driver to echo it back) |
-| `spc_ack` | (a helper) | Sound driver commands $07 (voice x: volume, sample, ADSR from [p0]), $08 (main volume, pitch modulation, noise, echo, FLG), $09 (echo), $0A (the echo filter: 8 bytes), each in two or three sends |
-| `SPCSetVolume` | `$8097B7` | Command $0E: the volume of voice x, a the left (APUIO2) and y the right (APUIO3) |
-| `SPCStatus` | `$80959A` | Command $02: the sample count (the result, a byte) and the free sound RAM pointer (*x, a word: APUIO1 and APUIO2) |
-| `SeqCmd0B` | `$80A4FD` | Sequencer: command $0B, the pitch SendPitch of voice y (APUIO2 and APUIO3) |
-| `SeqCmd08Init` | `$80A3F5` | Sequencer: clear the command $08 values (after keying every voice off), then send command $08 (the volume and pitch modulation) and $82 (noise and echo voices) |
-| `SeqCmd08Init_send` | `$80A40F` | Send command $08 (SoundVolume's high byte as both sides' main volume, PitchModVoices) and $82 (NoiseVoices, EchoVoices) as they stand: SeqCmd08Init's second half, entered too by SeqCmd08, the volume fade and the events that change one of them |
-| `ClearTracks` | `$80A3D8` | Clear the track pointers and waits of tracks y up to x (8-bit counters: y = x goes all round) |
-| `StopVoice` | `$80ABC7` | Stop voice y (x = 2 * y): a streamed effect's stream state cleared, the voice free, owned by no track, and a gain $9F sent |
-| `ReadVarLen` | `$80A568` | A variable length number (7 bits a byte, top bit = more) from the track at [EventPtr] (its low word steps; the 16-bit reads take the byte after too, the 8-bit X only the byte) |
-| `SPCSetVoice` | `$809649` | Command $07: voice x's volume, sample and ADSR, 5 bytes from [p0] in two sends ($07, $81) |
-| `SPCSetFIR` | `$80970C` | Command $0A: the 8 echo filter coefficients from [p0], in three sends ($0A, $84, $85) |
-| `SPCDownload` | `$8098BF` | Sound driver command $11: x bytes of sound RAM from address y to [p0], a byte a handshake on APUIO1 |
-| `SoundVoicesOff` | `$80A3C1` | Release every voice (the sound locked meanwhile) |
-| `MusicStop` | `$80A349` | Stop the song: release the voices of its tracks (below $10) and clear its tracks |
-| `StopSound` | `$80A2A8` | Stop every voice that plays sound a (its entry through SoundTable; after the first stop the comparisons are a byte: StopVoice returns with 8-bit registers) |
-| `ReleaseVoice` | `$80ABF7` | Put voice y (x = 2 * y) into its release: state 4, its gain word from the instrument's byte $15, and a release gain by the instrument's byte $11 (a voice in state 1 just stops) |
-| `UpdateVoice` | `$80A51C` | Voice y (x = 2 * y): count its length down; at 0 release it unless it is releasing already or its track holds the sustain pedal (a negative length: no limit) |
-| `SoundInit` | `$80A380` | Silence everything and reset the player: every voice released, the sound RAM from SongUnused on cleared, SoundVolume $5000, the tracks cleared, command $08 sent, TempoTick $12 |
-| `MusicStart` | `$80A2E0` | Start the song at [p0]: the tempo from its second byte (DivX8U leaves the 16-bit accumulator, so TempoTick's store takes the byte after it too, and EventPtr+2 the word at p0+2: p0 here is the direct page's 4 bytes), the tracks from its offset list at +8, the track count from +6 |
-| `SeqCmd07` | `$80A465` | Sequencer: command $07 (the voice's volume and the instrument's sample and ADSR, bytes $14-$16), $06 (its pitch) and, unless ADSR is on (byte $15 bit 7), $0C (its start gain); Y = the voice |
-| `SeqCmd08` | `$80ADE9` | Sequencer: command $08 (volume, pitch modulation, noise and echo voices) and, with echo voices, $09 (echo volume, feedback, buffer at $E0, delay) |
-| `FindFreeVoice` | `$80A610` | A voice for the sound at InstPtr (byte 0: the voices it may use, $2A: its priority): a free one from after the last used (VoiceRotor), else the usable one of no higher priority with the highest state, then age (the ages are read from voice 7 down whatever voice is tested; the 16-bit best age takes InstVolL and VoiceVolL), which is cut (command $0C; $FF none) |
-| `SPCStreamStart` | `$8097D9` | Sound driver command $0F: start streaming a sample of x bytes from [StreamSrc] with loop point y, sending its first block ($8A bytes, or $73 when STAT78's version bits are 0); a byte a handshake on APUIO1. |
-| `SPCStreamNext` | `$80983E` | Sound driver command $10: the next block of the stream ($8A bytes, or $73 when STAT78 bit 4 is clear; the rest when it is the last, 0 = 65536); the bytes still left |
-| `SPCUpload` | `$80AE7B` | Send the stream at [p0] through the sound CPU's boot loader: blocks of length, sound RAM address and data, a length of 0 ending it with the start address (each block's kick value the last index + 4, never 0) |
-| `ReadTrackEvent` | `$80A58E` | Read the next event of the track at CurTrackPtr: its delta (ReadVarLen, not kept), its code into EventCode and its data into EventData1 / EventData2 by the code (a note: the key and its length; $E7 skips a block) |
-| `UpdateVoices` | `$80A549` | Update each voice in use that belongs to a music track (below $10), CurVoice and VoiceOfs the voice |
-| `PlayTeamSong` | `$9C9B5F` | Play song slot a of the home team (TeamSongs), or a random DefaultSongs song when it has none, unless a song plays; cursong = a + 1 |
-| `StepTrack` | `$80A86F` | Track t: count its wait down, or play its events until one gives a wait (notes start voices, $D9 and up are commands: $D9/$DA stop the song, $E2/$DB loop (from the pointer the track's events started at), $DD tempo, $DE volume, $DF controllers, $E5 pitch bend (the pitches it sets take the tuning of the entry at InstPtr, whichever it is), $DC program change); returns CurTrack |
-| `SequencerTick` | `$80AC4A` | The tempo: TempoAcc + $40, and while it reaches TempoTick (less it each time) a tick: the music voices updated and, unless the music is paused, every track stepped (from the last; none when the song stops, and no more ticks without tracks) |
-| `SoundUpdate` | `$80AD9D` | Each frame, unless the sound is locked: the fade (SoundVolume less SoundFadeSpeed, the sound reset below 0, else the volume sent), the sound effect voices and the song's ticks (the pause's mute of the volume is undone at once) |
-| `SPCUploadBlock` | `$809906` | SPCSendSample of the sample at [p0]: its loop point and length (big-endian words), then the BRR blocks from +4 (the sound locked meanwhile) |
-| `spc_cmd5` | (a helper) | (SPCSetMaster and SPCSetEcho: 5 bytes from [p0] in two sends, cmd with the first three, cmd2 with the last two) |
+| `TitleDelay` | `$9DB884` | A busy loop of x passes, none once a pad press has ended the title (titleskip) |
+| `StartCredits` | `$9DB9F7` | Reset the credits state |
+| `TitlePathY` | `$9DB934` | The y scroll of title path step a: $1B0 - (a * $50 / 256) / 5 |
+| `TitlePathScale` | `$9DB8A1` | The mode 7 scale of title path step a |
+| `ShuffleTitleTeams` | `$9DBCF8` | Fill titleteams with the 26 team numbers in random order |
+| `NextTitleTeam` | `$9DBD36` | The next team of the shuffled title list, shuffling again after the 26th |
+| `TitleZoomIn` | `$9DB7A0` | Title: the mode 7 scale down to $100 a step at a time |
+| `TitleWindowWipe` | `$9DBCB3` | Title: count BG1HScroll down, moving the window edges each step, then close them |
+| `title_zoom_out` | (a helper) | Title: the mode 7 scale up to $200 while the BG1 scroll moves to ($1E8 / $120, $140) |
+| `TitleWait` | `$9DBCEB` | Wait x frames, unless a pad press has ended the title |
+| `DrawTitleSprite` | `$9DB754` | Draw sprite a of the title set at its position from the _1 / _2 tables |
+| `TitlePathX` | `$9DB8E6` | The x offset of title path step a: sin(a) times a growing amplitude (a * 10 / $50 + 1), then a straight run |
+| `PrintStringSprites` | `$9C9415` | Draw string a1 (from its first byte) as big letter sprites centred on x, at y |
+| `titlelogo_map` | (a helper) | The title logo's map header at titlelogobuf from the map at p0 (width, height, $10, then each tile + 1, palette bits $70 when a tile's attribute byte has bits $1C, else $60); *w / *h its size |
+| `titlelogo_tiles` | (a helper) | The title logo's graphics: n bytes at unpackbuf to a byte per pixel (palette bits added) from titlelogobuf+$40, 32 source bytes at a time; the bytes to send |
+| `LoadTitleLogo` | `$9DBB14` | The centre ice logo of team a in the title's mode 7 map: the map buffer sent, then the logo's map centred at ($42, $40), its graphics unpacked, converted and sent |
+| `TitleBlankSprites` | `$9DB891` | Title: an empty sprite frame, then a 35-frame wait |
+| `BuildTitlePath` | `$9DBC8B` | The title logo path, $500 steps: each step's mode 7 scale, x offset and y scroll |
+| `DrawLicenceNHL` | `$9DB983` | The licence screen: the NHL shield, the NHLPA logo and the NHL line at y $B0 |
+| `DrawLicenceNHLPA` | `$9DB9B4` | The licence screen with the NHL line moved up and "Players Association" under it |
+| `PrintCopyright` | `$9DB954` | The two copyright lines |
+| `RollCredits` | `$9DBA13` | The credits, a step when its wait is over: the title and name scroll up, hold, then the next name (or title, or the end) |
+| `TitleScreen_5` | `$9DB430` | Title: the next team's logo when the logo path has ended |
+| `TitleScreen_6` | `$9DB44B` | Title: the logo along its path (frame hook): $C00 a frame, $500 steps, then the other side; the step's scale and offsets from BuildTitlePath's tables |
+| `TitleScreen_7` | `$9DB5B6` | Title: the palettes, the licence and logo tiles, the maps and the sprites |
+| `TitleScreen_9` | `$9DB73F` | Title: sprite a alone for 4 frames |
+| `TitleScreen` | `$9DB118` | The title screen with its music: the logo zooms in, the licence screens with the team logos along their path, then the credits, until they end or a button |
+| `title_irq_next` | (a helper) | (the title's next IRQ hook, its bank stored as a word: the byte after IRQHook's, seed's low byte, cleared) |
+| `TitleScreen_framehook` | `$9DB4B2` | Title frame hook: a press of TitleSkipMask ends the title (titleskip), then the top band's display registers, .irq1 at line $46 and the logo along its path |
+| `TitleScreen_irq1` | `$9DB50C` | Title IRQ hooks: the WH3 window edge, then .irq2; the mode 7 band's matrix and scroll, then .irq3; BG1 on the main screen |
+| `TitleScreen_irq2` | `$9DB52F` | The title's second IRQ: mode 7 for the logo band (its matrix, centre and scroll), then .irq3 at line $B0 |
 
-## System: the 65816's arithmetic, interrupts, DMA, sprites, decompression, the sound sequencer, passwords and data
-
-### `game/system/decompress.c` (9)
+### `game/video.c` (88)
 
 | Function | Original | What it does |
 |---|---|---|
-| `DecompressRLE` | `$80C2F3` | Run-length data at y (data bank db; its header word at +3 is $0101 for bytes, else byte pairs) to WRAM through the port: a negative count n copies ~n + 1 literals, a positive one repeats the next byte (pair) n + 1 times, 0 ends |
-| `lz_lit` | (a helper) | LZ data at [p0] (its commands from +5) to WRAM through the port (LZOutAddr follows it, from p1; copies come from the WRAM already written, at LZCopySrc). |
-| `lz_copy` | (a helper) | (DecompressLZ: a copy of n bytes to the port from the output already written, at LZCopySrc) |
-| `lz_from` | (a helper) | (DecompressLZ: a copy's distance into LZDistance, and its source LZCopySrc dist + 1 bytes back from LZOutAddr) |
-| `DecompressLZ` | `$80B8DB` | Decompress's format $FB10: the LZ data at [p0] to WRAM at p1, command by command until the end run |
-| `DecompressPairs` | `$80BA63` | Decompress's format $FB46: y the data after the format word (from y+3 the escape code, the pair count and the pairs: code, first, second; then the packed bytes), expanded to WRAM |
-| `hf_number` | (a helper) | (.149 / .150: a number of the stream: 1 and 2 bits (0-3), or k zeros, a 1 and k + 3 bits over the base of .151; HuffBits the window after it) |
-| `DecompressHuffman` | `$80BBB3` | Huffman data at (p0) + 5 in data bank db to WRAM at p1 through the port. |
-| `Decompress` | `$80C373` | Unpack the data at [p0] to WRAM at [p1] (through the WRAM port, once the DMA queue is empty) by its format word: $FB10 LZ, $FB46 pairs, $FB30 Huffman, $FB7A run-length; the unpacked size from the header (its big-endian word at +3), or 1 for an unknown format |
-
-### `game/system/main.c` (2)
-
-| Function | Original | What it does |
-|---|---|---|
-| `CheckPAL` | `$9B8000` | The frame time step for a 50 Hz console (STAT78 bit 4; the 16-bit read takes APUIO0 too) |
-| `Reset_Fast` | `$80802A` | The reset: the PPU's registers cleared (the mode 7 matrix the identity, colour math $30 / $E0), VRAM cleared, the sound driver uploaded, all of WRAM cleared, the RAM tags, sprite masks and hooks set, the sprites and the sound started, the screen black, then the game (Opening) |
-
-### `game/system/middle.c` (71)
-
-| Function | Original | What it does |
-|---|---|---|
-| `randomd0A` | `$9BB370` | A random number from 0 to limit-1 |
-| `Mod100` | `$9F9E15` | d0 mod 100 |
-| `randomd0s` | `$9BB3B0` | randomas with the range in d0: a random number from -d0 to d0-1 (clears the carry) |
-| `PushNumberWidth` | `$9FC63B` | d0 as d1 digits, right aligned with leading blanks, in PushWidthBuf (more digits run on to the left); returns a1, the string, and in *a the last quotient (0) |
-| `PushNumberWrap` | `$9FC623` | PushNumberWidth, with d0 taken mod 100 when the width d1 is 2 |
-| `FramerRow` | `$9D804F` | One row of a frame into the text map at printx / printy: the corner [p0], d0 - 2 of the middle tile [p0+2], the corner [p0+4], each plus tmp0; printy steps down. |
-| `framer_box` | (a helper) | a d0 by d1 frame of the map at map (+6 the top row, +12 the middle, +18 the bottom) with tile base tmp0, the changed range of the text map kept (Framer and its kin) |
-| `FramerNineTile` | `$9D8091` | Framer with the nine-tile box (FramerNineTileMap) of tile set ninetilechars |
-| `FramerOutline` | `$9D80DD` | Framer with the outline box (FramerOutlineMap) of tile set outlinechars |
-| `ReadPads` | `$9B8017` | Once per frame: each pad's direction (PadDirection of its pad bits), changed buttons and new presses |
-| `ProcessInputWithRepeat` | `$9B852C` | Key repeat: held buttons d3 repeat (into d1) after a delay; a change d2 restarts it. |
-| `Readjoy1` | `$9B84F5` | Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held |
-| `WeightedRandomSelect` | `$9D9CD2` | A random index 0 ... |
-| `remap` | `$9B854B` | Send d0 tiles from [a0] to video memory, each pixel's colour remapped through the table [a1]; returns a0 advanced past them |
-| `Sroot` | `$9BB3BE` | The square root of the 32-bit d0 (a binary search, the range narrowed first) |
-| `forceblack` | `$8086A9` | Turn the screen black: fade out (when lit), forced blank, PPU registers reset |
-| `QueueTextDMA` | `$9FBF75` | Queue the changed part of the text map (textdirtylo to textdirtyhi) for transfer to video memory |
-| `waitx` | `$9FA5EA` | Wait d0 + 1 frames (drawing each one) or until a pad with a team holds a button (ReadjoyA's d3); returns the pad read last (zero when no pad has a team: the direct page's d0-d3 as they were) |
-| `Mul8XS` | `$808F5D` | 8 x 8 bits into 16 (A), X signed: A times X's magnitude, negated for a negative X (the carry set, or for a negative X set only when the product is 0) |
-| `Mul8S` | `$808F7D` | 8 x 8 bits into 16 (A), both signed: the magnitudes multiplied, negated when the signs differ (two negatives leave the carry as it came) |
-| `Mul16x8U` | `$808F98` | X (16 bits) x A (its low byte) into r2 ($08-$0B): unsigned; X signed; both signed. |
-| `Mul16x8XS` | `$808FC9` | X x A (low byte) into r2, X signed: X's magnitude times A, negated for a negative X |
-| `Mul16x8S` | `$808FEB` | X x A (low byte) into r2, both signed: the magnitudes multiplied, negated when the signs differ |
-| `Mul16U` | `$809099` | A x X into r2 ($08-$0B): unsigned; X signed; both signed (the carry as for Mul16x8U) |
-| `Mul16XS` | `$809080` | A x X into r2, X signed: A times X's magnitude, negated for a negative X |
-| `Mul16S` | `$809062` | A x X into r2, both signed: the magnitudes multiplied, negated when the signs differ |
-| `Mul16x8HiXS` | `$809032` | X x A (low byte) / 256, X signed: the product of X's magnitude / 256, negated for a negative X (so it rounds toward 0) |
-| `Mul16x8HiS` | `$80904B` | X x A (low byte) / 256, both signed: the magnitudes' product / 256, negated when signs differ |
-| `Div32U` | `$80923F` | r2 ($08-$0B) / r1 ($04) into r0, unsigned. |
-| `Div32S` | `$8091FC` | r2 / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF -> $8001) |
-| `Div16S` | `$809197` | r2 (16 bits) / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF for 0, $8001 when negated) |
-| `DivX8S` | `$809327` | X / A (low byte) into A, X signed: X's magnitude divided by the unsigned byte, negated for a negative X (the collision and hat trick speeds: a distance over a length or a frame count) |
-| `RandomWord` | `$808658` | A random word: the sum of two 16-bit shift-register generators (seeded $A5A5 / $B4B4 at 0) |
-| `ApproxLength` | `$9CA554` | The approximate length of (x, y): the longer side plus a quarter of the shorter, or, when the shorter is more than half the longer, plus 3/8 of it (in 16-bit words, unsigned) |
-| `ApproxLength_abs` | `$9CA568` | ApproxLength's second half, for x and y already positive (entered directly by the puck distance and the replay, which have the magnitudes) |
-| `ReadjoyA` | `$9B84DC` | Pad n: direction, new presses, changed buttons, buttons held |
-| `WaitSidePadsRelease` | `$9B866C` | Wait until every pad that has a side (cont1team) has no button down |
-| `WaitPadsRelease` | `$9B8682` | Wait until every standard pad (low nibble 0) has no button down |
-| `MemCopy` | `$808F2F` | Copy x bytes from [p0] to [p1], from the top down (an odd byte first); x = 2 or 3 goes round the whole 64 KB |
-| `DisposePtrHandle` | `$809D69` | Free handle a unless it is a heap block (bank $7E or $7F) |
-| `DerefHandle` | `$809F5B` | Handle a's address (low word) and bank (high word); 0 for a bad handle |
-| `FindHandle` | `$809F83` | The handle of address a in bank x, 0 if none |
-| `NewPtrHandle` | `$809D3C` | A handle for fixed memory at a in bank x; 0 if none is free |
-| `HeapFreeBank` | `$809FCB` | sum plus the sizes of the free blocks (flags 0) of the heap chain in p0's bank from block y (a header: size, flags, next) |
-| `WaitNoButtons` | `$8085FF` | Wait until no button is held on pad 1 |
-| `GetNewPresses` | `$9B8472` | For each of the 5 pads: the buttons that changed, those newly pressed, then the buttons held |
-| `MemFill` | `$808EDF` | Fill x bytes at [p1] with the word a (from the top down; x = 2 goes round the 64 KB); _t1 adds a to each word |
-| `MemFill_t1` | `$808EEB` | MemFill's second entry: add the word a to each word of x bytes at [p1] (from the top down) |
-| `MemOr` | `$808F03` | OR the word a into x bytes at [p1]; _t1 ANDs it |
-| `MemOr_t1` | `$808F19` | MemOr's second entry: AND the word a into x bytes at [p1] |
-| `Sin` | `$80954D` | sin / cos of a (1024 steps a circle, $0100 = 1), from the quarter-wave SineTable |
-| `Div32x32U` | `$8091CA` | n / d into the result (32 bits), the remainder in *rem, unsigned, by shift and subtract (the divisor is first shifted until its top bit is set: d = 0 never ends) |
-| `HeapInit` | `$809932` | The heaps: start them at x in bank $7E (at least $E68C) and y in bank $7F, one free block each (a header: size, flags, next, previous), all handles free |
-| `HeapFree` | `$809FAA` | The free bytes of both heaps (X high word, A low) |
-| `handle_block` | (a helper) | Handle a's block header (8 bytes before its address) in its heap's chain: *p0 the bank and the header's offset, 0 when not a heap handle or not in the chain |
-| `LockHandle` | `$809CA4` | Set / clear the locked bit ($4000) of handle a's block (a free block is left alone; clearing keeps only the used bit) |
-| `UnlockHandle` | `$809CF0` | Clear the locked bit of handle a's block, keeping only the used bit ($8000) |
-| `MulFrac16` | `$809144` | a * y (y a byte) / 128 into the result and MulProd+1: the mode 7 multiplier, or with bit 6 of Mode7InUse a shift-and-add of 7 steps (the 16-bit MulPlier: its high byte shifts down too) |
-| `MulFrac8` | `$8090ED` | c's low byte times its high byte (7 bits) / 128: the mode 7 multiplier, or with bit 6 of Mode7InUse a shift-and-add (each set bit adds the multiplicand and the carry, 1). |
-| `HeapAllocBlock` | `$809A33` | The first free block of at least want bytes in the heap chain of bank (bank << 16) from header y, taken with flags \| $8000 (split when 16 bytes or more are left: the new free block's header after the data, its next the old next; the old next's previous is not updated); its data address, $FFFF for none |
-| `PrintLetterSprites` | `$9C936C` | Draw string [a1] (its length + 2 at +0, the characters from +2) with the letter sprites at x, y: letters and digits, a space 6 pixels, other characters nothing |
-| `DisposeHandle` | `$809AAB` | Free handle a and its block (8 bytes before its address in the heap of its bank), joined with a free block after it, then with a free block before it |
-| `HeapCompactBank` | `$809BA5` | Join the free blocks of the chain in bank (bank << 16) from header y and move each used unlocked block after a free one down into it (its data by an ascending byte move), the free space moving up; the handle whose address word is the old data address points at the new one (whatever its bank) |
-| `HeapCompact` | `$809B84` | HeapCompactBank for both banks |
-| `NewHandle` | `$80999B` | A handle for a block of x bytes (a's bit 14: locked) in bank y ($7E or $7F; any other: either), compacting the heaps when it does not fit at first; 0 when no handle or no room |
-| `SetHandleSize` | `$809D8E` | Resize handle a's block to x bytes: in place when it can (shrinking by 9 or more: the rest a free block, joined with a free block after it; growing into a free block after it), else in a new block (NewHandle, either bank, not locked) that the old data (its size + 1 bytes) is moved to, the old one freed and the handle kept |
-| `Multi5ConnectCheck` | `$9B83BE` | Look for a multitap on each port: one when the first 8 signature bits are all 1 and the next 8 are not |
-| `Multi5Init` | `$9B8358` | Check for the multitap, then clear the multitap pads and state |
-| `mp5_sig` | (a helper) | Read the five pads: pads 1 and 2 from the auto read, pads 3 to 5 through the multitap on port 2 when mp5present is set (pads 4 and 5 only every 30 frames while nobody uses them); a port line change runs Multi5ConnectCheck for 16 frames; pads without the standard signature read $000F; with a warning every pad flashes $1000 / 0. |
-| `Multi5Bios` | `$9B80AB` | The pads' read of each frame, run by the NMI after the frame hook: JoyPad[0-4], with the multitap's check and warnings |
-| `PrintScrollArrows` | `$9B9AB2` | The scroll arrows beside a summary list (right while rows are below the five shown, left while rows are above), or blanks in their place; then the text map queued |
-
-### `game/system/print.c` (11)
-
-| Function | Original | What it does |
-|---|---|---|
-| `appstring` | `$9ECFA5` | Append string [a1] to string [a3] (each a length word, then the bytes; a word is stored per byte) |
-| `PushNumber` | `$9FC5EB` | d0 as a decimal string ending at mesareaEnd, no leading zeros; returns a1, the string |
-| `eraser` | `$9FBD9C` | Fill a d0 by d1 rectangle of the text map at printx / printy with tile d2 (plus the font set) |
-| `PushTime` | `$9FA3D7` | The time d0 (seconds) as a minutes:seconds string ending at mesareaEnd; returns a1, the string |
-| `print_control` | (a helper) | a control record (the negated byte n): palette and priority into printa, the font set, the map |
-| `print_dirty` | (a helper) | the changed range of the text map: entry e (the map word index) |
-| `print_pos` | (a helper) | the text map entry of the print position, and the carry the 65816 leaves (print's .1) |
-| `print` | `$9EC7BE` | Print string [a1] (a length word, then bytes: bit 7 a control record followed by printx and printy, $40 a blank, others SmallFontMap tiles) into the text map at printx / printy; returns a1 advanced past it |
-| `big_tile` | (a helper) | a big font tile: the map word at BigFontMap + off, its tile bases and printa |
-| `printbig` | `$9ECE15` | Print string [a1] with the big font (2 by 2 tiles a character, narrow ones 1 wide; lower case as upper case, a space a blank block) at printx / printy |
-| `Framer` | `$9D8000` | Draw a d0 by d1 frame (FramerMap: corners, edges, the fill) at printx / printy, the changed range of the text map kept |
-
-### `game/system/rom.c` (2)
-
-| Function | Original | What it does |
-|---|---|---|
-| `rom_set` | (a helper) | The cartridge from bytes (copied, a copier header skipped); 0 when shorter than one bank |
-| `rom_load` | (a helper) | The cartridge from the ROM file at path (rom_set); 0 when unreadable |
-
-### `game/system/snes.c` (3)
-
-| Function | Original | What it does |
-|---|---|---|
-| `wait_r16` | (a helper) | (the loops that wait for an interrupt to change WRAM: read it afresh, and between two reads let the interrupt run) |
-| `mset8` | (a helper) | a byte stored at a 24-bit address: WRAM, or the console's registers ($2100-$21FF, $4000-$43FF) in the banks that have them; the cartridge ignores it |
-| `call_long` | (a helper) | Call the hook routine at addr (bank << 16 \| address), as the original's jml through the hook |
+| `hat_move` | (a helper) | One frame of hat k's flight: it moves; in the air it falls (hatvz, its own: launching clears only the first hat's); on the ice it slides, slowing by a sixteenth, until it stops |
+| `updatesound` | `$9C9930` | The crowd noise voice's gain and pitch from Crowdlevel (at most $380) |
+| `showclock` | `$9FA078` | Print the game clock (m:ss, at 3, 24; on the horizontal rink at 13, 11, but not in period 4) unless a replay is playing. |
+| `addframe` | `$9BBFB9` | Draw sprite frame sprframe (at most $3D0) at sprx / spry, flipped by sprhflip / sprvflip |
+| `setffo` | `$9FBC5F` | Draw the markers of the pad-controlled players (PadControlObj's slots 6 to 0): the slot's star, and below it the player's number in the small font and, but in the shootout, his pad's button label |
+| `showzam` | `$9FA5AD` | Draw the zamboni moving across the horizontal rink during the intermission (x from the frames since vcountmark, less the borrow c leaves: the caller's carry) |
+| `checkfo` | `$9FB1FD` | Draw the big faceoff sprites (both centres and the ref) while a faceoff is set up on the vertical rink |
+| `setsortcords` | `$9CA054` | Draw the bench cheer, then the sorted objects (OOlist) in display order, hiding ones off the screen: penalized players over the boards, flips from the attributes (none for the bench and boards frames), palette $2200 for attribute bit 0, the cup over the cup frames |
+| `crowd_frame` | (a helper) | (showcrowd's .7: crowd slot x shows step crowdanimstep of its sequence p0 (of animation p1) for its time (3 * word 6): the frame's tiles sent to VRAM (word 0 the tiles a row, word 4 the first, word 2 the VRAM row); unless the sequence has ended. |
+| `puck_in` | (a helper) | (showcrowd's test of a slot's puck window: the puck above height $1A, its screen height (3 puckz + pucky) within [lo, lo + 8) and puckx within [xlo, xhi)) |
+| `showcrowd` | `$9B9FAF` | Animate the crowd sprites (slots $22 down to 0, from $28 in Montreal when its fans or song are on): a running sequence steps on when its time runs out (at its end: a cheer goes back to the fans' animation, the others to $0C, then now and then $0E, then off); an idle slot starts by chance when the crowd is loud enough for it, the goal-end slots $22 / $20 when the puck flies into their window; the hat trick hats first. |
+| `setvideo_t1` | `$9FBB50` | setvideo's .t1: the arrow r0 (3 frames: up / down, the side, a corner) of the player pad y controls when he is off the screen, at the screen's edge toward him |
+| `setvideo_t3` | `$9FBB01` | setvideo's .t3: the off-screen arrows of the five pads (not in the pregame pause or with sflags bit 11) |
+| `setvideo` | `$9FBAAA` | Once per game frame: build the sprite table for the next vblank (the rink, faceoff sprites, the off-screen arrows, the sorted objects, pad markers, clock, zamboni, crowd, referee, the rink rows, on the horizontal rink the team blocks) and queue the changed text |
+| `SetFrameHook` | `$80855E` | Run the routine at hook (bank << 16 \| address) as the frame hook of the next NMI |
+| `ClearNMIHook` | `$808569` | Set the NMI hook back to the empty routine |
+| `WaitFrame` | `$808583` | Wait for the next frame (FrameCount changes: the NMI increments it) |
+| `SetIRQ` | `$808520` | Turn on an IRQ at line y with the routine at hook (bank << 16 \| address): NMITIMEN $81 while the hook is changed, then a frame later $B1 (NMI, pads and the H/V IRQ) |
+| `IRQOff` | `$808507` | Turn the IRQ off (NMI and pad reading on) and the IRQ hook to IRQHook_Off |
+| `BrightnessHook` | `$9C9971` | NMI hook: the fade brightness to INIDISP unless the screen is blanked |
+| `IRQ_StatsScroll1` | `$9BCE21` | Stats screen split 1 (at irqline1): BG1VOFS = irqvscroll1, then IRQ_StatsScroll2 at irqline2; scrollirqdone set for the frame |
+| `IRQ_StatsScroll2` | `$9BCE44` | Stats screen split 2 (at irqline2): BG1VOFS = irqvscroll2, then IRQ_StatsScroll3 at irqline3 |
+| `IRQ_StatsScroll3` | `$9BCE61` | Stats screen split 3 (at irqline3): BG1VOFS = irqvscroll3, then IRQ_StatsScroll1 again (the NMI sets VTIME back to irqline1) |
+| `IRQ_BandStart` | `$9DCD0F` | Top of the band (at irqline1): BG1 scrolled to ($FFFC, $FFFB), then IRQ_BandEnd at irqline2 |
+| `IRQ_BandEnd` | `$9DCD34` | Bottom of the band (at irqline2): BG1 scrolled back to (0, $FFFF), then IRQ_BandStart at irqline1 |
+| `IRQ_BG1Scroll` | `$9B93C1` | A two-part BG1 split: BG1VOFS = BG3VScroll, then IRQ_BG1Scroll_t1 at line $30 |
+| `IRQ_BG1Scroll_t1` | `$9B93DE` | IRQ_BG1Scroll's second part (at line $30): BG1VOFS back to $FFFF, then IRQ_BG1Scroll again |
+| `SetColours` | `$9DE0BD` | Copy x colours from [p0] into the colour buffer from colour y |
+| `WaitFrames` | `$80858F` | Wait x frames, y counting the rounds of 65536 (WaitFrames_Inc adds 1 to y first) |
+| `WaitFadeOut` | `$9F9708` | Wait until the fade has reached black |
+| `SetupBandIRQ` | `$9DCCF5` | The band IRQ pair (lines a and x) that shifts the BG1 scroll |
+| `SetupScrollIRQ` | `$9BCDF8` | The split scroll of a stats screen: the IRQ lines a, x, y, the three scrolls $FFFF |
+| `ResetPPURegs` | `$8086D5` | Reset the scroll, window and colour math registers and their copies |
+| `SpriteFrameEnd` | `$80AFDE` | Move the unused OAM entries off screen (Y = $E1), swap the OAM buffers and set OAMReady |
+| `QueueVRAMDMA` | `$808950` | Add a DMA of x bytes from [p0] to video memory at y to the NMI's transfer list, in pieces of $1000 bytes at most; the VRAM address after it is returned and *p0 moves past the source (its low word: the second add takes the first's carry) |
+| `ScreenOn` | `$8086BD` | Full brightness (fading in unless already there), no forced blank |
+| `BlankScreen` | `$808684` | Wait for a frame, set the default hooks, turn the IRQ off, force blank (a frame later HDMA off) and drop the DMA queue |
+| `DMAToVRAM` | `$80891F` | DMA x bytes from [p0] to video memory at y (negative: where it is, r3 as the caller left it): at once with the screen blanked, else queued for the NMI (QueueVRAMDMA, which moves *p0). |
+| `DMAToVRAMHigh` | `$80899B` | DMA x bytes from [p0] to the high bytes of video memory at y. |
+| `FillVRAM` | `$8087EA` | Fill x bytes of video memory at y (negative: where it is, r3 as the caller left it) with the word a, the DMA's fixed source at $0016 (r3+2, which holds a): at once with the screen blanked, else queued in $1000-byte pieces (type 9). |
+| `WaitDMAQueue` | `$80859A` | Wait until the DMA queue is empty (the NMI moves its head up to the tail) |
+| `PasteMap` | `$808E2D` | Copy map [*p0] (width, height, then the entries from +6) into the map at [*p1] (r7 entries a row), column x, row y, adding a to each entry; *p0 and *p1 end past the last row (their low words, with the carries of the original's adds) |
+| `PasteMapPart` | `$808E7C` | Copy a part of map [*p0] (its width at +0, entries from +6): r4 entries by r4+2 rows from column r6, row r6+2, into the map at [*p1] (r7 entries a row) at column x, row y, adding a to each entry; *p0 and *p1 end past the last row (their low words, with the original's carries) |
+| `PasteMapPart_t1` | `$808ED2` | Fill y bytes at [p1] with the byte a, from the top down (y = 1 goes round the 64 KB) |
+| `InitSprites` | `$80AEE1` | Start the sprites: sprite tile 0 at VRAM a, x OAM entries reserved, y tiles (at least $1C0, else $1A0, in 32s) for the 16x16 blocks; the block and tile allocators empty, the frame cache clear, the OAM buffers reset and an empty frame ended |
+| `FillVRAMSplit` | `$808862` | Fill x VRAM words at y with the word a, the low bytes (from $0016) then the high bytes ($0017): at once with the screen blanked, else queued in pairs of $1000-byte pieces (types $FD, $FC). |
+| `cache_add` | (a helper) | (record the frame in the tile cache: its entry number by frame number, address, bank, number, allocation, first tile; the entry's VRAM address, tile * 16 + SpriteVRAM with the carry of the last shift) |
+| `dma_entry` | (a helper) | (LoadFrameTiles: DMA queue entry x, type 1 (DMAP), len bytes from bank:src; the caller stores the VRAM address at +6) |
+| `split_run` | (a helper) | (split run x of length len at need: the rest a free run after it, which points back at x, and the run after the rest at the rest; the second add takes the first's carry) |
+| `LoadFrameTiles` | `$80B3E1` | Allocate sprite VRAM for the frame at [p0] (p0 the direct page's 4 bytes: the cache keeps the word at p0+2), queue the DMA of its tiles (one or two rows: PieceX / PieceY bytes) and add a tile cache entry: its entry * 2, $FFFF when there is no room or all 128 entries are in use, x when the frame has no pieces. |
+| `FindCachedFrame` | `$80B3CE` | The tile cache entry (* 2) of the frame at [p0], searching y entries from x; else LoadFrameTiles |
+| `GetFrameTiles` | `$80B01E` | The first VRAM tile of the frame at [p0] (its entry by frame number with FrameByNumber, else by address), loaded now if needed (x as the original's X there), its use mark refreshed; FrameTilesFail and $FFFF when there is no room |
+| `piece_entry` | (a helper) | (one OAM entry for the current piece at (px, py), if on screen: the tile word (piece tile + first tile, xor r3) and the high table's size and X bits; mode: 0 plain, 1 mirrored, 2 flipped (x mirrored too when r3 has $4000)) |
+| `draw_pieces` | (a helper) | (DrawSprite_draw's piece loop: an OAM entry for each of the r0 pieces of the frame at [p0], 7 bytes each from +$16 (X, Y, tile, size), while sprites are left) |
+| `DrawSprite_draw` | `$80B0B0` | Draw the frame at [p0] at (r5, r5h), r3 xored into each tile word (bit 15: flipped, the pieces' positions mirrored, DrawSpritePieces; bit 14: mirrored); x is the original's X at the tile cache lookup |
+| `DrawSprite` | `$80B08D` | Draw frame `frame` of the sprite set at [p1] (p1 the direct page's 4 bytes) at (x, y), a xored into the tile and attribute word |
+| `FreeCacheEntry_go` | `$80B77B` | Free tile cache entry x: the last entry moves into its slot (its frame pointed at it), and its VRAM run is given back, joined with a free run after it (blocks: in the same row of 8) and with a free run before it |
+| `FreeCacheEntry` | `$80B772` | Free entry x of frame number y (its FrameCacheOf slot cleared); _A: the entry in a's high byte |
+| `FreeFrameTiles` | `$80B719` | Free the VRAM tiles of the frame at [p0] (by its number with FrameByNumber); not cached: nothing. |
+| `FreeFrameTiles_t1` | `$80B724` | (unused entries) FreeFrameTiles for frame a of the sprite set at [p1]; the sum of the free block run lengths, walking from index SpriteBlockTiles |
+| `FreeFrameTiles_t2` | `$80B8AE` | (unused entry) The sum of the free block run lengths, walking BlockRuns from SpriteBlockTiles (after a free run the step is the sum so far, as the original) |
+| `SpriteFrameStart` | `$80AF7B` | Start filling OAMDrawBuf after the reserved entries (the high table's shift from the byte offset, as the original); age the tile cache's use marks and free the entries not drawn since |
+| `DMAToCGRAM` | `$808723` | DMA x colours from [p0] to CGRAM at colour y: at once with the screen blanked (none for x = 0; y is a byte there, CGADD), else left for the NMI (CGDMALen etc.; the colour word as y is) |
+| `DMAToCGRAM_t3` | `$808766` | (unused entry) x colours from colour y of [p0] into [p1]: a = 0 fills them with y * 2 (the index, as the original leaves it in A), $0100 copies them, else scales each component by the byte a / 256 (the multiplier) |
+| `PulseColour` | `$9D96A9` | Store at y:x the colour of this moment (vcount) of a 60-frame pulse: white to $7E10 and back, each component interpolated over 30 frames (the divides' remainders as the divider leaves them) |
+| `map_addr` | (a helper) | (the screen map in VRAM: the word address of column c, row r) |
+| `map_dma_now` | (a helper) | (MapToVRAM with the screen blanked: channel 1's size n, source src and VMADD vram for a row; the caller starts the DMA) |
+| `MapToVRAM` | `$808ADF` | Copy map [p0] (width, height, then the entries from +6) into the screen map in VRAM at column x, row y, a row at a time (a row crossing column 32 in two, the rest on the next screen); at once with the screen blanked, else queued |
+| `MapPartToVRAM` | `$808BED` | Copy a part of map [p0] (its width at +0): r4 entries by r4+2 rows from column r7, row r7+2, into the screen map at column x (32 or more: the next screen), row y; at once or queued as MapToVRAM |
+| `MapPartToVRAMOffset` | `$808A11` | The same into VRAM through VMDATA with the screen blanked (it waits for that), adding a and ORing r3 into each entry |
+| `IRQ_Fast` | `$8084E9` | The IRQ: acknowledge TIMEUP and run the hook at IRQHook |
+| `LinearToPlanar` | `$9B85C2` | Convert linear 4bpp tiles at p0 (r0 bytes: r0 / 4 + 1 rows of 8 pixels, one row more than the bytes) to SNES planar into p1 (a 16-bit address in p0's bank): each row's two words, a nibble per pixel (a zero word skips its 4 pixels), into the row's plane words at +0 / +$10 of its tile |
+| `Mode7MapToVRAM` | `$808D43` | Copy byte map [p0] (width, height, then the bytes from +6) into the mode 7 map at column x, row y (128 bytes a row), a row at a time: at once with the screen blanked (VMAIN 0, the low bytes), else queued (type $FB) |
+| `Mode7MapToVRAM_t1` | `$808DED` | (unused entry) paste r6+2 bytes of [p0] into the map at [p1] (r7 entries a row) at column x, row y as words + a; a 0 byte ends the string, the rest of the count filled with $20 + a |
+| `NMI` | `$808147` | The NMI vector: VBlank, then NMI_FrameHookReturn unless NMISkip was set when it came |
+| `VBlank` | `$80814B` | The NMI: nothing while NMISkip is set (the 16-bit RDNMI read takes TIMEUP too), else the DMA budget for the frame, the NMI hook (NMIHookNext taken when set), then NMI_HookReturn. |
+| `nmi_dma` | (a helper) | (a DMA of channel 0 for a queue entry: its source and size from the entry, to VRAM at +6, if the budget left covers cost + its size; 0 when not) |
+| `NMI_HookReturn` | `$808186` | The NMI after its hook: the IRQ timers, INIDISP, the six BG scroll registers, the colour DMA left by DMAToCGRAM, then the DMA queue while the frame's budget lasts (entry types: a DMAP value; $FE $FF one or two words written through VMDATA; $FD / $FC low / high byte fills; $FB low bytes; the rest high bytes), then NMI_SendOAM (NMI_Tick when the budget ran out) |
+| `NMI_SendOAM` | `$8083A5` | The NMI: the queue head at x; the sprite table to OAM when it is ready and the budget has $26E left; then NMI_Tick |
+| `NMI_Tick` | `$8083DD` | The NMI's frame work: vcount (with the 50 Hz fraction's carry), a step of the fade (in after the fadestep delay, out with $FFFF; not on the frames STAT77 bit 7 is set), FrameCount (unless held), then the frame hook (FrameHookNext taken when set) |
+| `NMI_FrameHookReturn` | `$808469` | The NMI after the frame hook: the pads (Multi5Bios; b the accumulator's high byte the hook leaves), SoundUpdate, the sound stream, NMISkip cleared |
+| `DrawSpritePieces_cacheat` | `$80B389` | (unused entry) The tile cache entry * 2 of the frame at [p0], found by its number with FrameByNumber, else by its address; LoadFrameTiles when it is not cached |
+| `DrawSpritePieces_cacheframe` | `$80B394` | (unused entry) DrawSpritePieces_cacheat for frame a of the sprite set at [p1] (DrawFrameNum = a) |
+| `updatescroll` | `$9FBC41` | Set the rink scroll from the camera position (horizontal mode has its own) |
+| `find3d` | `$9BC10F` | Project rink position d0 / d1 (height d2) to the screen: d0 = x, d1 = y ($4E20 off the screen) |
+| `updatescroll_rows` | `$9FBFA0` | Queue the rink map rows that the vertical scroll brought on screen (at most $1D: the whole screen) into the BG2 ring of rows, and set BG2's scroll |
+| `UpdateHatTrick` | `$9BA1A1` | While the hat trick is on (not on the horizontal rink or in a replay): the ten hats, each launched at random (a chance in 32 a frame) on an arc onto the ice, animated, moved timestep frames and drawn with its shadow |
+| `DrawHorTeams` | `$9F9E24` | Horizontal rink: both team blocks (home at column $14, visitors at 3, row 2) and their palette rows |

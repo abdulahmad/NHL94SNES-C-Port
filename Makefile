@@ -12,7 +12,7 @@ GAMEINC := -Igame -Iplatform -Iruntime/include
 comma   := ,
 empty   :=
 space   := $(empty) $(empty)
-GAMEH   := $(wildcard game/*.h) $(wildcard game/*/*.h)
+GAMEH   := $(wildcard game/*.h)
 RTH     := $(wildcard runtime/include/snrt/*.h)
 INSTR   := -finstrument-functions -finstrument-functions-exclude-file-list=$(subst $(space),$(comma),$(GAMEH))
 GAMEDEF := -DHeapFree=HeapFree_game   # (the routine's name is Windows' too, which SDL brings in)
@@ -28,7 +28,7 @@ ROM     ?= $(firstword $(wildcard *.smc *.sfc))
 # the first Python 3 that runs (on Windows python3 may be the Store's stand-in, which only says so)
 PYTHON  ?= $(firstword $(foreach p,python3 python,$(if $(shell $(p) -c "import sys; print(sys.version_info[0])" 2>/dev/null | grep -x 3),$(p))) python3)
 
-GAME    := $(wildcard game/*/*.c)
+GAME    := $(wildcard game/*.c)
 RUNTIME := $(wildcard runtime/src/*.c)
 GAMEO   := $(GAME:%.c=build/obj/%.o)
 RTO     := $(RUNTIME:%.c=build/obj/%.o)

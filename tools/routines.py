@@ -7,11 +7,6 @@ import re
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 GAME = os.path.join(ROOT, 'game')
-FOLDERS = [('play', 'Play: the game on the ice (the game loop, skating, the AI, checks, the puck, goalies, penalties, the shootout)'),
-           ('screen', 'Screen: the picture (printing, the rink, sprites, the camera, replays, the crowd, cards, the scouting report)'),
-           ('menus', 'Menus: setup, the options, rosters and lines'),
-           ('sound', 'Sound: the sound CPU\'s uploads and the sound effects'),
-           ('system', 'System: the 65816\'s arithmetic, interrupts, DMA, sprites, decompression, the sound sequencer, passwords and data')]
 DEF = re.compile(r'^(?:static\s+)?(?:inline\s+)?[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*\)\s*\{?\s*$')
 SYM = re.compile(r'^#define SYM_(\w+) 0x([0-9A-F]+)u')
 
@@ -47,24 +42,22 @@ for line in open(os.path.join(GAME, 'symbols_gen.h'), encoding='utf-8'):
     if s: syms[s.group(1)] = s.group(2)
 total = labelled = 0
 md = ['# The routines', '',
-      'Every function in `game/`, by folder and file: the C name, the original routine it is (the',
+      'Every function in `game/`, by file: the C name, the original routine it is (the',
       'disassembly\'s label of the same name and its cartridge address), and what it does. Generated from',
       'the code\'s own comments by `tools/routines.py`. A helper is a piece split out of an original',
       'routine, a part a routine shares with others, or a small function of the C\'s own.', '']
 body = []
-for folder, title in FOLDERS:
-    body += ['## ' + title, '']
-    for f in sorted(os.listdir(os.path.join(GAME, folder))):
-        if not f.endswith('.c'): continue
-        rs = routines(os.path.join(GAME, folder, f))
-        if not rs: continue
-        body += ['### `game/%s/%s` (%d)' % (folder, f, len(rs)), '', '| Function | Original | What it does |', '|---|---|---|']
-        for name, what, static in rs:
-            orig = name in syms and not static
-            body.append('| `%s` | %s | %s |' % (name, '`$%s`' % syms[name] if orig else '(a helper)', what))
-            total += 1
-            labelled += orig
-        body.append('')
+for f in sorted(os.listdir(GAME)):
+    if not f.endswith('.c'): continue
+    rs = routines(os.path.join(GAME, f))
+    if not rs: continue
+    body += ['### `game/%s` (%d)' % (f, len(rs)), '', '| Function | Original | What it does |', '|---|---|---|']
+    for name, what, static in rs:
+        orig = name in syms and not static
+        body.append('| `%s` | %s | %s |' % (name, '`$%s`' % syms[name] if orig else '(a helper)', what))
+        total += 1
+        labelled += orig
+    body.append('')
 md += ['%d functions: %d original routines, %d helpers.' % (total, labelled, total - labelled), ''] + body
 open(os.path.join(ROOT, 'docs', 'ROUTINES.md'), 'w', encoding='utf-8', newline='\n').write('\n'.join(md))
 print('docs/ROUTINES.md: %d functions, %d original routines, %d helpers' % (total, labelled, total - labelled))

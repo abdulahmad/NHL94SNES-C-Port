@@ -1,6 +1,6 @@
 # The clock's table of C routines and their cartridge addresses (build/fnsyms_gen.c): every
-# function defined in game/*/*.c, not static, whose name has a SYM_ in game/symbols_gen.h.
-# usage: awk -f tools/gen_fnsyms.awk game/symbols_gen.h game/*/*.c > build/fnsyms_gen.c
+# function defined in game/*.c, not static, whose name has a SYM_ in game/symbols_gen.h.
+# usage: awk -f tools/gen_fnsyms.awk game/symbols_gen.h game/*.c > build/fnsyms_gen.c
 FILENAME ~ /symbols_gen\.h$/ { if ($1 == "#define" && $2 ~ /^SYM_/) sym[substr($2, 5)] = 1; next }
 /^[A-Za-z_][A-Za-z0-9_]* \**[A-Za-z_][A-Za-z0-9_]*\(/ && !/^static / && (index($0, "{") || !index($0, ";")) {
     s = $0; sub(/\(.*/, "", s); n = split(s, w, /[ *]+/); name = w[n]
