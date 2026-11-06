@@ -8,75 +8,6 @@
  * using it (an adc with no clc after the call): the multiplies set it as the original leaves it. */
 #include "game.h"
 
-/* A random number from 0 to limit-1 */
-uint16_t randomd0A(uint16_t limit)
-{
-    if (limit < 0x100) return randoma8_go(limit);
-    uint16_t r = RandomWord();
-    return (uint16_t)(Mul16U(r, limit) >> 16);
-}
-
-/* d0 mod 100 */
-uint16_t Mod100(uint16_t d0)
-{
-    while (d0 >= 100) d0 -= 100;
-    return d0;
-}
-
-/* randomas with the range in d0: a random number from -d0 to d0-1 (clears the carry) */
-uint16_t randomd0s(uint16_t d0)
-{
-    uint16_t v = (uint16_t)(randomd0A((uint16_t)(d0 << 1)) - d0);
-    cf = 0;
-    return v;
-}
-
-/* d0 as d1 digits, right aligned with leading blanks, in PushWidthBuf (more digits run on to the
- * left); returns a1, the string, and in *a the last quotient (0) */
-uint32_t PushNumberWidth(uint16_t d0, uint16_t d1, uint16_t *a)
-{
-    uint16_t y = (uint16_t)(d1 + 2);
-    g.PushWidthBuf[0] = y;
-    g.PushWidthBuf[1] = g.PushWidthBuf[2] = g.PushWidthBuf[3] = g.PushWidthBuf[4] = 0x2020;
-    uint16_t n = d0;
-    do {
-        y--;
-        uint16_t q = Div16x8U(n, 10);
-        w8(RAM_OFF_PushWidthBuf + y, (uint8_t)(n - q * 10 + 0x30));
-        n = q;
-    } while (n);
-    *a = n;
-    return RAM_OFF_PushWidthBuf;
-}
-
-/* PushNumberWidth, with d0 taken mod 100 when the width d1 is 2 */
-uint32_t PushNumberWrap(uint16_t d0, uint16_t d1, uint16_t *a)
-{
-    if (d1 == 2) while (d0 >= 100) d0 -= 100;   /* (its own copy of Mod100) */
-    return PushNumberWidth(d0, d1, a);
-}
-
-/* One row of a frame into the text map at printx / printy: the corner [p0], d0 - 2 of the middle
- * tile [p0+2], the corner [p0+4], each plus tmp0; printy steps down. Returns p0 past the three;
- * *tmp2 the row's first map offset, *x the offset before its last corner. */
-uint32_t FramerRow(uint32_t p0, uint16_t tmp0, uint16_t d0, uint16_t *tmp2, uint16_t *xo)
-{
-    uint32_t c = g.printy << 5;
-    c = (c & 0xFFFF) + g.printx + (g.printy >> 11 & 1);
-    uint32_t a = (c & 0xFFFF) << 1;
-    uint16_t x = (uint16_t)((a & 0xFFFF) + g.printm + (a >> 16 & 1));
-    *tmp2 = x;
-    w16(RAM_OFF_textmap + x, (uint16_t)(m16(p0) + tmp0));
-    p0 = (p0 & 0xFF0000) | (uint16_t)(p0 + 2);
-    uint16_t t = (uint16_t)(m16(p0) + tmp0), n = (uint16_t)(d0 - 2);
-    do { x += 2; w16(RAM_OFF_textmap + x, t); } while (--n);
-    p0 = (p0 & 0xFF0000) | (uint16_t)(p0 + 2);
-    w16(RAM_OFF_textmap + 2 + x, (uint16_t)(m16(p0) + tmp0));
-    g.printy++;
-    *xo = x;
-    return p0;
-}
-
 /* a d0 by d1 frame of the map at map (+6 the top row, +12 the middle, +18 the bottom) with tile
  * base tmp0, the changed range of the text map kept (Framer and its kin) */
 static void framer_box(uint32_t map, uint16_t tmp0, uint16_t d0, uint16_t d1)
@@ -92,310 +23,60 @@ static void framer_box(uint32_t map, uint16_t tmp0, uint16_t d0, uint16_t d1)
     if (x >= g.textdirtyhi) g.textdirtyhi = x;
 }
 
-/* Framer with the nine-tile box (FramerNineTileMap) of tile set ninetilechars */
-void FramerNineTile(uint16_t d0, uint16_t d1)
-{
-    framer_box(SYM_FramerNineTileMap, (uint16_t)(g.ninetilechars + g.printfontset), d0, d1);
-}
-
-/* Framer with the outline box (FramerOutlineMap) of tile set outlinechars */
-void FramerOutline(uint16_t d0, uint16_t d1)
-{
-    framer_box(SYM_FramerOutlineMap, (uint16_t)(g.outlinechars + g.printfontset), d0, d1);
-}
-
-/* Once per frame: each pad's direction (PadDirection of its pad bits), changed buttons and new
- * presses */
-void ReadPads(void)
-{
-    for (int i = 0; i < 5; i++) {
-        g.paddir[i] = rom8(SYM_PadDirection + (g.JoyPad[i] >> 8 & 0xF));
-    }
-    GetNewPresses();
-    g.padchangeany = g.padchange[0] | g.padchange[1] | g.padchange[2] | g.padchange[3] | g.padchange[4];
-}
-
-/* [dp],y: the pointer plus Y, carried into the bank */
-uint32_t ix(uint32_t p, uint16_t y) { return (p + y) & 0xFFFFFF; }
-/* adc with the carry in c (and out) */
-uint16_t adc(uint16_t a, uint16_t b, unsigned *c) { uint32_t s = (uint32_t)a + b + *c; *c = s >> 16 & 1; return (uint16_t)s; }
-/* asl, the bit shifted out in c */
-uint16_t asl(uint16_t a, unsigned *c) { *c = a >> 15; return (uint16_t)(a << 1); }
-
-/* A random number from 0 to n-1 (d0) */
-uint16_t randomd0(uint16_t n) { return randomd0A(n); }
-
-/* A random number from -n to n-1 */
-uint16_t randomas(uint16_t n) { return (uint16_t)(randomd0A((uint16_t)(n << 1)) - n); }
-
-/* Raise the high end of the changed text map area to a */
-void marktexthi(uint16_t a) { if (a >= g.textdirtyhi) g.textdirtyhi = a; }
-
-/* Lower the low end of the changed text map area to a */
-void marktextlo(uint16_t a) { if (a < g.textdirtylo) g.textdirtylo = a; }
-
-/* Key repeat: held buttons d3 repeat (into d1) after a delay; a change d2 restarts it. Returns d1. */
-uint16_t ProcessInputWithRepeat(uint16_t d1, uint16_t d2, uint16_t d3)
-{
-    if (!d3) return d1;
-    if (d2) { g.repeatdelay = 0x14; return d1; }
-    g.repeatdelay--;
-    if (!(g.repeatdelay & 0x8000)) return d1;
-    g.repeatdelay = 6;
-    return d3;
-}
-
-/* Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held */
-void Readjoy1(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3)
-{
-    *d3 = g.JoyPad[0];
-    *d2 = g.padchange[0];
-    *d1 = g.padnew[0];
-    *d0 = g.paddir[0];
-}
-
-/* A random index 0 ... d0-1 into the weight words at nibblebuffer, each as likely as its weight */
-uint16_t WeightedRandomSelect(uint16_t d0)
-{
-    uint16_t a1 = RAM_OFF_nibblebuffer, sum = 0;
-    while (!(--d0 & 0x8000)) { sum = (uint16_t)(sum + r16(a1)); a1 += 2; }
-    d0 = randomd0(sum);
-    do { a1 -= 2; d0 = (uint16_t)(d0 - r16(a1)); } while (!(d0 & 0x8000));
-    return (uint16_t)((uint16_t)(a1 - RAM_OFF_nibblebuffer) >> 1);
-}
-
-/* Send d0 tiles from [a0] to video memory, each pixel's colour remapped through the table [a1];
- * returns a0 advanced past them */
-uint32_t remap(uint32_t a0, uint32_t a1, uint16_t d0)
-{
-    do {
-        for (int row = 14; row >= 0; row -= 2) {
-            uint16_t p01 = m16(ix(a0, (uint16_t)row)), p23 = m16(ix(a0, (uint16_t)(row + 16)));
-            for (int px = 0; px < 8; px++) {
-                unsigned k = 0;
-                if (p23 & 0x8000) k += 8;
-                if (p23 & 0x0080) k += 4;
-                if (p01 & 0x8000) k += 2;
-                if (p01 & 0x0080) k += 1;
-                p23 = (uint16_t)((p23 & 0xFF00) << 1 | (uint8_t)(p23 << 1));
-                p01 = (uint16_t)((p01 & 0xFF00) << 1 | (uint8_t)(p01 << 1));
-                uint8_t v = m8(ix(a1, (uint16_t)k));
-                g.RemapOut[row] = (uint8_t)(g.RemapOut[row] << 1 | (v & 1));
-                g.RemapOut[row + 1] = (uint8_t)(g.RemapOut[row + 1] << 1 | (v >> 1 & 1));
-                g.RemapOut[row + 16] = (uint8_t)(g.RemapOut[row + 16] << 1 | (v >> 2 & 1));
-                g.RemapOut[row + 17] = (uint8_t)(g.RemapOut[row + 17] << 1 | (v >> 3 & 1));
-            }
-        }
-        for (int x = 0; x < 0x20; x += 2) io_w16(0x2118, (uint16_t)(g.RemapOut[x] | g.RemapOut[x + 1] << 8));
-        a0 = (a0 & 0xFF0000) | (uint16_t)(a0 + 0x20);
-    } while (--d0);
-    return a0;
-}
-
-/* The square root of the 32-bit d0 (a binary search, the range narrowed first) */
-uint16_t Sroot(uint32_t d0)
-{
-    uint16_t hi = (uint16_t)(d0 >> 16), p0, p1;
-    if (!hi) {
-        p0 = 0; p1 = 0xFF;
-        for (;;) {
-            uint32_t s = (uint32_t)p0 + p1;
-            uint16_t mid = (uint16_t)(s >> 1 | (s & 0x10000) >> 1);
-            if (mid == p0) return mid;
-            if (Mul8U(mid, mid) < (uint16_t)d0) p0 = mid; else p1 = mid;
-        }
-    }
-    if (hi >= 0x48) { p0 = 0x87C; p1 = 0x1000; if (hi >= 0x96) p0 = 0xC3F; else p1 = 0xC40; }
-    else { p0 = 0x100; p1 = 0x87D; if (hi >= 0x16) p0 = 0x4B0; else p1 = 0x4B1; }
-    for (;;) {
-        uint32_t s = (uint32_t)p0 + p1;
-        uint16_t mid = (uint16_t)(s >> 1 | (s & 0x10000) >> 1);
-        if (mid == p0) return mid;
-        if (d0 >= Mul16U(mid, mid)) p0 = mid; else p1 = mid;
-    }
-}
-
-/* Turn the screen black: fade out (when lit), forced blank, PPU registers reset */
-void forceblack(void)
-{
-    if (g.brightness) {
-        forcefade();
-        WaitFadeOut();
-    }
-    BlankScreen();
-    ResetPPURegs();
-}
-
-/* Queue the changed part of the text map (textdirtylo to textdirtyhi) for transfer to video
- * memory */
-void QueueTextDMA(void)
-{
-    uint16_t lo = g.textdirtylo;
-    if (lo & 0x8000) return;
-    uint32_t p0 = 0x7E0000u | (uint16_t)((uint16_t)(lo << 1) + (uint16_t)RAM_OFF_textmap);
-    if (!g.textdirtyhi) return;
-    DMAToVRAM(&p0, (uint16_t)((uint16_t)(g.textdirtyhi - lo + 1) << 1), lo, 0);
-    g.textdirtylo = 0xFFFF;
-    g.textdirtyhi = 0;
-}
-
-/* Wait d0 + 1 frames (drawing each one) or until a pad with a team holds a button (ReadjoyA's d3);
- * returns the pad read last (zero when no pad has a team: the direct page's d0-d3 as they were) */
-Pad waitx(uint16_t d0)
-{
-    Pad p = { 0, 0, 0, 0 };
-    uint16_t n = d0;
-    do {
-        for (uint16_t x = 0; x < 5; x++)
-            if (r16(RAM_OFF_cont1team + 2 * x) && (p = ReadjoyA(x)).held) return p;
-        SpriteFrameStart();
-        setvideo();
-        SpriteFrameEnd();
-        uint16_t v = g.vcount[0];
-        while (g.vcount[0] == v) hal_wait_interrupt();
-        ReadPads();
-    } while (!(--n & 0x8000));
-    return p;
-}
-
-/* 8 x 8 bits into 16 (A), X signed: A times X's magnitude, negated for a negative X (the carry
- * set, or for a negative X set only when the product is 0) */
-uint16_t Mul8XS(uint16_t a, uint16_t x)
-{
-    cf = 1;                                             /* (cpx #0) */
-    if (!(x & 0x8000)) return Mul8U(a, x);
-    uint16_t p = (uint16_t)((a & 0xFF) * ((uint16_t)-x & 0xFF));
-    cf = p == 0;                                        /* (0 - p) */
-    return (uint16_t)-p;
-}
-
-/* 8 x 8 bits into 16 (A), both signed: the magnitudes multiplied, negated when the signs differ
- * (two negatives leave the carry as it came) */
-uint16_t Mul8S(uint16_t a, uint16_t x)
-{
-    if (!(a & 0x8000)) return Mul8XS(a, x);
-    if (!(x & 0x8000)) {
-        uint16_t p = (uint16_t)((x & 0xFF) * ((uint16_t)-a & 0xFF));
-        cf = p == 0;
-        return (uint16_t)-p;
-    }
-    return (uint16_t)(((uint16_t)-x & 0xFF) * ((uint16_t)-a & 0xFF));   /* (the carry as it came) */
-}
-
-/* X (16 bits) x A (its low byte) into r2 ($08-$0B): unsigned; X signed; both signed. A zero
- * operand (A or X as a whole) leaves the carry as it came; a product clears it, but a negated
- * product sets it when the product is 0. */
-uint32_t Mul16x8U(uint16_t x, uint16_t a)
-{
-    if (!a || !x) return 0;
-    cf = 0;
-    return (uint32_t)x * (a & 0xFF);
-}
-
 static uint32_t neg_product(uint32_t p) { cf = p == 0; return (uint32_t)-(int32_t)p; }
 
-/* X x A (low byte) into r2, X signed: X's magnitude times A, negated for a negative X */
-uint32_t Mul16x8XS(uint16_t x, uint16_t a)
+/* Handle a's block header (8 bytes before its address) in its heap's chain: *p0 the bank and the
+ * header's offset, 0 when not a heap handle or not in the chain */
+static uint16_t handle_block(uint16_t a, uint32_t *p0)
 {
-    if (!a || !x) return 0;
-    if (!(x & 0x8000)) return Mul16x8U(x, a);
-    return neg_product(Mul16x8U((uint16_t)-x, a));
-}
-
-/* X x A (low byte) into r2, both signed: the magnitudes multiplied, negated when the signs differ */
-uint32_t Mul16x8S(uint16_t x, uint16_t a)
-{
-    if (!(a & 0x8000)) return Mul16x8XS(x, a);
-    if (!x) return 0;
-    uint32_t p = Mul16x8U(x & 0x8000 ? (uint16_t)-x : x, (uint16_t)-a);
-    return x & 0x8000 ? p : neg_product(p);
-}
-
-/* A x X into r2 ($08-$0B): unsigned; X signed; both signed (the carry as for Mul16x8U) */
-uint32_t Mul16U(uint16_t a, uint16_t x)
-{
-    if (!a || !x) return 0;
-    cf = 0;
-    return (uint32_t)a * x;
-}
-
-/* A x X into r2, X signed: A times X's magnitude, negated for a negative X */
-uint32_t Mul16XS(uint16_t a, uint16_t x)
-{
-    if (!a || !x) return 0;
-    if (!(x & 0x8000)) return Mul16U(a, x);
-    return neg_product(Mul16U(a, (uint16_t)-x));
-}
-
-/* A x X into r2, both signed: the magnitudes multiplied, negated when the signs differ */
-uint32_t Mul16S(uint16_t a, uint16_t x)
-{
-    if (!(a & 0x8000)) return Mul16XS(a, x);
-    if (!x) return 0;
-    uint32_t p = Mul16U((uint16_t)-a, x & 0x8000 ? (uint16_t)-x : x);
-    return x & 0x8000 ? p : neg_product(p);
-}
-
-/* X x A (low byte) / 256, X signed: the product of X's magnitude / 256, negated for a negative X
- * (so it rounds toward 0) */
-uint16_t Mul16x8HiXS(uint16_t x, uint16_t a)
-{
-    if (!a || !x) return 0;
-    if (!(x & 0x8000)) return Mul16x8HiU(x, a);
-    return (uint16_t)-Mul16x8HiU((uint16_t)-x, a);
-}
-
-/* X x A (low byte) / 256, both signed: the magnitudes' product / 256, negated when signs differ */
-uint16_t Mul16x8HiS(uint16_t x, uint16_t a)
-{
-    if (!(a & 0x8000)) return Mul16x8HiXS(x, a);
-    if (!x) return 0;
-    uint16_t p = Mul16x8HiU(x & 0x8000 ? (uint16_t)-x : x, (uint16_t)-a);
-    return x & 0x8000 ? p : (uint16_t)-p;
-}
-
-/* r2 ($08-$0B) / r1 ($04) into r0, unsigned. $7FFF when the dividend's top byte is not below the
- * divisor's high byte, or, for a byte divisor (0 too), when the dividend's third byte is not below
- * it; otherwise the exact quotient. */
-uint16_t Div32U(uint32_t n, uint16_t d)
-{
-    unsigned b3 = n >> 24, b2 = n >> 16 & 0xFF, dh = d >> 8, dl = d & 0xFF;
-    if (b3) {
-        if (b3 >= dh) return 0x7FFF;
-    } else if (!dh) {
-        if (!dl || (b2 && b2 >= dl)) return 0x7FFF;
+    if (a < 0x2000 || a >= 0x2100) return 0;
+    uint16_t bank = r16(a + 2), addr = r16(a), y;
+    if (bank == 0x7E) y = g.HeapStart7E;
+    else if (bank == 0x7F) { y = g.HeapStart7F; }
+    else return 0;
+    uint16_t want = (uint16_t)(addr - 8);
+    *p0 = (uint32_t)(bank & 0xFF) << 16;
+    while (y != want) {
+        y = m16(*p0 + (uint16_t)(y + 4));
+        if (!y) return 0;
     }
-    return (uint16_t)(n / d);
+    return (uint16_t)(y + 2);
 }
 
-/* r2 / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF -> $8001) */
-uint16_t Div32S(uint32_t n, uint16_t d)
+/* ---- the heap: handles, blocks (a header of words: size, flags, next, previous) ---- */
+
+/* Handles: 64 entries of an address word and a bank word at $2000-$20FF (0, 0 = free) */
+
+static uint16_t hr(uint32_t bank, uint16_t y) { return m16(bank + y); }
+
+static void hw(uint32_t bank, uint16_t y, uint16_t v) { mset16(bank + y, v); }
+
+/* Read 16 signature bits from each controller port (bit 1 of JOYSER0 / JOYSER1, after the auto
+ * read): mp5connect bit 7 (port 1) or 6 (port 2) for a multitap */
+static void rol8(uint32_t off, unsigned c) { w8(off, (uint8_t)(r8(off) << 1 | c)); }
+
+/* Read the five pads: pads 1 and 2 from the auto read, pads 3 to 5 through the multitap on port 2
+ * when mp5present is set (pads 4 and 5 only every 30 frames while nobody uses them); a port line
+ * change runs Multi5ConnectCheck for 16 frames; pads without the standard signature read $000F;
+ * with a warning every pad flashes $1000 / 0. b is the high byte of the accumulator the caller
+ * leaves (the 16-bit stores of the port bits take it). */
+static void mp5_sig(uint8_t a)
 {
-    int neg = 0;
-    if (d & 0x8000) { d = (uint16_t)-d; neg ^= 1; }
-    if (n & 0x80000000u) { n = (uint32_t)-(int32_t)n; neg ^= 1; }
-    uint16_t q = Div32U(n, d);
-    return neg ? (uint16_t)-q : q;
+    a &= 0x1E;
+    if (a == 0x02) g.mp5warning |= 4;
+    else if (a == 0x1E) g.mp5warning |= 2;
 }
 
-/* r2 (16 bits) / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF
- * for 0, $8001 when negated) */
-uint16_t Div16S(uint16_t n, uint16_t d)
+/* Wait until no button is held on pad 1 */
+void WaitNoButtons(void)
 {
-    int neg = 0;
-    if (d & 0x8000) { d = (uint16_t)-d; neg ^= 1; }
-    if (n & 0x8000) { n = (uint16_t)-n; neg ^= 1; }
-    uint16_t q = Div16U(n, d);
-    return neg ? (uint16_t)-q : q;
+    while (wait_r16(RAM_OFF_JoyPad) & 0xFFF0) wait_tick();
 }
 
-/* X / A (low byte) into A, X signed: X's magnitude divided by the unsigned byte, negated for a
- * negative X (the collision and hat trick speeds: a distance over a length or a frame count) */
-uint16_t DivX8S(uint16_t x, uint16_t a)
-{
-    if (!(x & 0x8000)) return DivX8U(x, a);
-    return (uint16_t)-DivX8U((uint16_t)-x, a);
-}
+uint16_t JoyDirIndex_Hi(uint16_t a) { return JoyDirIndex((uint16_t)(a >> 8 | a << 8)); }
+
+/* 2 * JoyDirTable[the d-pad bits of a] (JoyDirIndex_Hi: of a's high byte) */
+uint16_t JoyDirIndex(uint16_t a) { return (uint16_t)(rom8(SYM_JoyDirTable + (a & 0xF)) << 1); }
 
 /* A random word: the sum of two 16-bit shift-register generators (seeded $A5A5 / $B4B4 at 0) */
 uint16_t RandomWord(void)
@@ -407,128 +88,15 @@ uint16_t RandomWord(void)
     return (uint16_t)(g.seed[1] + g.seed[0]);
 }
 
-/* The approximate length of (x, y): the longer side plus a quarter of the shorter, or, when the
- * shorter is more than half the longer, plus 3/8 of it (in 16-bit words, unsigned) */
-uint16_t ApproxLength(uint16_t x, uint16_t y)
+/* Turn the screen black: fade out (when lit), forced blank, PPU registers reset */
+void forceblack(void)
 {
-    if (x & 0x8000) x = (uint16_t)-x;
-    if (y & 0x8000) y = (uint16_t)-y;
-    return ApproxLength_abs(x, y);
-}
-
-/* ApproxLength's second half, for x and y already positive (entered directly by the puck distance
- * and the replay, which have the magnitudes) */
-uint16_t ApproxLength_abs(uint16_t x, uint16_t y)
-{
-    uint16_t lo = x, hi = y;                            /* (r3 the shorter, r3+2 the longer) */
-    if (y < x) { lo = y; hi = x; }
-    if ((hi >> 1) < lo) return (uint16_t)(((uint16_t)((lo >> 1) + lo) >> 2) + hi);
-    return (uint16_t)((lo >> 2) + hi);
-}
-
-/* Pad n: direction, new presses, changed buttons, buttons held */
-Pad ReadjoyA(uint16_t n)
-{
-    uint16_t x = (uint16_t)(n << 1);
-    Pad p = { r16(RAM_OFF_paddir + x), r16(RAM_OFF_padnew + x), r16(RAM_OFF_padchange + x), r16(RAM_OFF_JoyPad + x) };
-    return p;
-}
-
-/* Wait until every pad that has a side (cont1team) has no button down */
-void WaitSidePadsRelease(void)
-{
-again:
-    for (int x = 8; x >= 0; x -= 2) {
-        if (!r16(RAM_OFF_cont1team + x)) continue;
-        if (wait_r16(RAM_OFF_JoyPad + x)) { wait_tick(); goto again; }
+    if (g.brightness) {
+        forcefade();
+        WaitFadeOut();
     }
-}
-
-/* Wait until every standard pad (low nibble 0) has no button down */
-void WaitPadsRelease(void)
-{
-again:
-    for (int x = 8; x >= 0; x -= 2) {
-        uint16_t j = wait_r16(RAM_OFF_JoyPad + x);
-        if (j & 0x000F) continue;
-        if (j & 0xFFF0) { wait_tick(); goto again; }
-    }
-}
-
-/* Copy x bytes from [p0] to [p1], from the top down (an odd byte first); x = 2 or 3 goes round the
- * whole 64 KB */
-void MemCopy(uint32_t p0, uint32_t p1, uint16_t x)
-{
-    uint16_t y = x;
-    if (x & 1) { y--; mset8(p1 + y, m8(p0 + y)); }
-    y = (uint16_t)(y - 2);
-    do {
-        mset16(p1 + y, m16(p0 + y));
-        y = (uint16_t)(y - 2);
-    } while (y);
-    mset16(p1, m16(p0));
-}
-
-/* Free handle a unless it is a heap block (bank $7E or $7F) */
-void DisposePtrHandle(uint16_t a)
-{
-    if (a < 0x2000 || a >= 0x2100) return;
-    uint16_t b = r16(a + 2);
-    if (b == 0x7E || b == 0x7F) return;
-    w16(a, 0);
-    w16(a + 2, 0);
-}
-
-/* Handle a's address (low word) and bank (high word); 0 for a bad handle */
-uint32_t DerefHandle(uint16_t a)
-{
-    if (a < 0x2000 || a >= 0x2100 || !(r16(a) | r16(a + 2))) return 0;
-    return r16(a) | (uint32_t)r16(a + 2) << 16;
-}
-
-/* The handle of address a in bank x, 0 if none */
-uint16_t FindHandle(uint16_t a, uint16_t x)
-{
-    for (uint16_t h = 0x2000; h != 0x2100; h += 4)
-        if (r16(h) == a && r16(h + 2) == x) return h;
-    return 0;
-}
-
-/* A handle for fixed memory at a in bank x; 0 if none is free */
-uint16_t NewPtrHandle(uint16_t a, uint16_t x)
-{
-    for (uint16_t h = 0x2000; h != 0x2100; h += 4)
-        if (!(r16(h) | r16(h + 2))) { w16(h, a); w16(h + 2, x); return h; }
-    return 0;
-}
-
-/* sum plus the sizes of the free blocks (flags 0) of the heap chain in p0's bank from block y
- * (a header: size, flags, next) */
-uint32_t HeapFreeBank(uint32_t p0, uint16_t y, uint32_t sum)
-{
-    for (;;) {
-        if (!m16(p0 + (uint16_t)(y + 2))) sum += m16(p0 + y);
-        y = m16(p0 + (uint16_t)(y + 4));
-        if (!y) return sum;
-    }
-}
-
-/* Wait until no button is held on pad 1 */
-void WaitNoButtons(void)
-{
-    while (wait_r16(RAM_OFF_JoyPad) & 0xFFF0) wait_tick();
-}
-
-/* For each of the 5 pads: the buttons that changed, those newly pressed, then the buttons held */
-void GetNewPresses(void)
-{
-    for (int i = 0; i < 5; i++) {
-        g.padchange[i] = g.JoyPad[i] ^ g.padlast[i];
-        g.padnew[i] = g.padchange[i] & g.JoyPad[i];
-    }
-    for (int i = 0; i < 5; i++) {
-        g.padlast[i] = g.JoyPad[i];
-    }
+    BlankScreen();
+    ResetPPURegs();
 }
 
 /* Fill x bytes at [p1] with the word a (from the top down; x = 2 goes round the 64 KB); _t1 adds
@@ -564,93 +132,145 @@ void MemOr_t1(uint32_t p1, uint16_t x, uint16_t a)
     mset16(p1, m16(p1) & a);
 }
 
-/* sin / cos of a (1024 steps a circle, $0100 = 1), from the quarter-wave SineTable */
-uint16_t Sin(uint16_t a)
+/* Copy x bytes from [p0] to [p1], from the top down (an odd byte first); x = 2 or 3 goes round the
+ * whole 64 KB */
+void MemCopy(uint32_t p0, uint32_t p1, uint16_t x)
 {
-    a &= 0x03FF;
-    if (a >= 0x0200) {
-        a = (uint16_t)(a - 0x0200);
-        if (a >= 0x0100) a = (uint16_t)(0x0200 - a);
-        return (uint16_t)(0 - rom16(SYM_SineTable + (uint16_t)(a << 1)));
-    }
-    if (a >= 0x0100) a = (uint16_t)(0x0200 - a);
-    return rom16(SYM_SineTable + (uint16_t)(a << 1));
-}
-
-/* n / d into the result (32 bits), the remainder in *rem, unsigned, by shift and subtract (the
- * divisor is first shifted until its top bit is set: d = 0 never ends) */
-uint32_t Div32x32U(uint32_t n, uint32_t d, uint32_t *rem)
-{
-    uint32_t q = 0;
-    int16_t y = 0;
-    while (!(d & 0x80000000u)) { y++; d <<= 1; }
+    uint16_t y = x;
+    if (x & 1) { y--; mset8(p1 + y, m8(p0 + y)); }
+    y = (uint16_t)(y - 2);
     do {
-        unsigned c = n >= d;
-        if (c) n -= d;
-        q = q << 1 | c;
-        d >>= 1;
-    } while (--y >= 0);
-    *rem = n;
-    return q;
+        mset16(p1 + y, m16(p0 + y));
+        y = (uint16_t)(y - 2);
+    } while (y);
+    mset16(p1, m16(p0));
 }
 
-/* The heaps: start them at x in bank $7E (at least $E68C) and y in bank $7F, one free block each
- * (a header: size, flags, next, previous), all handles free */
-void HeapInit(uint16_t x, uint16_t y)
+/* 8 x 8 bits into 16 (A): unsigned; X signed; both signed */
+uint16_t Mul8U(uint16_t a, uint16_t x) { return (uint16_t)((a & 0xFF) * (x & 0xFF)); }
+
+/* 8 x 8 bits into 16 (A), X signed: A times X's magnitude, negated for a negative X (the carry
+ * set, or for a negative X set only when the product is 0) */
+uint16_t Mul8XS(uint16_t a, uint16_t x)
 {
-    if (x < 0xE68C) x = 0xE68C;
-    g.HeapStart7E = x;
-    g.HeapStart7F = y;
-    w16(x + 6, 0xFFFF); w16(x + 4, 0); w16(x + 2, 0);
-    w16(x, (uint16_t)(0xFFF8 - g.HeapStart7E));
-    uint32_t b = 0x10000 + y;
-    w16(b + 6, 0xFFFF); w16(b + 4, 0); w16(b + 2, 0);
-    w16(b, (uint16_t)(0xFFF8 - g.HeapStart7F));
-    for (int k = 0xFE; k >= 0; k -= 2) w16(RAM_OFF_HandleTable + k, 0);
+    cf = 1;                                             /* (cpx #0) */
+    if (!(x & 0x8000)) return Mul8U(a, x);
+    uint16_t p = (uint16_t)((a & 0xFF) * ((uint16_t)-x & 0xFF));
+    cf = p == 0;                                        /* (0 - p) */
+    return (uint16_t)-p;
 }
 
-/* The free bytes of both heaps (X high word, A low) */
-uint32_t HeapFree(void)
+/* 8 x 8 bits into 16 (A), both signed: the magnitudes multiplied, negated when the signs differ
+ * (two negatives leave the carry as it came) */
+uint16_t Mul8S(uint16_t a, uint16_t x)
 {
-    uint32_t s = HeapFreeBank(0x7E0000, g.HeapStart7E, 0);
-    return HeapFreeBank(0x7F0000, g.HeapStart7F, s);
-}
-
-/* Handle a's block header (8 bytes before its address) in its heap's chain: *p0 the bank and the
- * header's offset, 0 when not a heap handle or not in the chain */
-static uint16_t handle_block(uint16_t a, uint32_t *p0)
-{
-    if (a < 0x2000 || a >= 0x2100) return 0;
-    uint16_t bank = r16(a + 2), addr = r16(a), y;
-    if (bank == 0x7E) y = g.HeapStart7E;
-    else if (bank == 0x7F) { y = g.HeapStart7F; }
-    else return 0;
-    uint16_t want = (uint16_t)(addr - 8);
-    *p0 = (uint32_t)(bank & 0xFF) << 16;
-    while (y != want) {
-        y = m16(*p0 + (uint16_t)(y + 4));
-        if (!y) return 0;
+    if (!(a & 0x8000)) return Mul8XS(a, x);
+    if (!(x & 0x8000)) {
+        uint16_t p = (uint16_t)((x & 0xFF) * ((uint16_t)-a & 0xFF));
+        cf = p == 0;
+        return (uint16_t)-p;
     }
-    return (uint16_t)(y + 2);
+    return (uint16_t)(((uint16_t)-x & 0xFF) * ((uint16_t)-a & 0xFF));   /* (the carry as it came) */
 }
 
-/* Set / clear the locked bit ($4000) of handle a's block (a free block is left alone; clearing
- * keeps only the used bit) */
-void LockHandle(uint16_t a)
+/* X (16 bits) x A (its low byte) into r2 ($08-$0B): unsigned; X signed; both signed. A zero
+ * operand (A or X as a whole) leaves the carry as it came; a product clears it, but a negated
+ * product sets it when the product is 0. */
+uint32_t Mul16x8U(uint16_t x, uint16_t a)
 {
-    uint32_t p0;
-    uint16_t f = handle_block(a, &p0);
-    if (!f || !m16(p0 + f)) return;
-    mset16(p0 + f, m16(p0 + f) | 0x4000);
+    if (!a || !x) return 0;
+    cf = 0;
+    return (uint32_t)x * (a & 0xFF);
 }
 
-/* Clear the locked bit of handle a's block, keeping only the used bit ($8000) */
-void UnlockHandle(uint16_t a)
+/* X x A (low byte) into r2, X signed: X's magnitude times A, negated for a negative X */
+uint32_t Mul16x8XS(uint16_t x, uint16_t a)
 {
-    uint32_t p0;
-    uint16_t f = handle_block(a, &p0);
-    if (!f || !m16(p0 + f)) return;
-    mset16(p0 + f, m16(p0 + f) & 0x8000);
+    if (!a || !x) return 0;
+    if (!(x & 0x8000)) return Mul16x8U(x, a);
+    return neg_product(Mul16x8U((uint16_t)-x, a));
+}
+
+/* X x A (low byte) into r2, both signed: the magnitudes multiplied, negated when the signs differ */
+uint32_t Mul16x8S(uint16_t x, uint16_t a)
+{
+    if (!(a & 0x8000)) return Mul16x8XS(x, a);
+    if (!x) return 0;
+    uint32_t p = Mul16x8U(x & 0x8000 ? (uint16_t)-x : x, (uint16_t)-a);
+    return x & 0x8000 ? p : neg_product(p);
+}
+
+/* X x A (low byte) / 256 into A (and $09): unsigned; X signed (the magnitude's, negated); both
+ * signed (the carry as for Mul16x8U, never set by the negation) */
+uint16_t Mul16x8HiU(uint16_t x, uint16_t a) { return (uint16_t)(Mul16x8U(x, a) >> 8); }
+
+/* X x A (low byte) / 256, X signed: the product of X's magnitude / 256, negated for a negative X
+ * (so it rounds toward 0) */
+uint16_t Mul16x8HiXS(uint16_t x, uint16_t a)
+{
+    if (!a || !x) return 0;
+    if (!(x & 0x8000)) return Mul16x8HiU(x, a);
+    return (uint16_t)-Mul16x8HiU((uint16_t)-x, a);
+}
+
+/* X x A (low byte) / 256, both signed: the magnitudes' product / 256, negated when signs differ */
+uint16_t Mul16x8HiS(uint16_t x, uint16_t a)
+{
+    if (!(a & 0x8000)) return Mul16x8HiXS(x, a);
+    if (!x) return 0;
+    uint16_t p = Mul16x8HiU(x & 0x8000 ? (uint16_t)-x : x, (uint16_t)-a);
+    return x & 0x8000 ? p : (uint16_t)-p;
+}
+
+/* A x X into r2, both signed: the magnitudes multiplied, negated when the signs differ */
+uint32_t Mul16S(uint16_t a, uint16_t x)
+{
+    if (!(a & 0x8000)) return Mul16XS(a, x);
+    if (!x) return 0;
+    uint32_t p = Mul16U((uint16_t)-a, x & 0x8000 ? (uint16_t)-x : x);
+    return x & 0x8000 ? p : neg_product(p);
+}
+
+/* A x X into r2, X signed: A times X's magnitude, negated for a negative X */
+uint32_t Mul16XS(uint16_t a, uint16_t x)
+{
+    if (!a || !x) return 0;
+    if (!(x & 0x8000)) return Mul16U(a, x);
+    return neg_product(Mul16U(a, (uint16_t)-x));
+}
+
+/* A x X into r2 ($08-$0B): unsigned; X signed; both signed (the carry as for Mul16x8U) */
+uint32_t Mul16U(uint16_t a, uint16_t x)
+{
+    if (!a || !x) return 0;
+    cf = 0;
+    return (uint32_t)a * x;
+}
+
+/* c's low byte times its high byte (7 bits) / 128: the mode 7 multiplier, or with bit 6 of
+ * Mode7InUse a shift-and-add (each set bit adds the multiplicand and the carry, 1). The 16-bit
+ * accumulator as the 65816 leaves it: the result in the low byte. */
+uint16_t MulFrac8(uint16_t c)
+{
+    if (!(g.Mode7InUse & 0x40)) {
+        uint8_t a = (uint8_t)(c << 1);
+        io_w8(0x211B, a);
+        io_w8(0x211B, 0);
+        io_w8(0x211C, (uint8_t)(c >> 8));
+        return (uint16_t)(a << 8 | io_r8(0x2135));
+    }
+    uint16_t m2 = (uint16_t)(c << 1);
+    g.MulCand[1] = m2;
+    g.MulCand[0] = (uint16_t)(m2 >> 1) & 0xFF;
+    uint16_t acc = 0;
+    for (int k = 0; k < 7; k++) {
+        if (k) acc = (uint16_t)(acc << 1);
+        unsigned bit = g.MulCand[1] >> 15;
+        g.MulCand[1] = (uint16_t)(g.MulCand[1] << 1);
+        if (bit) acc = (uint16_t)(acc + g.MulCand[0] + 1);
+    }
+    acc = (uint16_t)(acc << 1);
+    return (uint16_t)(acc >> 8 | acc << 8);
 }
 
 /* a * y (y a byte) / 128 into the result and MulProd+1: the mode 7 multiplier, or with bit 6 of
@@ -680,30 +300,130 @@ uint16_t MulFrac16(uint16_t a, uint8_t y)
     return r16(RAM_OFF_StreamLoop + 1);
 }
 
-/* c's low byte times its high byte (7 bits) / 128: the mode 7 multiplier, or with bit 6 of
- * Mode7InUse a shift-and-add (each set bit adds the multiplicand and the carry, 1). The 16-bit
- * accumulator as the 65816 leaves it: the result in the low byte. */
-uint16_t MulFrac8(uint16_t c)
+/* r2 (16 bits) / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF
+ * for 0, $8001 when negated) */
+uint16_t Div16S(uint16_t n, uint16_t d)
 {
-    if (!(g.Mode7InUse & 0x40)) {
-        uint8_t a = (uint8_t)(c << 1);
-        io_w8(0x211B, a);
-        io_w8(0x211B, 0);
-        io_w8(0x211C, (uint8_t)(c >> 8));
-        return (uint16_t)(a << 8 | io_r8(0x2135));
+    int neg = 0;
+    if (d & 0x8000) { d = (uint16_t)-d; neg ^= 1; }
+    if (n & 0x8000) { n = (uint16_t)-n; neg ^= 1; }
+    uint16_t q = Div16U(n, d);
+    return neg ? (uint16_t)-q : q;
+}
+
+/* n / d into the result (32 bits), the remainder in *rem, unsigned, by shift and subtract (the
+ * divisor is first shifted until its top bit is set: d = 0 never ends) */
+uint32_t Div32x32U(uint32_t n, uint32_t d, uint32_t *rem)
+{
+    uint32_t q = 0;
+    int16_t y = 0;
+    while (!(d & 0x80000000u)) { y++; d <<= 1; }
+    do {
+        unsigned c = n >= d;
+        if (c) n -= d;
+        q = q << 1 | c;
+        d >>= 1;
+    } while (--y >= 0);
+    *rem = n;
+    return q;
+}
+
+/* r2 / r1 into r0, signed: the magnitudes divided, negated when the signs differ ($7FFF -> $8001) */
+uint16_t Div32S(uint32_t n, uint16_t d)
+{
+    int neg = 0;
+    if (d & 0x8000) { d = (uint16_t)-d; neg ^= 1; }
+    if (n & 0x80000000u) { n = (uint32_t)-(int32_t)n; neg ^= 1; }
+    uint16_t q = Div32U(n, d);
+    return neg ? (uint16_t)-q : q;
+}
+
+/* r2 ($08-$0B) / r1 ($04) into r0, unsigned. $7FFF when the dividend's top byte is not below the
+ * divisor's high byte, or, for a byte divisor (0 too), when the dividend's third byte is not below
+ * it; otherwise the exact quotient. */
+uint16_t Div32U(uint32_t n, uint16_t d)
+{
+    unsigned b3 = n >> 24, b2 = n >> 16 & 0xFF, dh = d >> 8, dl = d & 0xFF;
+    if (b3) {
+        if (b3 >= dh) return 0x7FFF;
+    } else if (!dh) {
+        if (!dl || (b2 && b2 >= dl)) return 0x7FFF;
     }
-    uint16_t m2 = (uint16_t)(c << 1);
-    g.MulCand[1] = m2;
-    g.MulCand[0] = (uint16_t)(m2 >> 1) & 0xFF;
-    uint16_t acc = 0;
-    for (int k = 0; k < 7; k++) {
-        if (k) acc = (uint16_t)(acc << 1);
-        unsigned bit = g.MulCand[1] >> 15;
-        g.MulCand[1] = (uint16_t)(g.MulCand[1] << 1);
-        if (bit) acc = (uint16_t)(acc + g.MulCand[0] + 1);
+    return (uint16_t)(n / d);
+}
+
+/* r2 (16 bits) / r1 into r0: unsigned ($7FFF for 0); signed */
+uint16_t Div16U(uint16_t n, uint16_t d) { return d ? (uint16_t)(n / d) : 0x7FFF; }
+
+/* r2 (16 bits) / r1 (low byte) into r0, $7FFF for 0 */
+uint16_t Div16x8U(uint16_t n, uint16_t d) { return d & 0xFF ? (uint16_t)(n / (d & 0xFF)) : 0x7FFF; }
+
+/* X / A (low byte) into A, the divider's own (x / 0 = $FFFF): unsigned; X signed */
+uint16_t DivX8U(uint16_t x, uint16_t a) { return a & 0xFF ? (uint16_t)(x / (a & 0xFF)) : 0xFFFF; }
+
+/* X / A (low byte) into A, X signed: X's magnitude divided by the unsigned byte, negated for a
+ * negative X (the collision and hat trick speeds: a distance over a length or a frame count) */
+uint16_t DivX8S(uint16_t x, uint16_t a)
+{
+    if (!(x & 0x8000)) return DivX8U(x, a);
+    return (uint16_t)-DivX8U((uint16_t)-x, a);
+}
+
+uint16_t Cos(uint16_t a) { return Sin((uint16_t)(a + 0x0100)); }
+
+/* sin / cos of a (1024 steps a circle, $0100 = 1), from the quarter-wave SineTable */
+uint16_t Sin(uint16_t a)
+{
+    a &= 0x03FF;
+    if (a >= 0x0200) {
+        a = (uint16_t)(a - 0x0200);
+        if (a >= 0x0100) a = (uint16_t)(0x0200 - a);
+        return (uint16_t)(0 - rom16(SYM_SineTable + (uint16_t)(a << 1)));
     }
-    acc = (uint16_t)(acc << 1);
-    return (uint16_t)(acc >> 8 | acc << 8);
+    if (a >= 0x0100) a = (uint16_t)(0x0200 - a);
+    return rom16(SYM_SineTable + (uint16_t)(a << 1));
+}
+
+/* The heaps: start them at x in bank $7E (at least $E68C) and y in bank $7F, one free block each
+ * (a header: size, flags, next, previous), all handles free */
+void HeapInit(uint16_t x, uint16_t y)
+{
+    if (x < 0xE68C) x = 0xE68C;
+    g.HeapStart7E = x;
+    g.HeapStart7F = y;
+    w16(x + 6, 0xFFFF); w16(x + 4, 0); w16(x + 2, 0);
+    w16(x, (uint16_t)(0xFFF8 - g.HeapStart7E));
+    uint32_t b = 0x10000 + y;
+    w16(b + 6, 0xFFFF); w16(b + 4, 0); w16(b + 2, 0);
+    w16(b, (uint16_t)(0xFFF8 - g.HeapStart7F));
+    for (int k = 0xFE; k >= 0; k -= 2) w16(RAM_OFF_HandleTable + k, 0);
+}
+
+/* HeapInit at the same starts */
+void HeapReset(void) { HeapInit(g.HeapStart7E, g.HeapStart7F); }
+
+/* A handle for a block of x bytes (a's bit 14: locked) in bank y ($7E or $7F; any other: either),
+ * compacting the heaps when it does not fit at first; 0 when no handle or no room */
+uint16_t NewHandle(uint16_t a, uint16_t x, uint16_t y)
+{
+    uint16_t flags = a & 0x4000, h;
+    for (h = 0x2000; h != 0x2100; h += 4)
+        if (!(r16(h) | r16(h + 2))) break;
+    if (h == 0x2100) return 0;
+    g.NewHandleSlot = h;
+    g.NewHandleSkipBank = y ^ 1;
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass) HeapCompact();
+        for (uint16_t bank = 0x7E; bank <= 0x7F; bank++) {
+            if (bank == g.NewHandleSkipBank) continue;
+            uint16_t d = HeapAllocBlock((uint32_t)bank << 16, bank == 0x7E ? g.HeapStart7E : g.HeapStart7F, x, flags);
+            if (d == 0xFFFF) continue;
+            w16(g.NewHandleSlot, d);
+            w16(g.NewHandleSlot + 2, bank);
+            return g.NewHandleSlot;
+        }
+    }
+    return 0;
 }
 
 /* The first free block of at least want bytes in the heap chain of bank (bank << 16) from header y,
@@ -739,34 +459,6 @@ uint16_t HeapAllocBlock(uint32_t bank, uint16_t y, uint16_t want, uint16_t flags
     return (uint16_t)(hdr + 8);
 }
 
-/* Draw string [a1] (its length + 2 at +0, the characters from +2) with the letter sprites at x, y:
- * letters and digits, a space 6 pixels, other characters nothing */
-void PrintLetterSprites(uint32_t a1, uint16_t x, uint16_t y)
-{
-    uint32_t s = a1 & 0xFFFFFF;
-    g.letterx[0] = x;
-    w16(RAM_OFF_lettery, y);
-    for (uint16_t k = 2; k != m16(s); k++) {
-        uint16_t ch = m8(s + k), idx, adv;
-        if (ch == 0x20) adv = 6;
-        else {
-            if (ch >= 0x30 && ch < 0x3A) idx = (uint16_t)(ch - 0x30 + 0x1A);
-            else if (ch >= 0x61 && ch < 0x7B) idx = (uint16_t)(ch - 0x61);
-            else if (ch >= 0x41 && ch < 0x5B) idx = (uint16_t)(ch - 0x41);
-            else continue;
-            DrawSprite(0x2000, g.letterx[0], r16(RAM_OFF_lettery), idx, SYM_LetterSprites);
-            adv = rom8(SYM_LetterSpriteWidths + idx);
-        }
-        g.letterx[0] = (uint16_t)(adv + g.letterx[0]);
-    }
-}
-
-/* ---- the heap: handles, blocks (a header of words: size, flags, next, previous) ---- */
-
-/* Handles: 64 entries of an address word and a bank word at $2000-$20FF (0, 0 = free) */
-
-static uint16_t hr(uint32_t bank, uint16_t y) { return m16(bank + y); }
-static void hw(uint32_t bank, uint16_t y, uint16_t v) { mset16(bank + y, v); }
 /* (block y's link words: next at +4, previous at +6) */
 #define NEXT(y) ((uint16_t)((y) + 4))
 #define PREV(y) ((uint16_t)((y) + 6))
@@ -804,6 +496,13 @@ void DisposeHandle(uint16_t a)
     uint32_t s = (uint32_t)hr(b, pv) + size;
     hw(b, pv, (uint16_t)(s + 8 + (s >> 16 & 1)));
     hw(b, NEXT(pv), after);
+}
+
+/* HeapCompactBank for both banks */
+void HeapCompact(void)
+{
+    HeapCompactBank(0x7E0000, g.HeapStart7E);
+    HeapCompactBank(0x7F0000, g.HeapStart7F);
 }
 
 /* Join the free blocks of the chain in bank (bank << 16) from header y and move each used unlocked
@@ -854,35 +553,41 @@ void HeapCompactBank(uint32_t bank, uint16_t y)
     }
 }
 
-/* HeapCompactBank for both banks */
-void HeapCompact(void)
+/* Set / clear the locked bit ($4000) of handle a's block (a free block is left alone; clearing
+ * keeps only the used bit) */
+void LockHandle(uint16_t a)
 {
-    HeapCompactBank(0x7E0000, g.HeapStart7E);
-    HeapCompactBank(0x7F0000, g.HeapStart7F);
+    uint32_t p0;
+    uint16_t f = handle_block(a, &p0);
+    if (!f || !m16(p0 + f)) return;
+    mset16(p0 + f, m16(p0 + f) | 0x4000);
 }
 
-/* A handle for a block of x bytes (a's bit 14: locked) in bank y ($7E or $7F; any other: either),
- * compacting the heaps when it does not fit at first; 0 when no handle or no room */
-uint16_t NewHandle(uint16_t a, uint16_t x, uint16_t y)
+/* Clear the locked bit of handle a's block, keeping only the used bit ($8000) */
+void UnlockHandle(uint16_t a)
 {
-    uint16_t flags = a & 0x4000, h;
-    for (h = 0x2000; h != 0x2100; h += 4)
-        if (!(r16(h) | r16(h + 2))) break;
-    if (h == 0x2100) return 0;
-    g.NewHandleSlot = h;
-    g.NewHandleSkipBank = y ^ 1;
-    for (int pass = 0; pass < 2; pass++) {
-        if (pass) HeapCompact();
-        for (uint16_t bank = 0x7E; bank <= 0x7F; bank++) {
-            if (bank == g.NewHandleSkipBank) continue;
-            uint16_t d = HeapAllocBlock((uint32_t)bank << 16, bank == 0x7E ? g.HeapStart7E : g.HeapStart7F, x, flags);
-            if (d == 0xFFFF) continue;
-            w16(g.NewHandleSlot, d);
-            w16(g.NewHandleSlot + 2, bank);
-            return g.NewHandleSlot;
-        }
-    }
+    uint32_t p0;
+    uint16_t f = handle_block(a, &p0);
+    if (!f || !m16(p0 + f)) return;
+    mset16(p0 + f, m16(p0 + f) & 0x8000);
+}
+
+/* A handle for fixed memory at a in bank x; 0 if none is free */
+uint16_t NewPtrHandle(uint16_t a, uint16_t x)
+{
+    for (uint16_t h = 0x2000; h != 0x2100; h += 4)
+        if (!(r16(h) | r16(h + 2))) { w16(h, a); w16(h + 2, x); return h; }
     return 0;
+}
+
+/* Free handle a unless it is a heap block (bank $7E or $7F) */
+void DisposePtrHandle(uint16_t a)
+{
+    if (a < 0x2000 || a >= 0x2100) return;
+    uint16_t b = r16(a + 2);
+    if (b == 0x7E || b == 0x7F) return;
+    w16(a, 0);
+    w16(a + 2, 0);
 }
 
 /* Resize handle a's block to x bytes: in place when it can (shrinking by 9 or more: the rest a free
@@ -958,53 +663,48 @@ move:;
     w16(nh + 2, 0);
 }
 
-/* Read 16 signature bits from each controller port (bit 1 of JOYSER0 / JOYSER1, after the auto
- * read): mp5connect bit 7 (port 1) or 6 (port 2) for a multitap */
-static void rol8(uint32_t off, unsigned c) { w8(off, (uint8_t)(r8(off) << 1 | c)); }
-
-/* Look for a multitap on each port: one when the first 8 signature bits are all 1 and the next 8
- * are not */
-void Multi5ConnectCheck(void)
+/* Handle a's address (low word) and bank (high word); 0 for a bad handle */
+uint32_t DerefHandle(uint16_t a)
 {
-    w8(RAM_OFF_mp5connect, 0);
-    while (io_r8(0x4212) & 0x01) {}
-    io_w8(0x4016, 0);
-    io_w8(0x4016, 1);
-    for (int k = 0; k < 8; k++) {
-        rol8(RAM_OFF_Multi5Sig + 1, io_r8(0x4016) >> 1 & 1);
-        rol8(RAM_OFF_Multi5Sig + 3, io_r8(0x4017) >> 1 & 1);
-    }
-    io_w8(0x4016, 0);
-    for (int k = 0; k < 8; k++) {
-        rol8(RAM_OFF_Multi5Sig, io_r8(0x4016) >> 1 & 1);
-        rol8(RAM_OFF_Multi5Sig + 2, io_r8(0x4017) >> 1 & 1);
-    }
-    if (g.Multi5Sig[1] == 0xFF && g.Multi5Sig[0] != 0xFF) w8(RAM_OFF_mp5connect, 0x80);
-    if (g.Multi5Sig[3] == 0xFF && g.Multi5Sig[2] != 0xFF) w8(RAM_OFF_mp5connect, r8(RAM_OFF_mp5connect) | 0x40);
+    if (a < 0x2000 || a >= 0x2100 || !(r16(a) | r16(a + 2))) return 0;
+    return r16(a) | (uint32_t)r16(a + 2) << 16;
 }
 
-/* Check for the multitap, then clear the multitap pads and state */
-void Multi5Init(void)
+/* The handle of address a in bank x, 0 if none */
+uint16_t FindHandle(uint16_t a, uint16_t x)
 {
-    Multi5ConnectCheck();
-    g.JoyPad[2] = g.JoyPad[3] = g.JoyPad[4] = 0x000F;
-    g.mp5present = g.mp5warning = 0;
-    w16(RAM_OFF_mp5checktimer, 0);
-    g.mp5readdelay = 0;
-    if (g.mp5connect & 0x0080) g.mp5warning |= 1; else g.mp5warning &= ~1;
-    if (g.mp5connect & 0x0040) g.mp5present |= 1; else g.mp5present &= ~1;
+    for (uint16_t h = 0x2000; h != 0x2100; h += 4)
+        if (r16(h) == a && r16(h + 2) == x) return h;
+    return 0;
 }
 
-/* Read the five pads: pads 1 and 2 from the auto read, pads 3 to 5 through the multitap on port 2
- * when mp5present is set (pads 4 and 5 only every 30 frames while nobody uses them); a port line
- * change runs Multi5ConnectCheck for 16 frames; pads without the standard signature read $000F;
- * with a warning every pad flashes $1000 / 0. b is the high byte of the accumulator the caller
- * leaves (the 16-bit stores of the port bits take it). */
-static void mp5_sig(uint8_t a)
+/* The free bytes of both heaps (X high word, A low) */
+uint32_t HeapFree(void)
 {
-    a &= 0x1E;
-    if (a == 0x02) g.mp5warning |= 4;
-    else if (a == 0x1E) g.mp5warning |= 2;
+    uint32_t s = HeapFreeBank(0x7E0000, g.HeapStart7E, 0);
+    return HeapFreeBank(0x7F0000, g.HeapStart7F, s);
+}
+
+/* sum plus the sizes of the free blocks (flags 0) of the heap chain in p0's bank from block y
+ * (a header: size, flags, next) */
+uint32_t HeapFreeBank(uint32_t p0, uint16_t y, uint32_t sum)
+{
+    for (;;) {
+        if (!m16(p0 + (uint16_t)(y + 2))) sum += m16(p0 + y);
+        y = m16(p0 + (uint16_t)(y + 4));
+        if (!y) return sum;
+    }
+}
+
+/* Once per frame: each pad's direction (PadDirection of its pad bits), changed buttons and new
+ * presses */
+void ReadPads(void)
+{
+    for (int i = 0; i < 5; i++) {
+        g.paddir[i] = rom8(SYM_PadDirection + (g.JoyPad[i] >> 8 & 0xF));
+    }
+    GetNewPresses();
+    g.padchangeany = g.padchange[0] | g.padchange[1] | g.padchange[2] | g.padchange[3] | g.padchange[4];
 }
 
 /* The pads' read of each frame, run by the NMI after the frame hook: JoyPad[0-4], with the
@@ -1092,6 +792,131 @@ warn:
     }
 }
 
+/* Check for the multitap, then clear the multitap pads and state */
+void Multi5Init(void)
+{
+    Multi5ConnectCheck();
+    g.JoyPad[2] = g.JoyPad[3] = g.JoyPad[4] = 0x000F;
+    g.mp5present = g.mp5warning = 0;
+    w16(RAM_OFF_mp5checktimer, 0);
+    g.mp5readdelay = 0;
+    if (g.mp5connect & 0x0080) g.mp5warning |= 1; else g.mp5warning &= ~1;
+    if (g.mp5connect & 0x0040) g.mp5present |= 1; else g.mp5present &= ~1;
+}
+
+/* Look for a multitap on each port: one when the first 8 signature bits are all 1 and the next 8
+ * are not */
+void Multi5ConnectCheck(void)
+{
+    w8(RAM_OFF_mp5connect, 0);
+    while (io_r8(0x4212) & 0x01) {}
+    io_w8(0x4016, 0);
+    io_w8(0x4016, 1);
+    for (int k = 0; k < 8; k++) {
+        rol8(RAM_OFF_Multi5Sig + 1, io_r8(0x4016) >> 1 & 1);
+        rol8(RAM_OFF_Multi5Sig + 3, io_r8(0x4017) >> 1 & 1);
+    }
+    io_w8(0x4016, 0);
+    for (int k = 0; k < 8; k++) {
+        rol8(RAM_OFF_Multi5Sig, io_r8(0x4016) >> 1 & 1);
+        rol8(RAM_OFF_Multi5Sig + 2, io_r8(0x4017) >> 1 & 1);
+    }
+    if (g.Multi5Sig[1] == 0xFF && g.Multi5Sig[0] != 0xFF) w8(RAM_OFF_mp5connect, 0x80);
+    if (g.Multi5Sig[3] == 0xFF && g.Multi5Sig[2] != 0xFF) w8(RAM_OFF_mp5connect, r8(RAM_OFF_mp5connect) | 0x40);
+}
+
+/* For each of the 5 pads: the buttons that changed, those newly pressed, then the buttons held */
+void GetNewPresses(void)
+{
+    for (int i = 0; i < 5; i++) {
+        g.padchange[i] = g.JoyPad[i] ^ g.padlast[i];
+        g.padnew[i] = g.padchange[i] & g.JoyPad[i];
+    }
+    for (int i = 0; i < 5; i++) {
+        g.padlast[i] = g.JoyPad[i];
+    }
+}
+
+/* Pad n: direction, new presses, changed buttons, buttons held */
+Pad ReadjoyA(uint16_t n)
+{
+    uint16_t x = (uint16_t)(n << 1);
+    Pad p = { r16(RAM_OFF_paddir + x), r16(RAM_OFF_padnew + x), r16(RAM_OFF_padchange + x), r16(RAM_OFF_JoyPad + x) };
+    return p;
+}
+
+/* Pad 1: d0 = direction, d1 = new presses, d2 = changed buttons, d3 = buttons held */
+void Readjoy1(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3)
+{
+    *d3 = g.JoyPad[0];
+    *d2 = g.padchange[0];
+    *d1 = g.padnew[0];
+    *d0 = g.paddir[0];
+}
+
+/* d1 = the buttons that changed on any pad */
+uint16_t ReadAnyPad(void) { return g.padchangeany; }
+
+/* Key repeat: held buttons d3 repeat (into d1) after a delay; a change d2 restarts it. Returns d1. */
+uint16_t ProcessInputWithRepeat(uint16_t d1, uint16_t d2, uint16_t d3)
+{
+    if (!d3) return d1;
+    if (d2) { g.repeatdelay = 0x14; return d1; }
+    g.repeatdelay--;
+    if (!(g.repeatdelay & 0x8000)) return d1;
+    g.repeatdelay = 6;
+    return d3;
+}
+
+/* Send d0 tiles from [a0] to video memory, each pixel's colour remapped through the table [a1];
+ * returns a0 advanced past them */
+uint32_t remap(uint32_t a0, uint32_t a1, uint16_t d0)
+{
+    do {
+        for (int row = 14; row >= 0; row -= 2) {
+            uint16_t p01 = m16(ix(a0, (uint16_t)row)), p23 = m16(ix(a0, (uint16_t)(row + 16)));
+            for (int px = 0; px < 8; px++) {
+                unsigned k = 0;
+                if (p23 & 0x8000) k += 8;
+                if (p23 & 0x0080) k += 4;
+                if (p01 & 0x8000) k += 2;
+                if (p01 & 0x0080) k += 1;
+                p23 = (uint16_t)((p23 & 0xFF00) << 1 | (uint8_t)(p23 << 1));
+                p01 = (uint16_t)((p01 & 0xFF00) << 1 | (uint8_t)(p01 << 1));
+                uint8_t v = m8(ix(a1, (uint16_t)k));
+                g.RemapOut[row] = (uint8_t)(g.RemapOut[row] << 1 | (v & 1));
+                g.RemapOut[row + 1] = (uint8_t)(g.RemapOut[row + 1] << 1 | (v >> 1 & 1));
+                g.RemapOut[row + 16] = (uint8_t)(g.RemapOut[row + 16] << 1 | (v >> 2 & 1));
+                g.RemapOut[row + 17] = (uint8_t)(g.RemapOut[row + 17] << 1 | (v >> 3 & 1));
+            }
+        }
+        for (int x = 0; x < 0x20; x += 2) io_w16(0x2118, (uint16_t)(g.RemapOut[x] | g.RemapOut[x + 1] << 8));
+        a0 = (a0 & 0xFF0000) | (uint16_t)(a0 + 0x20);
+    } while (--d0);
+    return a0;
+}
+
+/* Wait until every pad that has a side (cont1team) has no button down */
+void WaitSidePadsRelease(void)
+{
+again:
+    for (int x = 8; x >= 0; x -= 2) {
+        if (!r16(RAM_OFF_cont1team + x)) continue;
+        if (wait_r16(RAM_OFF_JoyPad + x)) { wait_tick(); goto again; }
+    }
+}
+
+/* Wait until every standard pad (low nibble 0) has no button down */
+void WaitPadsRelease(void)
+{
+again:
+    for (int x = 8; x >= 0; x -= 2) {
+        uint16_t j = wait_r16(RAM_OFF_JoyPad + x);
+        if (j & 0x000F) continue;
+        if (j & 0xFFF0) { wait_tick(); goto again; }
+    }
+}
+
 /* The scroll arrows beside a summary list (right while rows are below the five shown, left while
  * rows are above), or blanks in their place; then the text map queued */
 void PrintScrollArrows(void)
@@ -1101,38 +926,217 @@ void PrintScrollArrows(void)
     QueueTextDMA();
 }
 
-/* 8 x 8 bits into 16 (A): unsigned; X signed; both signed */
-uint16_t Mul8U(uint16_t a, uint16_t x) { return (uint16_t)((a & 0xFF) * (x & 0xFF)); }
+/* A random number from 0 to limit-1 */
+uint16_t randomd0A(uint16_t limit)
+{
+    if (limit < 0x100) return randoma8_go(limit);
+    uint16_t r = RandomWord();
+    return (uint16_t)(Mul16U(r, limit) >> 16);
+}
 
-/* X x A (low byte) / 256 into A (and $09): unsigned; X signed (the magnitude's, negated); both
- * signed (the carry as for Mul16x8U, never set by the negation) */
-uint16_t Mul16x8HiU(uint16_t x, uint16_t a) { return (uint16_t)(Mul16x8U(x, a) >> 8); }
-
-/* r2 (16 bits) / r1 into r0: unsigned ($7FFF for 0); signed */
-uint16_t Div16U(uint16_t n, uint16_t d) { return d ? (uint16_t)(n / d) : 0x7FFF; }
-
-/* r2 (16 bits) / r1 (low byte) into r0, $7FFF for 0 */
-uint16_t Div16x8U(uint16_t n, uint16_t d) { return d & 0xFF ? (uint16_t)(n / (d & 0xFF)) : 0x7FFF; }
-
-/* X / A (low byte) into A, the divider's own (x / 0 = $FFFF): unsigned; X signed */
-uint16_t DivX8U(uint16_t x, uint16_t a) { return a & 0xFF ? (uint16_t)(x / (a & 0xFF)) : 0xFFFF; }
+uint16_t randoma8(uint16_t limit) { return randoma8_go(limit); }
 
 /* A random number from 0 to limit-1, for a limit below 256 (randoma8_go: randomd0A's way in) */
 uint16_t randoma8_go(uint16_t limit) { return Mul8U(limit, RandomWord() & 0xFF) >> 8; }
 
-uint16_t randoma8(uint16_t limit) { return randoma8_go(limit); }
+/* [dp],y: the pointer plus Y, carried into the bank */
+uint32_t ix(uint32_t p, uint16_t y) { return (p + y) & 0xFFFFFF; }
 
-/* d1 = the buttons that changed on any pad */
-uint16_t ReadAnyPad(void) { return g.padchangeany; }
+/* adc with the carry in c (and out) */
+uint16_t adc(uint16_t a, uint16_t b, unsigned *c) { uint32_t s = (uint32_t)a + b + *c; *c = s >> 16 & 1; return (uint16_t)s; }
 
-/* 2 * JoyDirTable[the d-pad bits of a] (JoyDirIndex_Hi: of a's high byte) */
-uint16_t JoyDirIndex(uint16_t a) { return (uint16_t)(rom8(SYM_JoyDirTable + (a & 0xF)) << 1); }
+/* asl, the bit shifted out in c */
+uint16_t asl(uint16_t a, unsigned *c) { *c = a >> 15; return (uint16_t)(a << 1); }
 
-uint16_t JoyDirIndex_Hi(uint16_t a) { return JoyDirIndex((uint16_t)(a >> 8 | a << 8)); }
+/* A random number from 0 to n-1 (d0) */
+uint16_t randomd0(uint16_t n) { return randomd0A(n); }
 
-uint16_t Cos(uint16_t a) { return Sin((uint16_t)(a + 0x0100)); }
+/* A random number from -n to n-1 */
+uint16_t randomas(uint16_t n) { return (uint16_t)(randomd0A((uint16_t)(n << 1)) - n); }
 
-/* HeapInit at the same starts */
-void HeapReset(void) { HeapInit(g.HeapStart7E, g.HeapStart7F); }
+/* randomas with the range in d0: a random number from -d0 to d0-1 (clears the carry) */
+uint16_t randomd0s(uint16_t d0)
+{
+    uint16_t v = (uint16_t)(randomd0A((uint16_t)(d0 << 1)) - d0);
+    cf = 0;
+    return v;
+}
+
+/* The square root of the 32-bit d0 (a binary search, the range narrowed first) */
+uint16_t Sroot(uint32_t d0)
+{
+    uint16_t hi = (uint16_t)(d0 >> 16), p0, p1;
+    if (!hi) {
+        p0 = 0; p1 = 0xFF;
+        for (;;) {
+            uint32_t s = (uint32_t)p0 + p1;
+            uint16_t mid = (uint16_t)(s >> 1 | (s & 0x10000) >> 1);
+            if (mid == p0) return mid;
+            if (Mul8U(mid, mid) < (uint16_t)d0) p0 = mid; else p1 = mid;
+        }
+    }
+    if (hi >= 0x48) { p0 = 0x87C; p1 = 0x1000; if (hi >= 0x96) p0 = 0xC3F; else p1 = 0xC40; }
+    else { p0 = 0x100; p1 = 0x87D; if (hi >= 0x16) p0 = 0x4B0; else p1 = 0x4B1; }
+    for (;;) {
+        uint32_t s = (uint32_t)p0 + p1;
+        uint16_t mid = (uint16_t)(s >> 1 | (s & 0x10000) >> 1);
+        if (mid == p0) return mid;
+        if (d0 >= Mul16U(mid, mid)) p0 = mid; else p1 = mid;
+    }
+}
+
+/* Draw string [a1] (its length + 2 at +0, the characters from +2) with the letter sprites at x, y:
+ * letters and digits, a space 6 pixels, other characters nothing */
+void PrintLetterSprites(uint32_t a1, uint16_t x, uint16_t y)
+{
+    uint32_t s = a1 & 0xFFFFFF;
+    g.letterx[0] = x;
+    w16(RAM_OFF_lettery, y);
+    for (uint16_t k = 2; k != m16(s); k++) {
+        uint16_t ch = m8(s + k), idx, adv;
+        if (ch == 0x20) adv = 6;
+        else {
+            if (ch >= 0x30 && ch < 0x3A) idx = (uint16_t)(ch - 0x30 + 0x1A);
+            else if (ch >= 0x61 && ch < 0x7B) idx = (uint16_t)(ch - 0x61);
+            else if (ch >= 0x41 && ch < 0x5B) idx = (uint16_t)(ch - 0x41);
+            else continue;
+            DrawSprite(0x2000, g.letterx[0], r16(RAM_OFF_lettery), idx, SYM_LetterSprites);
+            adv = rom8(SYM_LetterSpriteWidths + idx);
+        }
+        g.letterx[0] = (uint16_t)(adv + g.letterx[0]);
+    }
+}
+
+/* The approximate length of (x, y): the longer side plus a quarter of the shorter, or, when the
+ * shorter is more than half the longer, plus 3/8 of it (in 16-bit words, unsigned) */
+uint16_t ApproxLength(uint16_t x, uint16_t y)
+{
+    if (x & 0x8000) x = (uint16_t)-x;
+    if (y & 0x8000) y = (uint16_t)-y;
+    return ApproxLength_abs(x, y);
+}
+
+/* ApproxLength's second half, for x and y already positive (entered directly by the puck distance
+ * and the replay, which have the magnitudes) */
+uint16_t ApproxLength_abs(uint16_t x, uint16_t y)
+{
+    uint16_t lo = x, hi = y;                            /* (r3 the shorter, r3+2 the longer) */
+    if (y < x) { lo = y; hi = x; }
+    if ((hi >> 1) < lo) return (uint16_t)(((uint16_t)((lo >> 1) + lo) >> 2) + hi);
+    return (uint16_t)((lo >> 2) + hi);
+}
+
+/* One row of a frame into the text map at printx / printy: the corner [p0], d0 - 2 of the middle
+ * tile [p0+2], the corner [p0+4], each plus tmp0; printy steps down. Returns p0 past the three;
+ * *tmp2 the row's first map offset, *x the offset before its last corner. */
+uint32_t FramerRow(uint32_t p0, uint16_t tmp0, uint16_t d0, uint16_t *tmp2, uint16_t *xo)
+{
+    uint32_t c = g.printy << 5;
+    c = (c & 0xFFFF) + g.printx + (g.printy >> 11 & 1);
+    uint32_t a = (c & 0xFFFF) << 1;
+    uint16_t x = (uint16_t)((a & 0xFFFF) + g.printm + (a >> 16 & 1));
+    *tmp2 = x;
+    w16(RAM_OFF_textmap + x, (uint16_t)(m16(p0) + tmp0));
+    p0 = (p0 & 0xFF0000) | (uint16_t)(p0 + 2);
+    uint16_t t = (uint16_t)(m16(p0) + tmp0), n = (uint16_t)(d0 - 2);
+    do { x += 2; w16(RAM_OFF_textmap + x, t); } while (--n);
+    p0 = (p0 & 0xFF0000) | (uint16_t)(p0 + 2);
+    w16(RAM_OFF_textmap + 2 + x, (uint16_t)(m16(p0) + tmp0));
+    g.printy++;
+    *xo = x;
+    return p0;
+}
+
+/* Framer with the nine-tile box (FramerNineTileMap) of tile set ninetilechars */
+void FramerNineTile(uint16_t d0, uint16_t d1)
+{
+    framer_box(SYM_FramerNineTileMap, (uint16_t)(g.ninetilechars + g.printfontset), d0, d1);
+}
+
+/* Framer with the outline box (FramerOutlineMap) of tile set outlinechars */
+void FramerOutline(uint16_t d0, uint16_t d1)
+{
+    framer_box(SYM_FramerOutlineMap, (uint16_t)(g.outlinechars + g.printfontset), d0, d1);
+}
+
+/* A random index 0 ... d0-1 into the weight words at nibblebuffer, each as likely as its weight */
+uint16_t WeightedRandomSelect(uint16_t d0)
+{
+    uint16_t a1 = RAM_OFF_nibblebuffer, sum = 0;
+    while (!(--d0 & 0x8000)) { sum = (uint16_t)(sum + r16(a1)); a1 += 2; }
+    d0 = randomd0(sum);
+    do { a1 -= 2; d0 = (uint16_t)(d0 - r16(a1)); } while (!(d0 & 0x8000));
+    return (uint16_t)((uint16_t)(a1 - RAM_OFF_nibblebuffer) >> 1);
+}
+
+/* Lower the low end of the changed text map area to a */
+void marktextlo(uint16_t a) { if (a < g.textdirtylo) g.textdirtylo = a; }
+
+/* Raise the high end of the changed text map area to a */
+void marktexthi(uint16_t a) { if (a >= g.textdirtyhi) g.textdirtyhi = a; }
 
 void forcefade(void) { g.fadestep = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
+
+/* d0 mod 100 */
+uint16_t Mod100(uint16_t d0)
+{
+    while (d0 >= 100) d0 -= 100;
+    return d0;
+}
+
+/* Wait d0 + 1 frames (drawing each one) or until a pad with a team holds a button (ReadjoyA's d3);
+ * returns the pad read last (zero when no pad has a team: the direct page's d0-d3 as they were) */
+Pad waitx(uint16_t d0)
+{
+    Pad p = { 0, 0, 0, 0 };
+    uint16_t n = d0;
+    do {
+        for (uint16_t x = 0; x < 5; x++)
+            if (r16(RAM_OFF_cont1team + 2 * x) && (p = ReadjoyA(x)).held) return p;
+        SpriteFrameStart();
+        setvideo();
+        SpriteFrameEnd();
+        uint16_t v = g.vcount[0];
+        while (g.vcount[0] == v) hal_wait_interrupt();
+        ReadPads();
+    } while (!(--n & 0x8000));
+    return p;
+}
+
+/* Queue the changed part of the text map (textdirtylo to textdirtyhi) for transfer to video
+ * memory */
+void QueueTextDMA(void)
+{
+    uint16_t lo = g.textdirtylo;
+    if (lo & 0x8000) return;
+    uint32_t p0 = 0x7E0000u | (uint16_t)((uint16_t)(lo << 1) + (uint16_t)RAM_OFF_textmap);
+    if (!g.textdirtyhi) return;
+    DMAToVRAM(&p0, (uint16_t)((uint16_t)(g.textdirtyhi - lo + 1) << 1), lo, 0);
+    g.textdirtylo = 0xFFFF;
+    g.textdirtyhi = 0;
+}
+
+/* PushNumberWidth, with d0 taken mod 100 when the width d1 is 2 */
+uint32_t PushNumberWrap(uint16_t d0, uint16_t d1, uint16_t *a)
+{
+    if (d1 == 2) while (d0 >= 100) d0 -= 100;   /* (its own copy of Mod100) */
+    return PushNumberWidth(d0, d1, a);
+}
+
+/* d0 as d1 digits, right aligned with leading blanks, in PushWidthBuf (more digits run on to the
+ * left); returns a1, the string, and in *a the last quotient (0) */
+uint32_t PushNumberWidth(uint16_t d0, uint16_t d1, uint16_t *a)
+{
+    uint16_t y = (uint16_t)(d1 + 2);
+    g.PushWidthBuf[0] = y;
+    g.PushWidthBuf[1] = g.PushWidthBuf[2] = g.PushWidthBuf[3] = g.PushWidthBuf[4] = 0x2020;
+    uint16_t n = d0;
+    do {
+        y--;
+        uint16_t q = Div16x8U(n, 10);
+        w8(RAM_OFF_PushWidthBuf + y, (uint8_t)(n - q * 10 + 0x30));
+        n = q;
+    } while (n);
+    *a = n;
+    return RAM_OFF_PushWidthBuf;
+}
