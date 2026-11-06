@@ -176,142 +176,6 @@ void setoptions_12(uint16_t d0)
     }
 }
 
-/* The game setup screen: up and down pick a row, left and right change it, Start goes on (the
- * password screen in play mode 1, new playoffs in 2 and 3), then the player select screen; left alone
- * long enough it starts the demo with random teams. (a2 and the multitap state d2+2 as the caller left
- * them in the direct page.) */
-void setoptions(void)
-{
-    uint16_t a2 = g.a2[0];
-    uint16_t d0, d1, d2 = 0, d3, d6;
-    forcefade();
-    g.matchupphotos = 1;
-    g.playerstatson = 0;
-    g.phototeams[0] = 0xFFFF;
-    g.phototeams[1] = 0xFFFF;
-    g.redrawblocks = 1;
-    g.cardtimer = 1;
-    g.teamschanged = 1;
-    g.setupmatchup = 5;
-    forceblack();
-    ClearTextMap();
-    InitSetupChars();
-    g.HomeTeam = g.OptTeam1;
-    g.VisTeam[0] = g.OptTeam2;
-    setteams();
-    g.setupvis = (uint16_t)(g.VisTeam[0] + 0x21);
-    g.setuphome = g.HomeTeam;
-    SetupScreen();
-    io_w8(0x2105, 0x01);
-    PrintLetterSprites(SYM_GameSetupTitle, 0x4F, 0x18);
-    w16(RAM_OFF_colourbuf + 0x0A, 0x1D47);
-    w16(RAM_OFF_colourbuf + 0x0E, 0xFFFF);
-    w16(RAM_OFF_colourbuf + 0x182, 0x14A5);
-    w16(RAM_OFF_colourbuf + 0xC2, 0x6F7B);
-    SendColours();
-    SpriteFrameEnd();
-    SendTextMap();
-    ReadPads();
-    ReadAnyPad();
-    g.sprpriority = 0;
-    print(SYM_setoptionsPos);
-    defaultsprites_0();
-    g.OldXpos[0] = 0x28;                                   /* (rosxoff) */
-    g.OldXpos[6] = 0x28;
-    g.notdemo = 0xFFFF;
-    LoadTeamLines(0);
-    LoadTeamLines(2);
-    g.d7 = 0;
-    setoptions_12(0);
-    setoptions_10(&a2);
-    setoptions_11(&a2);
-    ReadPads();
-    MenuScreenHDMA();
-    ScreenOn();
-    SetupBandIRQ(8, 0x40);
-    SendTextMap();
-    LoadMatchupPhotos(0);
-    LoadMatchupPhotos(2);
-    for (;;) {
-        d6 = 0x12C0;
-        for (;;) {
-            do WaitFrame(); while (r16(RAM_OFF_OAMReady));
-            if (!++g.seed[0]) g.seed[1]++;
-            WaitFrame();
-            uint16_t w = g.mp5warning;
-            if (w != g.d2[1]) {
-                g.d2[1] = w;                               /* (kept in the direct page: read there each pass) */
-                if (!w) {
-                    Multi5Init();
-                    ClearTextMapBottom();
-                    setoptions_10(&a2);
-                    d1 = 0;
-                    goto pressed;
-                }
-                if (w & 1) { ClearMessageArea(); Multi5SocketMsg(); }
-                else if (w & 2) { ClearMessageArea(); Multi5ScopeMsg(); }
-                else if (w & 4) { ClearMessageArea(); Multi5MouseMsg(); }
-            }
-            if (g.mp5warning) continue;
-            ReadPads();
-            g.lastframevc = g.vcount[0];
-            g.oldvcount = g.vcount[0];
-            Readjoy1(&d0, &d1, &d2, &d3);
-            g.repeatdelay--;
-            d1 = ProcessInputWithRepeat(d1, d2, d3) & 0xFFF0;
-            if (d1) goto pressed;
-            setoptions_11(&a2);
-            QueueTextDMA();
-            d6 -= 2;
-            if (d6 & 0x8000) goto timeout;
-        }
-    pressed:
-        if (d1 & 0x1000) goto start;
-        if (d1 & 0x0400) {
-            setoptions_12(2);
-            setoptions_10(&a2);
-            continue;
-        }
-        if (d1 & 0x0800) {
-            setoptions_12(0xFFFE);
-            setoptions_10(&a2);
-            continue;
-        }
-        d2 = 1;
-        if (!(d1 & 0x0100)) {
-            if (!(d1 & 0x0200)) continue;
-            d2 = 0xFFFF;
-        }
-        setoptions_7(d2, &a2);
-        setoptions_10(&a2);
-    }
-timeout:
-    g.OptTeam1 = randoma8(0x1C);
-    g.HomeTeam = g.OptTeam1;
-    uint16_t t;
-    do t = randoma8(0x1C); while (t == g.OptTeam1);
-    g.OptTeam2 = t;
-    g.VisTeam[0] = t;
-    g.notdemo = 0;
-    g.OptPlayMode = 0;
-    g.OptPlayers = 0;
-start:;
-    uint16_t n = Decompress(SYM_BigLetterTiles, WRAM24(RAM_OFF_bigtextbuf));
-    LinearToPlanar(WRAM24(RAM_OFF_bigtextbuf), (uint16_t)RAM_OFF_hlsavebuf, n);
-    g.matchupphotos = 0;
-    if (g.OptPlayMode == 2 || g.OptPlayMode == 3) {
-        NewPO();
-        d2 = g.OptTeam1 < 0x1A ? g.OptTeam1 : 0x19;       /* (NewPO leaves team 1 in d2) */
-    }
-    g.OptPlayers = 1;
-    if (g.OptPlayMode >= 1 && g.OptPlayMode < 4) g.OptPlayers = 5;
-    g.pojoy = (uint16_t)(g.OptPlayers - 5);
-    if (g.OptPlayMode == 1) d2 = PasswordScreen();
-    w16(RAM_OFF_PassWord, r16(RAM_OFF_PassWord) | 0x0080);
-    MakeTree();
-    PlayerSelect(a2, d2);
-}
-
 /* Copy team a2's lines ($38 bytes at its team data's offset +6) into its RAM lines, then without line
  * changes the 8 bytes at offset +$0C over their start */
 void LoadTeamLines(uint16_t a2)
@@ -334,120 +198,22 @@ void PrintSelectLeft(uint16_t d4)
     print(SYM_SelectLeft);
 }
 
-/* Clear the message rows */
-void ClearMessageArea(void) { ClearTextMapBottom(); }
-
-/* Clear the big text letter tiles (bigtextbuf+1, $300 bytes) and part of its map (screenmap+$28C) */
-void ClearBigText(void)
+/* Draw the place name of team d1, or string [a1] (made to end at its length) when d1 is negative, as big
+ * letter sprites at x / y */
+void PrintTeamSprites(uint16_t x, uint16_t y, uint16_t d1, uint32_t a1, uint16_t a2)
 {
-    MemFill(0x7E0000 + RAM_OFF_bigtextbuf + 1, 0x0300, 0);
-    MemFill(0x7E0000 + RAM_OFF_screenmap + 0x28C, 0x0080, 0);
-}
-
-/* The setup screen's tiles: the blank tile $200, the small font after it (unpacked, its VRAM cleared
- * first), the frame tiles after the font and the score tiles 4 further */
-void InitSetupChars(void)
-{
-    g.blankchar = 0x0200;
-    g.smallfontchars = 0x0201;
-    FillVRAM(0, 0x20, 0x3000, 0);
-    uint16_t n = Decompress(SYM_SmallFontTiles, unpackbuf);
-    uint32_t s = (uint32_t)(n >> 5) + g.smallfontchars + (n >> 4 & 1);   /* (lsr's carry) */
-    g.Framercset = (uint16_t)s;
-    g.scorechars = (uint16_t)(g.Framercset + 4 + (s >> 16 & 1));
-}
-
-/* Send the big text map (screenmap from +6: a 32 x 2 part at row printy) and the letter tiles to VRAM */
-void SendBigText(void)
-{
-    w16(RAM_OFF_screenmap + 6, 0x20);
-    w16(RAM_OFF_screenmap + 8, 0x20);
-    g.MapVRAM = 0x0800;
-    MapPartToVRAM(0x7E0000 + RAM_OFF_screenmap + 6, 0, g.printy, 0, g.printy, 0x20, 2);
-    uint32_t p0 = 0x7E0000 + RAM_OFF_bigtextbuf;
-    DMAToVRAM(&p0, (uint16_t)((uint16_t)(g.bigtextchar + 1) << 4), 0x4000, 0);
-}
-
-/* The MultiPlayer 5 warnings: the mouse, the Super Scope, the socket */
-void Multi5MouseMsg(void)
-{
-    print(SYM_TheMultiPlayer5IsNotTxt2);
-    print(SYM_DesignedForUseWithTheTxt2);
-    print(SYM_SuperNesMouseTxt);
-    SendTextMap();
-}
-
-/* The warning that the MultiPlayer 5 is not designed for use with the Super Scope */
-void Multi5ScopeMsg(void)
-{
-    print(SYM_TheMultiPlayer5IsNotTxt);
-    print(SYM_DesignedForUseWithTheTxt);
-    print(SYM_SuperNesSuperScopeTxt);
-    SendTextMap();
-}
-
-/* The warning that the MultiPlayer 5 must be connected to controller socket 2 */
-void Multi5SocketMsg(void)
-{
-    print(SYM_TheMultiPlayer5MustBeTxt);
-    print(SYM_ConnectedToControllerTxt);
-    print(SYM_Socket2Txt);
-    SendTextMap();
-}
-
-/* Unpack the six matchup players' photos of team x (0 home, 2 visitors) into the $7F photo buffer (visitors
- * at $2D00, home at $5100, each at its MatchupPhotoOffsets place), unless that team's are already there */
-void LoadMatchupPhotos(uint16_t x)
-{
-    uint16_t a2 = x;
-    if (r16(RAM_OFF_HomeTeam + a2) == r16(RAM_OFF_phototeams + a2)) return;
-    for (int k = 0x0A; k >= 0; k -= 2) {
-        uint16_t d0 = GetMatchupPlayer((uint16_t)(k >> 1), a2);
-        uint16_t team = r16(RAM_OFF_HomeTeam + a2);
-        w16(RAM_OFF_phototeams + a2, team);
-        uint16_t e = (uint16_t)((uint16_t)(Mul8U(team, 0x1A) + d0) << 2);
-        uint32_t p0 = (uint32_t)rom16(SYM_PlayerPhotoTable + e) | (uint32_t)rom16(SYM_PlayerPhotoTable + e + 2) << 16;
-        uint16_t r0 = Decompress(p0, unpackbuf);
-        uint16_t p1 = (uint16_t)((a2 ? 0x2D00 : 0x5100) + rom16(SYM_MatchupPhotoOffsets + k));
-        LinearToPlanar(unpackbuf, p1, r0);
+    g.letterx[0] = x;
+    g.lettery[0] = y;
+    if (!(d1 & 0x8000)) {
+        uint32_t bank = SYM_PrintTeamSprites & 0xFF0000;
+        PrintTeamSprites_go(bank | db16(bank >> 16, (uint16_t)(SYM_TeamPlaceNames + (uint16_t)(d1 << 1))), 0, 0, a2);
+        return;
     }
-}
-
-/* Team d1 on the player select screen at printx: its palette (colours $70 for the home team, unless both
- * teams are the same, else $60), its block map (with redrawblocks) and its city name in the big font */
-void DrawSelectTeam(uint16_t d1)
-{
-    g.bigtextchar = 1;
-    uint16_t r3 = 0x1800, y = 0x60;
-    if (d1 == g.HomeTeam) {
-        r3 = 0x1C00;
-        y = 0x70;
-        g.bigtextchar = 0x18;
-    }
-    for (;;) {
-        uint32_t e = SYM_TeamBlockPalettes + (uint16_t)(d1 << 2);
-        SetColours((uint32_t)rom16(e) | (uint32_t)rom16(e + 2) << 16, 0x10, y);
-        if (g.HomeTeam != g.VisTeam[0] || r3 == 0x1800) break;
-        r3 = 0x1800;
-        y = 0x60;
-    }
-    if (g.redrawblocks) {
-        uint32_t a2 = SYM_TeamBlocksMap + 6;
-        uint32_t s = (uint32_t)(uint16_t)(g.printy << 5) + g.printx + (g.printy >> 11 & 1);   /* (the shifts' carries) */
-        uint16_t t = (uint16_t)s;
-        uint16_t x = (uint16_t)((uint16_t)(t << 1) + g.printm + (t >> 15));
-        uint16_t k = 0;
-        for (int row = 0; row < 2; row++)
-            for (int n = 0; n < 9; n++, k += 2, x += 2)
-                mset16(0x7E0000 + RAM_OFF_textmap + (row ? 0x2E : 0) + x,
-                       (uint16_t)(m16(a2 + k) + g.scorechars + g.printfontset + r3));
-    }
-    uint16_t px = g.printx;
-    w16(RAM_OFF_jmlvector, 0x005C);
-    w16(RAM_OFF_jmlvector + 1, (uint16_t)SYM_BigLetterSelect);
-    w16(RAM_OFF_jmlvector + 3, SYM_BigLetterSelect >> 16);
-    RenderBigText((SYM_TeamPlaceNames & 0xFF0000) | rom16(SYM_TeamPlaceNames + (uint16_t)(d1 << 1)));
-    g.printx = px;
+    uint32_t bank = a1 & 0xFF0000;
+    uint16_t n = m16(a1);
+    uint16_t d = (uint16_t)(a1 + 2);
+    mset16(bank + d + (uint16_t)(n - 2), 0);
+    PrintTeamSprites_go(bank | d, 0, 1, a2);
 }
 
 /* The width of letter c (and its frame, f; -1 for a space) in the big sprite font */
@@ -486,35 +252,6 @@ void PrintTeamSprites_go(uint32_t s, uint16_t r3, uint16_t r3h, uint16_t a2)
         }
         g.letterx[0] = (uint16_t)(g.letterx[0] + w);
     }
-}
-
-/* Draw the place name of team d1, or string [a1] (made to end at its length) when d1 is negative, as big
- * letter sprites at x / y */
-void PrintTeamSprites(uint16_t x, uint16_t y, uint16_t d1, uint32_t a1, uint16_t a2)
-{
-    g.letterx[0] = x;
-    g.lettery[0] = y;
-    if (!(d1 & 0x8000)) {
-        uint32_t bank = SYM_PrintTeamSprites & 0xFF0000;
-        PrintTeamSprites_go(bank | db16(bank >> 16, (uint16_t)(SYM_TeamPlaceNames + (uint16_t)(d1 << 1))), 0, 0, a2);
-        return;
-    }
-    uint32_t bank = a1 & 0xFF0000;
-    uint16_t n = m16(a1);
-    uint16_t d = (uint16_t)(a1 + 2);
-    mset16(bank + d + (uint16_t)(n - 2), 0);
-    PrintTeamSprites_go(bank | d, 0, 1, a2);
-}
-
-/* Clear the message rows and redraw the PlayerSelectAlt title and the team pictures */
-void RedrawPlayerSelect(uint16_t a2)
-{
-    ClearTextMapBottom();
-    SpriteFrameStart();
-    PrintLetterSprites(SYM_PlayerSelectAlt, 0x47, 0x18);
-    DrawMatchupPictures(a2);
-    WaitFrame();
-    SpriteFrameEnd();
 }
 
 /* The player select screen after the game setup: each pad moves its icon under the visitors or home
@@ -674,4 +411,267 @@ redraw:
             if (!(j & 0x000F) && (j & 0x1000)) { hal_wait_interrupt(); goto again; }
         }
     }
+}
+
+/* The game setup screen: up and down pick a row, left and right change it, Start goes on (the
+ * password screen in play mode 1, new playoffs in 2 and 3), then the player select screen; left alone
+ * long enough it starts the demo with random teams. (a2 and the multitap state d2+2 as the caller left
+ * them in the direct page.) */
+void setoptions(void)
+{
+    uint16_t a2 = g.a2[0];
+    uint16_t d0, d1, d2 = 0, d3, d6;
+    forcefade();
+    g.matchupphotos = 1;
+    g.playerstatson = 0;
+    g.phototeams[0] = 0xFFFF;
+    g.phototeams[1] = 0xFFFF;
+    g.redrawblocks = 1;
+    g.cardtimer = 1;
+    g.teamschanged = 1;
+    g.setupmatchup = 5;
+    forceblack();
+    ClearTextMap();
+    InitSetupChars();
+    g.HomeTeam = g.OptTeam1;
+    g.VisTeam[0] = g.OptTeam2;
+    setteams();
+    g.setupvis = (uint16_t)(g.VisTeam[0] + 0x21);
+    g.setuphome = g.HomeTeam;
+    SetupScreen();
+    io_w8(0x2105, 0x01);
+    PrintLetterSprites(SYM_GameSetupTitle, 0x4F, 0x18);
+    w16(RAM_OFF_colourbuf + 0x0A, 0x1D47);
+    w16(RAM_OFF_colourbuf + 0x0E, 0xFFFF);
+    w16(RAM_OFF_colourbuf + 0x182, 0x14A5);
+    w16(RAM_OFF_colourbuf + 0xC2, 0x6F7B);
+    SendColours();
+    SpriteFrameEnd();
+    SendTextMap();
+    ReadPads();
+    ReadAnyPad();
+    g.sprpriority = 0;
+    print(SYM_setoptionsPos);
+    defaultsprites_0();
+    g.OldXpos[0] = 0x28;                                   /* (rosxoff) */
+    g.OldXpos[6] = 0x28;
+    g.notdemo = 0xFFFF;
+    LoadTeamLines(0);
+    LoadTeamLines(2);
+    g.d7 = 0;
+    setoptions_12(0);
+    setoptions_10(&a2);
+    setoptions_11(&a2);
+    ReadPads();
+    MenuScreenHDMA();
+    ScreenOn();
+    SetupBandIRQ(8, 0x40);
+    SendTextMap();
+    LoadMatchupPhotos(0);
+    LoadMatchupPhotos(2);
+    for (;;) {
+        d6 = 0x12C0;
+        for (;;) {
+            do WaitFrame(); while (r16(RAM_OFF_OAMReady));
+            if (!++g.seed[0]) g.seed[1]++;
+            WaitFrame();
+            uint16_t w = g.mp5warning;
+            if (w != g.d2[1]) {
+                g.d2[1] = w;                               /* (kept in the direct page: read there each pass) */
+                if (!w) {
+                    Multi5Init();
+                    ClearTextMapBottom();
+                    setoptions_10(&a2);
+                    d1 = 0;
+                    goto pressed;
+                }
+                if (w & 1) { ClearMessageArea(); Multi5SocketMsg(); }
+                else if (w & 2) { ClearMessageArea(); Multi5ScopeMsg(); }
+                else if (w & 4) { ClearMessageArea(); Multi5MouseMsg(); }
+            }
+            if (g.mp5warning) continue;
+            ReadPads();
+            g.lastframevc = g.vcount[0];
+            g.oldvcount = g.vcount[0];
+            Readjoy1(&d0, &d1, &d2, &d3);
+            g.repeatdelay--;
+            d1 = ProcessInputWithRepeat(d1, d2, d3) & 0xFFF0;
+            if (d1) goto pressed;
+            setoptions_11(&a2);
+            QueueTextDMA();
+            d6 -= 2;
+            if (d6 & 0x8000) goto timeout;
+        }
+    pressed:
+        if (d1 & 0x1000) goto start;
+        if (d1 & 0x0400) {
+            setoptions_12(2);
+            setoptions_10(&a2);
+            continue;
+        }
+        if (d1 & 0x0800) {
+            setoptions_12(0xFFFE);
+            setoptions_10(&a2);
+            continue;
+        }
+        d2 = 1;
+        if (!(d1 & 0x0100)) {
+            if (!(d1 & 0x0200)) continue;
+            d2 = 0xFFFF;
+        }
+        setoptions_7(d2, &a2);
+        setoptions_10(&a2);
+    }
+timeout:
+    g.OptTeam1 = randoma8(0x1C);
+    g.HomeTeam = g.OptTeam1;
+    uint16_t t;
+    do t = randoma8(0x1C); while (t == g.OptTeam1);
+    g.OptTeam2 = t;
+    g.VisTeam[0] = t;
+    g.notdemo = 0;
+    g.OptPlayMode = 0;
+    g.OptPlayers = 0;
+start:;
+    uint16_t n = Decompress(SYM_BigLetterTiles, WRAM24(RAM_OFF_bigtextbuf));
+    LinearToPlanar(WRAM24(RAM_OFF_bigtextbuf), (uint16_t)RAM_OFF_hlsavebuf, n);
+    g.matchupphotos = 0;
+    if (g.OptPlayMode == 2 || g.OptPlayMode == 3) {
+        NewPO();
+        d2 = g.OptTeam1 < 0x1A ? g.OptTeam1 : 0x19;       /* (NewPO leaves team 1 in d2) */
+    }
+    g.OptPlayers = 1;
+    if (g.OptPlayMode >= 1 && g.OptPlayMode < 4) g.OptPlayers = 5;
+    g.pojoy = (uint16_t)(g.OptPlayers - 5);
+    if (g.OptPlayMode == 1) d2 = PasswordScreen();
+    w16(RAM_OFF_PassWord, r16(RAM_OFF_PassWord) | 0x0080);
+    MakeTree();
+    PlayerSelect(a2, d2);
+}
+
+/* Team d1 on the player select screen at printx: its palette (colours $70 for the home team, unless both
+ * teams are the same, else $60), its block map (with redrawblocks) and its city name in the big font */
+void DrawSelectTeam(uint16_t d1)
+{
+    g.bigtextchar = 1;
+    uint16_t r3 = 0x1800, y = 0x60;
+    if (d1 == g.HomeTeam) {
+        r3 = 0x1C00;
+        y = 0x70;
+        g.bigtextchar = 0x18;
+    }
+    for (;;) {
+        uint32_t e = SYM_TeamBlockPalettes + (uint16_t)(d1 << 2);
+        SetColours((uint32_t)rom16(e) | (uint32_t)rom16(e + 2) << 16, 0x10, y);
+        if (g.HomeTeam != g.VisTeam[0] || r3 == 0x1800) break;
+        r3 = 0x1800;
+        y = 0x60;
+    }
+    if (g.redrawblocks) {
+        uint32_t a2 = SYM_TeamBlocksMap + 6;
+        uint32_t s = (uint32_t)(uint16_t)(g.printy << 5) + g.printx + (g.printy >> 11 & 1);   /* (the shifts' carries) */
+        uint16_t t = (uint16_t)s;
+        uint16_t x = (uint16_t)((uint16_t)(t << 1) + g.printm + (t >> 15));
+        uint16_t k = 0;
+        for (int row = 0; row < 2; row++)
+            for (int n = 0; n < 9; n++, k += 2, x += 2)
+                mset16(0x7E0000 + RAM_OFF_textmap + (row ? 0x2E : 0) + x,
+                       (uint16_t)(m16(a2 + k) + g.scorechars + g.printfontset + r3));
+    }
+    uint16_t px = g.printx;
+    w16(RAM_OFF_jmlvector, 0x005C);
+    w16(RAM_OFF_jmlvector + 1, (uint16_t)SYM_BigLetterSelect);
+    w16(RAM_OFF_jmlvector + 3, SYM_BigLetterSelect >> 16);
+    RenderBigText((SYM_TeamPlaceNames & 0xFF0000) | rom16(SYM_TeamPlaceNames + (uint16_t)(d1 << 1)));
+    g.printx = px;
+}
+
+/* Clear the big text letter tiles (bigtextbuf+1, $300 bytes) and part of its map (screenmap+$28C) */
+void ClearBigText(void)
+{
+    MemFill(0x7E0000 + RAM_OFF_bigtextbuf + 1, 0x0300, 0);
+    MemFill(0x7E0000 + RAM_OFF_screenmap + 0x28C, 0x0080, 0);
+}
+
+/* Clear the message rows and redraw the PlayerSelectAlt title and the team pictures */
+void RedrawPlayerSelect(uint16_t a2)
+{
+    ClearTextMapBottom();
+    SpriteFrameStart();
+    PrintLetterSprites(SYM_PlayerSelectAlt, 0x47, 0x18);
+    DrawMatchupPictures(a2);
+    WaitFrame();
+    SpriteFrameEnd();
+}
+
+/* Clear the message rows */
+void ClearMessageArea(void) { ClearTextMapBottom(); }
+
+/* The warning that the MultiPlayer 5 must be connected to controller socket 2 */
+void Multi5SocketMsg(void)
+{
+    print(SYM_TheMultiPlayer5MustBeTxt);
+    print(SYM_ConnectedToControllerTxt);
+    print(SYM_Socket2Txt);
+    SendTextMap();
+}
+
+/* The warning that the MultiPlayer 5 is not designed for use with the Super Scope */
+void Multi5ScopeMsg(void)
+{
+    print(SYM_TheMultiPlayer5IsNotTxt);
+    print(SYM_DesignedForUseWithTheTxt);
+    print(SYM_SuperNesSuperScopeTxt);
+    SendTextMap();
+}
+
+/* The MultiPlayer 5 warnings: the mouse, the Super Scope, the socket */
+void Multi5MouseMsg(void)
+{
+    print(SYM_TheMultiPlayer5IsNotTxt2);
+    print(SYM_DesignedForUseWithTheTxt2);
+    print(SYM_SuperNesMouseTxt);
+    SendTextMap();
+}
+
+/* Send the big text map (screenmap from +6: a 32 x 2 part at row printy) and the letter tiles to VRAM */
+void SendBigText(void)
+{
+    w16(RAM_OFF_screenmap + 6, 0x20);
+    w16(RAM_OFF_screenmap + 8, 0x20);
+    g.MapVRAM = 0x0800;
+    MapPartToVRAM(0x7E0000 + RAM_OFF_screenmap + 6, 0, g.printy, 0, g.printy, 0x20, 2);
+    uint32_t p0 = 0x7E0000 + RAM_OFF_bigtextbuf;
+    DMAToVRAM(&p0, (uint16_t)((uint16_t)(g.bigtextchar + 1) << 4), 0x4000, 0);
+}
+
+/* Unpack the six matchup players' photos of team x (0 home, 2 visitors) into the $7F photo buffer (visitors
+ * at $2D00, home at $5100, each at its MatchupPhotoOffsets place), unless that team's are already there */
+void LoadMatchupPhotos(uint16_t x)
+{
+    uint16_t a2 = x;
+    if (r16(RAM_OFF_HomeTeam + a2) == r16(RAM_OFF_phototeams + a2)) return;
+    for (int k = 0x0A; k >= 0; k -= 2) {
+        uint16_t d0 = GetMatchupPlayer((uint16_t)(k >> 1), a2);
+        uint16_t team = r16(RAM_OFF_HomeTeam + a2);
+        w16(RAM_OFF_phototeams + a2, team);
+        uint16_t e = (uint16_t)((uint16_t)(Mul8U(team, 0x1A) + d0) << 2);
+        uint32_t p0 = (uint32_t)rom16(SYM_PlayerPhotoTable + e) | (uint32_t)rom16(SYM_PlayerPhotoTable + e + 2) << 16;
+        uint16_t r0 = Decompress(p0, unpackbuf);
+        uint16_t p1 = (uint16_t)((a2 ? 0x2D00 : 0x5100) + rom16(SYM_MatchupPhotoOffsets + k));
+        LinearToPlanar(unpackbuf, p1, r0);
+    }
+}
+
+/* The setup screen's tiles: the blank tile $200, the small font after it (unpacked, its VRAM cleared
+ * first), the frame tiles after the font and the score tiles 4 further */
+void InitSetupChars(void)
+{
+    g.blankchar = 0x0200;
+    g.smallfontchars = 0x0201;
+    FillVRAM(0, 0x20, 0x3000, 0);
+    uint16_t n = Decompress(SYM_SmallFontTiles, unpackbuf);
+    uint32_t s = (uint32_t)(n >> 5) + g.smallfontchars + (n >> 4 & 1);   /* (lsr's carry) */
+    g.Framercset = (uint16_t)s;
+    g.scorechars = (uint16_t)(g.Framercset + 4 + (s >> 16 & 1));
 }
