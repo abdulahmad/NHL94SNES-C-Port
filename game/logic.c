@@ -132,7 +132,7 @@ static uint16_t ag_lead(uint16_t r3) { return (uint16_t)((uint16_t)((int16_t)r3 
 static int ass_start(int o, int a3, uint8_t def, int offense)
 {
     uint16_t pc = (uint16_t)g.puckc;
-    if (offense && 2 * o == g.puckc) { assinsert(o, 0x11); return 0; }
+    if (offense && 2 * o == g.puckc) { assinsert(o, apuckc); return 0; }
     if (!(pc & 0x8000) && (g.pfteam[o] == r16(RAM_OFF_pfteam + pc)) != offense) { assreplace(o, def); return 0; }
     if (g.gmclock) { donothing(o, a3); return 0; }
     if (check4bench(o)) return 0;
@@ -465,7 +465,7 @@ static uint16_t off_zone(uint16_t a2, uint16_t d0, uint16_t d3)
 static int asswingo_start(int o, int a3, uint8_t def, int carrier, int spots)
 {
     uint16_t pc = (uint16_t)g.puckc;
-    if (carrier && 2 * o == g.puckc) { assinsert(o, 0x11); return 0; }
+    if (carrier && 2 * o == g.puckc) { assinsert(o, apuckc); return 0; }
     if (!(pc & 0x8000) && (g.pfteam[o] == r16(RAM_OFF_pfteam + pc)) != carrier) { assreplace(o, def); return 0; }
     if (g.gmclock) { donothing(o, a3); return 0; }
     if (check4bench(o)) return 0;
@@ -924,7 +924,7 @@ void assnearest(int o, uint16_t a2, int a3)
     }
     if (!g.position[o]) { assgoalie(o, a2, a3); return; }
     if (2 * o == g.puckc) {
-        if (g.playerpad[o] & 0x8000) assinsert(o, 0x11);
+        if (g.playerpad[o] & 0x8000) assinsert(o, apuckc);
         return;
     }
     {
@@ -944,9 +944,9 @@ void assnearest(int o, uint16_t a2, int a3)
         if (g.d2[0] & 0x8000) goto l3;
     }
     if (2 * o != a1 && !g.gmclock && !(r16(RAM_OFF_pflags + a1) & 0x1000) && r16(RAM_OFF_position + a1)
-        && r16(RAM_OFF_asscur + a1) != 0x15) {
+        && r16(RAM_OFF_asscur + a1) != apassrec) {
         w16(RAM_OFF_pflags + a1, r16(RAM_OFF_pflags + a1) & 0xFFFE);
-        assinsert(a1 >> 1, 0x12);
+        assinsert(a1 >> 1, anearest);
         assexit(g.curobj >> 1);
         return;
     }
@@ -1060,9 +1060,9 @@ void asspuckc(int o, int a3)
             t = (uint16_t)(t + g.aioff[o] + c);           /* (adc: the carry of the sbc) */
             g.temp1[o] = (int16_t)(t & 0x8000 ? 0 : t);
             checkob(o, 0);
-            if (g.breakaway && NEG(abs16((uint16_t)g.Ypos[o]), 0x90)) { assreplace(o, 0x10); return; }
+            if (g.breakaway && NEG(abs16((uint16_t)g.Ypos[o]), 0x90)) { assreplace(o, abreakaway); return; }
             if (chk4lc(o, a3) || chk4shot(o)) return;
-            if (g.asscur[o] == 0x11 && chk4pass(o, a3)) return;
+            if (g.asscur[o] == apuckc && chk4pass(o, a3)) return;
         }
     }
     uint16_t k = (uint16_t)((g.sflags & 0x8000 ? g.position[o] : (uint16_t)(6 + g.temp3[o])) << 2);
@@ -1074,7 +1074,7 @@ void asspuckc(int o, int a3)
 /* Assignment 6: the center on offense, the same with his own spots (CenterOSpots) by the puck y. */
 void asscentero(int o, uint16_t a2, int a3)
 {
-    if (!asswingo_start(o, a3, 5, 1, 1)) return;
+    if (!asswingo_start(o, a3, acenterd, 1, 1)) return;
     if (ass_timer(o, g.aidef[o])) {
         uint16_t d0 = (uint16_t)g.pucky[0];
         if (!g.pfgoal[o]) d0 = (uint16_t)-d0;
@@ -1088,7 +1088,7 @@ void asscentero(int o, uint16_t a2, int a3)
 /* Assignment 5: the center on defense, halfway between the puck and his goal. */
 void asscenterd(int o, int a3)
 {
-    if (!asswingo_start(o, a3, 6, 0, 0)) return;
+    if (!asswingo_start(o, a3, acentero, 0, 0)) return;
     uint16_t t = (uint16_t)(g.temp1[o] - g.d7);
     g.temp1[o] = (int16_t)(t & 0x8000 ? g.aidef[o] : t);
     uint16_t d0 = (uint16_t)(g.Xpos[14] >> 1);
@@ -1106,7 +1106,7 @@ void asscenterd(int o, int a3)
  * are left unused.) */
 void assdefd(int o, uint16_t a2, int a3)
 {
-    if (!ass_start(o, a3, 1, 0)) return;
+    if (!ass_start(o, a3, adefo, 0)) return;
     if (ass_timer(o, g.aidef[o])) {
         /* (the original's test of the puck against the blue line, its results dropped: only its chkpk
          * call is kept) */
@@ -1149,7 +1149,7 @@ void assdefd(int o, uint16_t a2, int a3)
  * carrier. */
 void assdefo(int o, uint16_t a2, int a3)
 {
-    if (!ass_start(o, a3, 2, 1)) return;
+    if (!ass_start(o, a3, adefd, 1)) return;
     ass_timer(o, g.aioff[o]);
     uint16_t d0 = g.position[o] == 2 ? 0x50 : 0xFFB0;
     if (!g.pfgoal[o]) d0 = (uint16_t)-d0;
@@ -1186,7 +1186,7 @@ uint16_t EvadePC(int o, uint16_t d0)
  * by address, in the program bank's mirror.) */
 void asswingd(int o, uint16_t a2, int a3)
 {
-    if (!ass_start(o, a3, 4, 0)) return;
+    if (!ass_start(o, a3, awingo, 0)) return;
     ass_timer(o, g.aidef[o]);
     uint16_t d0 = g.position[o] == 5 ? 0xFF9C : 0x64, d1, d2;
     uint16_t pcpos = r16((RAM_OFF_position + (uint16_t)g.puckc) & 0xFFFF);
@@ -1213,7 +1213,7 @@ void asswingd(int o, uint16_t a2, int a3)
  * y led by its velocity), picked again as the zone changes or at random when his timer runs out. */
 void asswingo(int o, uint16_t a2, int a3)
 {
-    if (!asswingo_start(o, a3, 3, 1, 1)) return;
+    if (!asswingo_start(o, a3, awingd, 1, 1)) return;
     if (ass_timer(o, g.aidef[o])) {
         uint16_t d0 = (uint16_t)g.pucky[0];
         uint16_t l = (uint16_t)g.puckvy[0] >> 6;
@@ -1871,7 +1871,7 @@ in_box:
     g.pfalock[o] = 2;
     SetSPAFromA(o, (uint16_t)SYM_SPAwallright);
     g.pflags[o] &= 0xBFFF;
-    assreplace(o, 0xE);
+    assreplace(o, adopen);
     return;
 skate:
     skateto(o, (uint16_t)g.temp3[o], (uint16_t)g.temp4[o], SYM_rtss, a3);
@@ -2074,7 +2074,7 @@ ready:
         SetSPA(o, (uint16_t)SYM_SPAgready);
         return;
     }
-    if (2 * o != g.puckc && g.asscur[o] != 0xC) {
+    if (2 * o != g.puckc && g.asscur[o] != abench) {
         uint16_t ay = (uint16_t)g.Ypos[o];
         if (ay & 0x8000) ay = (uint16_t)-ay;
         if (ay >= 0x98) {
@@ -2502,7 +2502,7 @@ l48:
     if (g.pfgoal[o]) a = (uint16_t)-a;
     if (NEG(a, 0xFC00)) goto l44;
     if (g.tmnear[0] < 0x132 || g.tmnear[1] < 0x132) goto l44;
-    assinsert(o, 0xF);
+    assinsert(o, agoalietopuck);
 }
 
 /* Turn goalie o's facing a step the short way toward want, at most a step per 6 ticks. */
@@ -2741,7 +2741,7 @@ void CompShoot(int o)
     if (t >= 0x14) t = 0x14;
     g.temp2[o] = 0;
     g.temp2b[o] = (int16_t)t;
-    assreplace(o, 0x13);
+    assreplace(o, ashoot);
 }
 
 /* Assignment $13: a computer shot: the first time it starts (SetShotMode); with shot mode over, the
@@ -2857,7 +2857,7 @@ void doshot(int o, int a3)
     PuckSfx(sound);
     uint16_t gy = g.pfgoal[a3] ? 0x108 : 0xFEF8;
     if (((uint16_t)(gy - g.pucky[0]) ^ (uint16_t)g.puckvy[0]) & 0x8000) g.puckvy[0] = (int16_t)-g.puckvy[0];
-    if (g.PenShotActive) assreplace(a3, 0x12);
+    if (g.PenShotActive) assreplace(a3, anearest);
 }
 
 /* Assignment $10: a computer puck carrier on a breakaway skates the path to the net (no avoidance)
@@ -3127,7 +3127,7 @@ void dopass_count(int o, uint16_t a0, int a3, uint16_t y)
     uint16_t gx = r16(RAM_OFF_topgoalie + y);
     w16(RAM_OFF_temp1 + gx, (uint16_t)((r16(RAM_OFF_aidef + gx) >> 1) + 1 + r16(RAM_OFF_temp1 + gx)));
     g.passReceiverPlayerNum = a0;
-    assinsert(a0 >> 1, 0x15);
+    assinsert(a0 >> 1, apassrec);
     uint16_t save = r16(RAM_OFF_frame + a0);
     uint16_t dir = r16(RAM_OFF_attribute + a0) & 0x0800 ? (uint16_t)(0 - r16(RAM_OFF_facedir + a0)) : r16(RAM_OFF_facedir + a0);
     uint16_t t = rom16(SYM_SPAonetimerf + (uint16_t)((dir & 7) << 1));
@@ -3185,7 +3185,7 @@ void DumpInTarget(int o)
 }
 
 /* Replace player o's assignment with assdumpin ($14). */
-void StartDumpIn(int o) { assreplace(o, 0x14); }
+void StartDumpIn(int o) { assreplace(o, adumpin); }
 
 /* Assignment $14: the puck carrier o dumps the puck in: once the target is picked a computer player
  * shoots instead toward $14 / 8 (CompShoot: returns nonzero, his caller ended too); he turns toward
@@ -3618,12 +3618,12 @@ void puckfaceoff2(int o, int a3)
         if (d1 & 0x8000) continue;
         if (d1) {
             if (g.penshot) g.pnum[g.BA_Team ? 10 : 4] = g.BA_Skater_Offset;
-            uint8_t d0 = 0x16;
+            uint8_t d0 = afaceoff;
             if (d1 == 4) {
                 uint16_t a2 = g.pfteam[p] ? 2 : 0;
                 w16(RAM_OFF_tmtouch1 + a2, g.pnum[p] & 0xFF);
                 w16(RAM_OFF_tmflags + a2, 4);
-                d0 = 0x17;
+                d0 = afaceoffpl;
             }
             assinsert(p, d0);
         }
@@ -3810,7 +3810,7 @@ void Endfaceoff(int a3)
     g.puckvz = (int16_t)(RandomWord() & 0x7FF);
     g.puckz = 0;
     w16(RAM_OFF_pfnc + 2 * a3, 0);
-    assreplace(a3, 0x18);
+    assreplace(a3, pnorm);
 }
 
 /* Assignment $16: wait (unless locked in an animation) until the face off is over. */
@@ -3853,7 +3853,7 @@ void assfaceoffpl(int o)
  * otherwise the ready pose. */
 void faceoffinput(int o, uint16_t d0, uint16_t d1)
 {
-    if (g.asscur[o] != 0x17) return;
+    if (g.asscur[o] != afaceoffpl) return;
     if (g.pfgoal[o]) g.fodir2 = d0; else g.fodir1 = d0;
     if (g.pf2aip[o]) return;
     if (d1 & 0x8000) {
@@ -3904,7 +3904,7 @@ void puckfaceoff(int o, int a3, uint16_t d0, uint16_t a0)
     fo_box_timer(a3, 0x20);
     if (g.temp1[a3] >= 0 || g.temp2[a3] >= 0) return;
     fo_line(0, 2, 1);
-    assreplace(a3, 0x1C);
+    assreplace(a3, pfaceoff2);
 }
 
 /* Lock the view at its current position */
@@ -3999,7 +3999,7 @@ void doinput(int o, uint16_t d0, uint16_t d1, uint16_t d2, uint16_t d3, uint16_t
         if (g.sflags & 8) { ShotMode(o, d0, d2, a3); return; }
         if (g.dumpinplayer == g.curobj) return;
         if (d1 & 0x8000) { setpassmode(o); return; }
-        if (d1 & 0x4000) { assinsert(o, 0x14); return; }
+        if (d1 & 0x4000) { assinsert(o, adumpin); return; }
         if (!g.position[o]) { goalie_input(o, d0, a3); return; }
         if (d1 & 0x0080) { SetShotMode(o); return; }
         doplayeracc(o, d0, a3);
@@ -4433,10 +4433,10 @@ int check4bench(int o)
         Setplass(o);
         return 1;
     }
-    if (g.asscur[o] == 0xC || 2 * o == g.puckc) return 0;
+    if (g.asscur[o] == abench || 2 * o == g.puckc) return 0;
     g.pflags[o] |= 0x1000;
     g.temp1[o] = 0;
-    assreplace(o, 0xC);
+    assreplace(o, abench);
     return 1;
 }
 

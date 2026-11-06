@@ -1130,7 +1130,7 @@ void Goal(int o)
     for (int k = 0, p = r16(RAM_OFF_tmsort + a2) >> 1; k < 6; k++, p++) {
         if (g.position[p] <= 0) continue;
         g.pfnc[p] = 0;
-        assinsert(p, 8);
+        assinsert(p, ascore);
     }
     g.collflag = 0;
     g.puckvx[0] = 0;
@@ -1142,7 +1142,7 @@ void Goal(int o)
     g.puckcross[1] = 0xFFFF;
     g.puckcross[3] = 0xFFFF;
     g.pfnc[14] = 0xFFFF;
-    assreplace(o, 0x1A);
+    assreplace(o, pnothing);
     SetSPAFromA(o + 1, (uint16_t)SYM_SPAsiren);
     AddPenalty2(r16(RAM_OFF_tmsort + a2) >> 1, PenGoal);
 }
@@ -1225,7 +1225,7 @@ void SetupPenaltyShot(void)
     uint16_t x = g.BA_Team ? 0xC : 0, d4 = g.BA_Team ? 0 : 2;
     for (int k = 0; k < 6; k++, x += 2) {
         g.puckc = (int16_t)x;
-        for (int n = 0; n < 8; n++) assinsert(x >> 1, 0x10);
+        for (int n = 0; n < 8; n++) assinsert(x >> 1, abreakaway);
     }
     if (r16(RAM_OFF_teampads + d4) && r16(RAM_OFF_goaliemode1 + d4)) {
         for (uint16_t y = 0; y < 0xA; y += 2) {
@@ -1266,7 +1266,7 @@ void forcepldata(uint16_t a2)
         g.position[o] = (int16_t)p;
         if (!(p & 0x8000)) {
             Setplass(o);
-            if (g.position[o] == 4) assinsert(o, 0x12);
+            if (g.position[o] == 4) assinsert(o, anearest);
             uint16_t d3 = (uint16_t)(((uint16_t)g.newpnum[o] & 0xFF) << 1);
             w16(RAM_OFF_tmpdst + (uint16_t)((a2 ? 0x34 : 0) + d3), TMPDICE);
             setplayer(o, d3 >> 1);
@@ -1298,7 +1298,7 @@ void setplayer(int o, uint16_t d3)
     uint16_t d1 = r16(RAM_OFF_tmpdst + y);
     uint16_t r3 = (uint16_t)(y * 6);
     if (!(d1 & 0x8000) || d1 == TMPDBENCH) {
-        assinsert(o, d1 & 0x8000 ? 0xA : 0xB);
+        assinsert(o, d1 & 0x8000 ? aeben : aepen);
         g.pfalock[o] = 0;
         g.SPA[o] = 0;
     }

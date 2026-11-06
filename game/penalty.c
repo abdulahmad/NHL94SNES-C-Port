@@ -156,7 +156,7 @@ static void penalty_to_box(uint16_t a0, uint16_t d0, uint16_t d2)
     uint16_t b = a2 ? 0x1A : 0, d1 = 0x18;
     do y = b++; while (!(r8(RAM_OFF_tmboxlist + y) & 0x80) && !((d1 = (uint16_t)(d1 - 1)) & 0x8000));
     w16(RAM_OFF_tmboxlist + y, pl | 0xFF00);
-    assreplace(o, 0x0D);
+    assreplace(o, apenalty);
     SetPA(d0);
     USBoard();
 }
@@ -239,7 +239,7 @@ void chkprogress(void)
     }
     SetHor();
     g.puckc = (int16_t)(g.puckc | 0xFF00);
-    assinsert(14, 0x1A);
+    assinsert(14, pnothing);
     g.temp1[14] = 0x1C20;
     g.RefStep = (int16_t)(g.RefStep | 0xFF00);
     g.RefCnt = 0;
@@ -254,7 +254,7 @@ void chkprogress(void)
 void InProgress_exit(void)
 {
     g.gmode &= ~gmpen;
-    assreplace(14, 0x1B);
+    assreplace(14, pfaceoff);
     InProgress_coin();
 }
 
