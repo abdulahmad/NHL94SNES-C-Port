@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """ROM-order gate for one C module.
 
-Compares original C defs in game/<module>.c (or game/*/<module>.c before flatten)
-with 94S globals under src/routines/<module>/ that have a C function, in name_map
-address order. Skips static C helpers, asm locals, and data labels (and unused
-asm code with SYM_ but no C). Does not fail the whole tree: pass --module M.
+Compares original C defs in game/<module>.c with 94S globals under
+src/routines/<module>/ that have a C function, in name_map address order.
+Skips static C helpers, asm locals, and data labels (and unused asm with SYM_
+but no C). C extras that are not asm globals in this module (Parent_x locals,
+missing framehooks) hitchhike with the parent and do not fail. Does not fail
+the whole tree: pass --module M.
 
-Self-test: print (small leftover recut) is membership-complete and not ROM order.
+Self-test: print 7/7 membership, not ROM order until S2.
 
   python3 tools/check_rom_order.py --module print
   python3 tools/check_rom_order.py --asm ../nhl94snes --module print
@@ -119,18 +121,23 @@ def check_module(module, cdir, asm, by_file, have_c):
     rel = os.path.relpath(c_file, ROOT).replace(os.sep, '/')
     c_names = by_file.get(rel, [])
     a_names = asm_globals_with_c(asm, module, have_c)
-    if c_names == a_names:
-        print('%s: %d original routines, ROM order OK' % (module, len(c_names)))
-        return 0
-    print('%s: ROM order mismatch (%d C, %d asm with C)' % (module, len(c_names), len(a_names)))
     extra = [n for n in c_names if n not in set(a_names)]
     missing = [n for n in a_names if n not in set(c_names)]
+    c_ord = [n for n in c_names if n in set(a_names)]
+    if c_ord == a_names and not missing:
+        msg = '%s: %d original routines, ROM order OK' % (module, len(a_names))
+        if extra:
+            msg += ' (%d hitchhikers)' % len(extra)
+        print(msg)
+        return 0
+    print('%s: ROM order mismatch (%d C originals, %d asm with C)' % (
+        module, len(c_ord), len(a_names)))
     if extra:
-        print('  extra in C:   %s' % fmt(extra))
+        print('  hitchhikers:  %s' % fmt(extra))
     if missing:
         print('  missing in C: %s' % fmt(missing))
     print('  asm: %s' % fmt(a_names))
-    print('  c:   %s' % fmt(c_names))
+    print('  c:   %s' % fmt(c_ord))
     return 1
 
 
