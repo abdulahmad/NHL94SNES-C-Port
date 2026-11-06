@@ -33,7 +33,10 @@ RUNTIME := $(wildcard runtime/src/*.c)
 GAMEO   := $(GAME:%.c=build/obj/%.o)
 RTO     := $(RUNTIME:%.c=build/obj/%.o)
 CONSOLEO := build/obj/platform/hal.o build/obj/platform/clock.o build/obj/fnsyms_gen.o build/obj/uncounted_gen.o
-WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o
+OVERBARO := build/obj/overbar/scaler.o build/obj/overbar/host.o build/obj/overbar/menu.o \
+	build/obj/overbar/overlay.o build/obj/overbar/filemenu.o build/obj/overbar/pulseman_menu.o
+WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o \
+	build/obj/platform/overbar_client.o $(OVERBARO)
 
 all: build/snes94$(EXE) build/golden$(EXE)
 
@@ -42,7 +45,13 @@ build/obj/game/%.o: game/%.c $(GAMEH)
 	$(CC) $(CFLAGS) $(INSTR) $(GAMEDEF) $(GAMEINC) -c $< -o $@
 build/obj/platform/%.o: platform/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(if $(findstring main,$<),$(SDLCF)) -c $< -o $@
+	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) -Iplatform/overbar/include $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF)) -c $< -o $@
+build/obj/overbar/%.o: platform/overbar/src/%.c platform/overbar/include/overbar/overbar.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iplatform/overbar/include -c $< -o $@
+build/obj/overbar/pulseman_menu.o: platform/overbar/third_party/pulseman/menu.c platform/overbar/include/mdrt/menu.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iplatform/overbar/include -c $< -o $@
 build/obj/runtime/%.o: runtime/%.c $(RTH)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Iruntime/include -Ibuild -c $< -o $@
