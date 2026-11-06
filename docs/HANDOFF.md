@@ -5,6 +5,10 @@ Project-wide handoff (always current, read it first): `alignment-plan/c_ports_HA
 
 Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md).
 
+## Now
+
+S0 ROM-order checker stacked on leftover names/recut [#3](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/3). `python3 tools/check_rom_order.py --module M` vs 94S `src/routines/<module>/` (name_map address order). Self-test: print 7/7 membership, not ROM order (`appstring…Framer` vs `Framer print printbig appstring PushTime eraser PushNumber`). Names 844/0/6/5. Clock 851. Next: S1 flatten `game/play|menus|screen|sound|system` to `game/<module>.c`. Do not merge to main.
+
 ## Done
 
 * Phase 0: credit in the README, AGENTS.md, CLAUDE.md, docs/RULES.md, docs/VANILLA.md, this file.
@@ -44,8 +48,11 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
    `test/oracle/`, resyncing at lag frames as 1nput's Genesis player does.
 3. Coverage report (plan S3), and the cost model measured against the oracle (plan S4).
 4. ~~Renames~~ and ~~re-cut~~ done, including leftover recut alignment to current 94S (6 renames parked: C
-   `SYM_*_t1`/`_t2` at other cartridge addresses than the asm locals). Order inside each file (ROM order,
-   docs/RULES.md) is not yet checked.
+   `SYM_*_t1`/`_t2` at other cartridge addresses than the asm locals).
+5. ~~**S0 ROM-order checker**~~ (2026-11-06): `tools/check_rom_order.py --module M` vs 94S `src/routines/<module>/`.
+   Self-test: print membership-complete, not ROM order. Does not fail the tree until S2.
+6. **S1 flatten** extra grouping to `game/<module>.c`, then S2 ROM order (20 modules). Parked 6 / missing 5 stay.
+   Oracle (plan S1/S2) still parked.
 
 ## Needs
 
