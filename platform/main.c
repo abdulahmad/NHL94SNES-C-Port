@@ -594,9 +594,9 @@ int main(int argc, char *argv[])
     ob_profile profile = ob_profile_from_env();
     Uint32 wflags, rflags;
     SDL_RendererInfo rinfo;
-    ob_present_apply_hints(profile);
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     profile = ob_profile_detect(SDL_GetCurrentVideoDriver(), ob_handheld_env());
+    ob_present_apply_hints(profile);
     char *where = SDL_GetBasePath();
     if (where) { snprintf(base, sizeof base, "%s", where); SDL_free(where); }
     settings_load();
@@ -624,7 +624,14 @@ int main(int argc, char *argv[])
     }
     win = SDL_CreateWindow("NHL '94", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 320 * SCALE, 240 * SCALE, wflags);
     ren = win ? SDL_CreateRenderer(win, -1, rflags) : NULL;
-    if (!ren && win) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
+    if (!ren && win) {
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d");
+        ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+    }
+    if (!ren && win) {
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+        ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
+    }
     if (ren && SDL_GetRendererInfo(ren, &rinfo) == 0 && rinfo.name) {
         int gles = strstr(rinfo.name, "opengles") || strstr(rinfo.name, "gles");
         ob_host_set_present(overbar_client_host(), gles, 0);

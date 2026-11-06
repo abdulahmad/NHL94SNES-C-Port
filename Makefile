@@ -23,7 +23,12 @@ ifeq ($(OS),Windows_NT)
 EXE     := .exe
 WINDRES ?= $(patsubst %gcc,%windres,$(CC))
 ICONO   := build/obj/icon.o   # (the exe's icon, res/icon.ico)
+# Explorer launch needs only SDL2.dll beside the exe (no libgcc_s / libwinpthread
+# from PATH, which are often the 32-bit ones from a 95PC tree → 0xc000007b).
+WINLIB  ?= -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic
+SDL_DLL := $(shell sdl2-config --prefix 2>/dev/null)/bin/SDL2.dll
 endif
+WINLIB  ?=
 ROM     ?= $(firstword $(wildcard *.smc *.sfc))
 # the first Python 3 that runs (on Windows python3 may be the Store's stand-in, which only says so)
 PYTHON  ?= $(firstword $(foreach p,python3 python,$(if $(shell $(p) -c "import sys; print(sys.version_info[0])" 2>/dev/null | grep -x 3),$(p))) python3)
@@ -84,7 +89,8 @@ build/obj/icon.o: res/icon.rc res/icon.ico
 	@mkdir -p $(dir $@)
 	$(WINDRES) -I res $< -O coff -o $@
 build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
-	$(CC) -o $@ $^ $(SDLLIB) -lm
+	$(CC) -o $@ $^ $(SDLLIB) $(WINLIB) -lm
+	@if [ -n "$(SDL_DLL)" ] && [ -f "$(SDL_DLL)" ]; then cp -f "$(SDL_DLL)" build/SDL2.dll; fi
 build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
 	$(CC) -o $@ $^ -lm
 # one file to give a player: SDL2 and the compiler's runtime in it, nothing but the system's DLLs needed
