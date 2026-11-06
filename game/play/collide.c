@@ -1340,3 +1340,182 @@ void SetupPenaltyShot(void)
     g.pstimer = 0x3E8;
     ClearPenaltyBuffer();
 }
+
+static void inc16(uint32_t off) { w16(off, (uint16_t)(r16(off) + 1)); }
+
+/* The puck is in the net (o, the puck): the score and team stats, the siren and the crowd, the score
+ * summary and the players' goals and assists, the scoreboard, the scorers celebrate, the puck pops up at
+ * the goal line and the goal whistle. A stopped clock only stops the puck; a penalty shot at the wrong net
+ * (by the end and gmdir, against BA_Team) ends without a goal. */
+void Goal(int o)
+{
+    if (g.gmclock) {
+        g.puckvz = 0;
+        g.puckvx[0] = 0;
+        g.puckvy[0] = 0;
+        return;
+    }
+    if (g.PenShotActive) {
+        int right = !(g.pucky[0] & 0x8000) == !!(g.gmode & gmdir);
+        if (right ? !g.BA_Team : g.BA_Team) { EndPenaltyShotPlay(o); return; }
+    }
+    ChkShotStat();
+    freezewindow();
+    g.replaydelay = 0x1E;
+    uint16_t a2 = 0, a1 = 2;
+    if (g.pucky[0] & 0x8000) { a1 = 0; a2 = 2; }
+    if (g.gmode & gmdir) { a2 = a1; a1 ^= 2; }
+    inc16(RAM_OFF_tmscore + a2);
+    uint16_t d = (uint16_t)(g.tmap[0] - g.tmap[1]);
+    if (d && (d & 0x8000 ? !a2 : a2)) inc16(RAM_OFF_tmSHGoals + a2);
+    if (g.penshot) inc16(RAM_OFF_tmPenShotGoals + a2);
+    else if (g.breakaway) inc16(RAM_OFF_tmBreakawayGoals + a2);
+    if (g.onetimer) inc16(RAM_OFF_tmOneTimerGoals + a2);
+    MusicStop();
+    uint16_t a = g.streamsfx == 1 ? 1 : 2;   /* (StreamSfx's A: the stream asked for, or 1 still playing) */
+    StreamSfx(2);
+    g.benchcheer = 0;
+    if (a2) {
+        StartBenchCheer(4);
+        uint16_t c = (uint16_t)(g.Crowdlevel - 0x300);
+        g.Crowdlevel = c & 0x8000 ? 0 : c;
+    } else {
+        StartBenchCheer((uint16_t)(a + 2));
+        g.Crowdlevel = (uint16_t)(g.Crowdlevel + 0x1F4);
+        g.crowdhold = 0x78;
+        PlayTeamSong(3);
+    }
+    g.sfxmutetime = g.vcount[0];
+    EndPenaltyShotPlay(o);
+    g.breakaway = 0;
+    g.onetimer = 0;
+    uint16_t x = (uint16_t)(g.gsp << 2);
+    uint16_t c = (uint16_t)(g.CwdExciteLvl + 0x1E);
+    if (!(c & 0x8000)) g.CwdExciteLvl = c;
+    if (a2) {
+        x += 2;
+        c = (uint16_t)(g.CwdExciteLvl + 0xFFCE);
+        if (!(c & 0x8000)) g.CwdExciteLvl = c;
+    }
+    inc16(RAM_OFF_tmPerGoals + x);
+    if (g.ScoreSumbytes[0] == 0x258) g.ScoreSumbytes[0] -= 6;
+    uint32_t s = (uint32_t)(uint16_t)ScoreSum + g.ScoreSumbytes[0];
+    uint32_t a0 = (ScoreSum & 0xFF0000) | (uint16_t)s;
+    g.ScoreSumbytes[0] = (uint16_t)(g.ScoreSumbytes[0] + 6 + (s >> 16));   /* (the first add's carry) */
+    put16(a0, GetPeriodTimeRemaining());
+    a0 += 2;
+    uint16_t v = (uint16_t)(2 + r16(RAM_OFF_tmap + a2) - r16(RAM_OFF_tmap + a1));
+    if (a2) v |= 0x80;
+    put16(a0, v);
+    a0++;
+    uint16_t d0 = r16(RAM_OFF_tmtouch1 + a2);
+    put16(a0, d0);
+    a0++;
+    put16(a0, 0xFFFF);
+    uint16_t base = a2 ? 0x1A : 0;
+    if (r16(RAM_OFF_tmgoalie + a2) != d0) {
+        uint32_t t = RAM_OFF_tmgoals + (uint16_t)(base + d0);
+        w8(t, (uint8_t)(r8(t) + 1));
+    }
+    d0 = r16(RAM_OFF_tmtouch2 + a2);
+    if (!(d0 & 0x8000)) {
+        put8(a0, (uint8_t)d0);
+        uint32_t t = RAM_OFF_tmassists + (uint16_t)(base + d0);
+        w8(t, (uint8_t)(r8(t) + 1));
+        a0++;
+        d0 = r16(RAM_OFF_tmtouch3 + a2);
+        if (!(d0 & 0x8000)) {
+            put8(a0, (uint8_t)d0);
+            t = RAM_OFF_tmassists + (uint16_t)(base + d0);
+            w8(t, (uint8_t)(r8(t) + 1));
+        }
+    }
+    d0 = r16(RAM_OFF_tmgoalie + a1);
+    if (!(d0 & 0x8000)) inc16(RAM_OFF_tmgoals + (uint16_t)((a1 ? 0x1A : 0) + d0));   /* (a word: the next player's byte takes the carry) */
+    PenGoalStuff(a1, a2);
+    printscores1();
+    for (int k = 0, p = r16(RAM_OFF_tmsort + a2) >> 1; k < 6; k++, p++) {
+        if (g.position[p] <= 0) continue;
+        g.pfnc[p] = 0;
+        assinsert(p, 8);
+    }
+    g.collflag = 0;
+    g.puckvx[0] = 0;
+    g.puckvy[0] = 0;
+    g.Xpos[14] = g.Xpos[14] & 0x8000 ? (int16_t)-6 : 6;
+    g.pucky[0] = g.pucky[0] & 0x8000 ? (int16_t)0xFEF0 : 0x110;
+    g.puckvz = 0x600;
+    g.puckz = 0;
+    g.puckcross[1] = 0xFFFF;
+    g.puckcross[3] = 0xFFFF;
+    g.pfnc[14] = 0xFFFF;
+    assreplace(o, 0x1A);
+    SetSPAFromA(o + 1, (uint16_t)SYM_SPAsiren);
+    AddPenalty2(r16(RAM_OFF_tmsort + a2) >> 1, PenGoal);
+}
+
+/* The puck x against player y (a2): unless he carries it, is past the skaters, off the ice or not
+ * colliding. A goalie: within his stick's reach (his stick hot spot, the height by the
+ * checkpuckcoll_ccx_8 table) the stick (puckstick); then his body within 11 (puckgoalie). A skater,
+ * puck low and slow: within $C4 squared of his stick (a quarter while the puck is not to be
+ * touched) the stick; otherwise within 9 and $41 squared his body (puckbody, the original's X
+ * being a3). */
+void checkpuckcoll_ccx(int x, int y, int a3, uint16_t a0)
+{
+    int a2 = y;
+    uint16_t d0, d1, d2, d3, d4;
+    int16_t hx, hy;
+    if (2 * y == g.puckc || y >= 12 || (g.position[y] & 0x8000) || (g.pfnc[y] | g.nopuck[y])) return;
+    if (g.pflags[a2] & 0x1000) goto l5;
+    if (!g.position[a2]) goto l9;
+    if (!((uint16_t)(g.puckz - 5) & 0x8000) || !((uint16_t)(g.puckvz - 0x100) & 0x8000)) goto l5;
+    GetHot(a2, &hx, &hy);
+    d0 = abs16((uint16_t)((uint16_t)hx + g.Xpos[a2] - g.Xpos[14]));
+    if (d0 >= 0xF) goto l5;
+    d1 = abs16((uint16_t)((uint16_t)hy + g.Ypos[a2] - g.pucky[0]));
+    if (d1 >= 0xF) goto l5;
+    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
+    d1 = 0xC4;
+    if (!(g.nopuck[14] & 0x8000) && g.nopuck[14]) d1 >>= 2;
+    if (d1 < d0) goto l5;
+    puckstick(g.curobj >> 1, a2, a3, d0, a0);
+    return;
+l5:
+    if (!g.position[a2]) goto l7;
+    d0 = abs16((uint16_t)(g.Xpos[a2] - g.Xpos[14]));
+    if (d0 >= 9) return;
+    d1 = abs16((uint16_t)(g.Ypos[a2] - g.pucky[0]));
+    if (d1 >= 9) return;
+    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
+    if (d0 >= 0x41) return;
+    puckbody(a3, a2, a3, d0);
+    return;
+l9:
+    GetFrameHot(a2, &d0, &d1);
+    d2 = abs16(d0);
+    d4 = rom16(SYM_checkpuckcoll_ccx_8 + (uint16_t)(d2 << 1));
+    d3 = rom16(SYM_checkpuckcoll_ccx_8 + (uint16_t)(abs16(d1) << 1));
+    x = g.curobj >> 1;
+    GetHot(a2, &hx, &hy);
+    d0 = abs16((uint16_t)((uint16_t)hx + g.Xpos[a2] - g.Xpos[14]));
+    if (d0 >= d2) goto l7;
+    d1 = abs16((uint16_t)((uint16_t)hy + g.Ypos[a2] - g.pucky[0]));
+    if (d1 >= d2) goto l7;
+    {
+        uint16_t t = (uint16_t)(d3 + d4);
+        if ((uint16_t)(t - 5) & 0x8000) t = 5;
+        if (t < (uint16_t)g.puckz) goto l7;
+        t = (uint16_t)(d3 - d4);
+        if (!(t & 0x8000) && t >= (uint16_t)g.puckz) goto l7;
+    }
+    d0 = (uint16_t)(Mul8U(d0, d0) + Mul8U(d1, d1));
+    d1 = Mul8U(d2, d2);
+    if (!(g.nopuck[14] & 0x8000) && g.nopuck[14]) d1 >>= 2;
+    if (d1 >= d0) puckstick(x, a2, a3, d0, a0);
+l7:
+    d0 = (uint16_t)(g.Xpos[a2] - g.Xpos[14]);
+    if ((uint16_t)(d0 - 0xFFF5) & 0x8000 || !((uint16_t)(d0 - 0xB) & 0x8000)) return;
+    d1 = (uint16_t)(g.Ypos[a2] - g.pucky[0]);
+    if ((uint16_t)(d1 - 0xFFF5) & 0x8000 || !((uint16_t)(d1 - 0xB) & 0x8000)) return;
+    puckgoalie(x, a2, a3, d0, d1);
+}

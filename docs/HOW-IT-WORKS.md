@@ -24,7 +24,7 @@ arithmetic, same RAM. That is why it plays exactly as the cartridge (`test/check
 
 ## From power on
 
-1. `Reset` (`system/snes.c`, `Reset_Fast`): the picture processor's registers cleared, VRAM
+1. `Start` (`system/main.c`, `Reset_Fast`): the picture processor's registers cleared, VRAM
    cleared, the sound driver uploaded to the sound CPU (`SPCIPLUpload`), all of work RAM cleared,
    the interrupt hooks set, the NMI on, the sound started, then `Opening`.
 2. `Opening` (`menus/setup.c`): the MultiPlayer 5 check, the publisher's logo and intro

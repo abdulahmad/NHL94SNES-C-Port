@@ -35,3 +35,5 @@ int puckbody(int x, int a2, int a3, uint16_t d0);
 void puckstick(int x, int a2, int a3, uint16_t d0, uint16_t a0);
 void puckgoalie(int x, int a2, int a3, uint16_t d0, uint16_t d1);
 void SetupPenaltyShot(void);
+void Goal(int o);
+void checkpuckcoll_ccx(int x, int y, int a3, uint16_t a0);

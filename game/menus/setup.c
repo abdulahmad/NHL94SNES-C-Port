@@ -1181,3 +1181,1224 @@ void ShowGoalBox(void)
     print(SYM_ShowGoalBoxPos2);
     print(FormatPlayerNumInitial(a2, d0));
 }
+
+void nullrtl(void) {}
+
+/* Reset the scouting report text scroll; a0 = TestList */
+uint32_t InitScoutingDisplay(void)
+{
+    g.VertLineScrolling = 0xFFFF;
+    g.PlayerScrollCtr = 0xFFFF;
+    g.SelectedPlayerIdx = 0;
+    g.ScoutingReportTimer = 0;
+    return TestList;
+}
+
+/* Blank the password */
+void ResetPassWord(void)
+{
+    g.PassWord[0] = 0;
+    for (int i = 15; i > 0; i--) g.PassWord[i] = 0x1E;
+}
+
+/* Start the hat trick sprites: clear the ten slots and set hattrick */
+void StartHatTrick(void)
+{
+    for (int i = 0; i < 10; i++) g.hatstep[i] = 0;
+    g.hattrick = 1;
+}
+
+/* The roster record of player d0 of team a2 (a0): past the team header, then d0 records of (length word
+ * + 8) bytes */
+uint32_t GetPlayerNamePointer(uint16_t a2, uint16_t d0)
+{
+    uint32_t bank = SYM_TeamList & 0xFF0000;
+    uint16_t a0 = r16(RAM_OFF_tmdata + a2);
+    a0 = (uint16_t)(a0 + m16(bank | a0));
+    while (!((d0 = (uint16_t)(d0 - 1)) & 0x8000)) {
+        uint32_t s = (uint32_t)a0 + m16(bank | a0);
+        a0 = (uint16_t)(s + 8 + (s >> 16));   /* (the first add's carry) */
+    }
+    return bank | a0;
+}
+
+/* End the string built in mesarea: its length word = a1 - mesarea; a1 = mesarea */
+uint32_t FinalizeTextBuffer(uint32_t a1)
+{
+    g.mesarea[0] = (uint16_t)(a1 - RAM_OFF_mesarea);
+    return (a1 & 0xFF0000) | RAM_OFF_mesarea;
+}
+
+/* RenderBigText's letter hooks: letter tile bigtextchar (two rows) at printx / printy of screenmap2
+ * (PlayoffScreen) or screenmap (DrawSelectTeam) */
+void BigLetterPlayoff(void)
+{
+    uint16_t x = (uint16_t)(((uint16_t)(g.printy << 7) + g.printx + (g.printy >> 9 & 1)) << 1);   /* (asl's carry) */
+    uint16_t v = (uint16_t)(g.bigtextchar | 0x2000 | g.printa);
+    w16(RAM_OFF_screenmap2 + 6 + x, v);
+    w16(RAM_OFF_screenmap2 + 0x106 + x, (uint16_t)(v + 1));
+}
+
+/* RenderBigText's letter hook on the team select screen: tile bigtextchar (two rows) in screenmap */
+void BigLetterSelect(void)
+{
+    uint16_t x = (uint16_t)(((uint16_t)(g.printy << 5) + g.printx + (g.printy >> 11 & 1)) << 1);   /* (asl's carry) */
+    uint16_t v = (uint16_t)(g.bigtextchar | 0x2400);
+    w16(RAM_OFF_screenmap + 0x0C + x, v);
+    w16(RAM_OFF_screenmap + 0x4C + x, (uint16_t)(v + 1));
+}
+
+/* mesarea = the first initial and last name of player TempPlOffset (bit 15: a visitor); a1 = mesarea */
+uint32_t GetPlayerInitial(void)
+{
+    uint16_t d0 = g.TempPlOffset, a2 = 0;
+    if (d0 & 0x8000) { d0 &= 0xFF; a2 = 2; }
+    return PlayerInitialName(a2, d0);
+}
+
+/* RenderBigText's state: the string, the letter pixels (hlsavebuf), the pixel offset r3 in the tile, its
+ * complement r3+2, the shift masks' indexes r0+2 / r2+2, the letter's pixel rows r1 / r1+2 */
+static struct { uint32_t p0, p1; uint16_t r1, r1h, r3, r3h, r0h, r2h; } bt;
+
+/* OR a letter's 8 pixel rows (from r1, shifted right r3) into tile t of bigtextbuf */
+static void bigtext_or(uint16_t t)
+{
+    uint32_t x = RAM_OFF_bigtextbuf + (uint16_t)(t << 4);
+    for (int k = 0; k < 8; k++, x += 2, bt.r1 += 2) {
+        uint16_t a = m16(bt.p1 + bt.r1);
+        if (bt.r3) a = (uint16_t)(a >> bt.r3);
+        a &= m16((SYM_RenderBigText_8 & 0xFF0000) + (uint16_t)(SYM_RenderBigText_8 + 16) + bt.r0h);
+        w16(x, (uint16_t)(a | r16(x)));
+    }
+}
+
+/* Store a letter's 8 pixel rows (from r1, shifted left r3+2 + 1) into tile t of bigtextbuf: the last one */
+static uint16_t bigtext_put(uint16_t t)
+{
+    uint32_t x = RAM_OFF_bigtextbuf + (uint16_t)(t << 4);
+    uint16_t a = 0;
+    for (int k = 0; k < 8; k++, x += 2, bt.r1 += 2) {
+        a = m16(bt.p1 + bt.r1);
+        uint16_t y = (uint16_t)(bt.r3h + 1);
+        do a = (uint16_t)(a << 1); while (--y);
+        a &= m16((SYM_RenderBigText_8 & 0xFF0000) + (uint16_t)SYM_RenderBigText_8 + bt.r2h);
+        w16(x, a);
+    }
+    return a;
+}
+
+/* The pixel rows of letter r2's half (0 top: its BigLetterMap entry; 1: the one $36 bytes on) */
+static uint16_t bigtext_rows(uint16_t r2, int half)
+{
+    return (uint16_t)(m16(SYM_BigLetterMap + 6 + (uint16_t)((uint16_t)(r2 << 1) + (half ? 0x36 : 0))) << 5);
+}
+
+/* The width of the string in pixels (a space at the start counts nothing) */
+static uint16_t bigtext_width(void)
+{
+    uint16_t r3 = 0;
+    for (uint16_t y = 0;; y++) {
+        uint16_t c = m8(bt.p0 + y), w;
+        if (!c) return r3;
+        if (c == 0x20) { if (!y) continue; w = 5; }
+        else if (c == 0x2E) w = 3;
+        else if (c == 0x40) w = m8(SYM_LetterWidths + 0x1B);
+        else if (c >= 0x30 && c < 0x3A) w = m8(SYM_LetterWidths + (uint16_t)(c - 0x30 + 0x1C));
+        else w = m8(SYM_LetterWidths + (uint16_t)((c & 0xDF) - 0x41));
+        r3 = (uint16_t)(r3 + w);
+    }
+}
+
+/* RAM's jml trampoline: the routine at jmlvector+1 (RenderBigText's letter hooks) */
+static void jml_vector(void)
+{
+    uint32_t t = r16(RAM_OFF_jmlvector + 1) | (uint32_t)r8(RAM_OFF_jmlvector + 3) << 16;
+    if (t == SYM_BigLetterSelect) BigLetterSelect();
+    else if (t == SYM_BigLetterPlayoff) BigLetterPlayoff();
+}
+
+/* Draw string p0 in the big proportional font: letter tiles into bigtextbuf from tile bigtextchar, centred
+ * in $24 pixels from printx, the jmlvector hook placing each letter on the map. A letter outside A-Z (a
+ * digit) ends the string after its first tile. */
+void RenderBigText(uint32_t p0)
+{
+    bt.p0 = p0;
+    bt.p1 = 0x7E0000 | RAM_OFF_hlsavebuf;
+    uint16_t a = (uint16_t)(0x24 - (bigtext_width() >> 1));
+    bt.r3 = a;
+    bt.r3h = a >> 3;
+    g.printx = (uint16_t)(g.printx + bt.r3h);
+    bt.r3 = (uint16_t)(bt.r3 - (uint16_t)(bt.r3h << 3));
+    for (uint16_t y = 0;; y++) {
+        bt.r0h = (uint16_t)(bt.r3 << 1);
+        uint16_t c = m8(bt.p0 + y), r2;
+        if (!c) {
+            jml_vector();
+            g.printx++;
+            bt.r1 = bt.r1h;
+            g.bigtextchar += 2;
+            return;
+        }
+        if (c == 0x20) a = 0x20;
+        else if (c == 0x2E) a = 0x1A;
+        else a = (uint16_t)((c & 0xDF) - 0x41);
+        r2 = a;
+        if (a == 0x20) a = 5;
+        else {
+            bt.r1 = bt.r1h = bigtext_rows(r2, 0);
+            bigtext_or(g.bigtextchar);
+            bt.r1 = bigtext_rows(r2, 1);
+            bigtext_or((uint16_t)(g.bigtextchar + 1));
+            a = m8(SYM_LetterWidths + r2);
+        }
+        a = (uint16_t)(a + bt.r3);
+        if (a >= 8) {
+            jml_vector();
+            g.printx++;
+            bt.r1 = bt.r1h;
+            g.bigtextchar += 2;
+            if (r2 & 0x8000) return;
+            a = r2;
+            if (r2 != 0x20) {
+                bt.r3h = bt.r3 ^ 7;
+                bt.r2h = (uint16_t)(bt.r3h << 1);
+                bigtext_put(g.bigtextchar);
+                bt.r1 = bigtext_rows(r2, 1);
+                a = bigtext_put((uint16_t)(g.bigtextchar + 1));
+            }
+        }
+        a = a == 0x20 ? 5 : m8(SYM_LetterWidths + r2);   /* (A, not the letter, is tested) */
+        bt.r3 = (uint16_t)(a + bt.r3) & 7;
+    }
+}
+
+/* Turn the password bits into the password characters (the remainders by PWrange, the last first) */
+void BitstoPW(void)
+{
+    for (int x = 15; x >= 0; x--) g.PassWord[x] = (uint8_t)SuperDiv(PWrange);
+}
+
+/* Turn the password characters into the password bits */
+void PWtoBits(void)
+{
+    ClrPassBits();
+    for (int x = 0; x < pwlength; x++) {
+        SuperMult(PWrange);
+        SuperAdd(g.PassWord[x]);
+    }
+}
+
+/* Move the password cursor to character d5: rows of 6 from the record's position */
+void PlacePasswordCursor(uint16_t d5)
+{
+    print(SYM_PlacePasswordCursorPos);
+    uint16_t q = DivX8U(d5, 6), rem = (uint16_t)(d5 - q * 6);   /* (the divider's remainder, RDMPYL) */
+    g.printy = (uint16_t)((uint16_t)(q << 1) + g.printy + (q >> 15));   /* (asl's carry) */
+    g.printx = (uint16_t)((uint16_t)(rem << 1) + g.printx + (rem >> 15) - 2);
+}
+
+/* Print the password screen keys */
+void PrintPasswordHelp(void)
+{
+    print(SYM_SelectTxt);
+    print(SYM_ANextTxt);
+    print(SYM_YBackTxt);
+    print(SYM_PressStartTxt);
+}
+
+/* mesarea = the uniform number and name of roster player d0 of team a2; a1 = mesarea */
+uint32_t getname(uint16_t a2, uint16_t d0)
+{
+    uint32_t rec = GetPlayerNamePointer(a2, d0), bank = rec & 0xFF0000;
+    w16(RAM_OFF_mesarea, 4);
+    uint16_t a0 = (uint16_t)(rec + m16(rec));
+    ConvertByteToDigits(m8(bank | a0), RAM_OFF_mesarea + 2);
+    appstring(SYM_PlayerNumNamePos, RAM_OFF_mesarea);
+    appstring(rec, RAM_OFF_mesarea);
+    return RAM_OFF_mesarea;
+}
+
+/* mesarea = the number, first initial and last name of roster player d0 of team a2 (a word written at a
+ * time); a1 = mesarea */
+uint32_t FormatPlayerNumInitial(uint16_t a2, uint16_t d0)
+{
+    uint32_t a0 = GetPlayerNamePointer(a2, d0), bank = a0 & 0xFF0000;
+    uint16_t p0 = (uint16_t)a0;
+    w16(RAM_OFF_mesarea, 2);
+    uint16_t a1 = (uint16_t)ConvertByteToDigits(m8(bank | (uint16_t)(p0 + m16(a0))), RAM_OFF_mesarea + 2);
+    w16(a1++, 0x0020);
+    uint16_t end = (uint16_t)(m16(a0) + p0);
+    p0 += 2;
+    w16(a1++, m16(bank | p0++));
+    w16(a1++, 0x002E);
+    w16(a1++, 0x0020);
+    while ((m8(bank | p0++)) != 0x20) {}
+    do w16(a1++, m16(bank | p0++)); while (p0 != end);
+    return FinalizeTextBuffer(a1);
+}
+
+/* Print the password (PassWord's characters through PasstoText), unless it is hidden (bit 7) */
+void PWprint(void)
+{
+    if (g.PassWord[0] & 0x80) return;
+    uint16_t a1 = RAM_OFF_mesarea;
+    w16(a1, 0x12);
+    a1 += 2;
+    for (int k = 0; k < 16; k++) w16(a1++, m16(SYM_PasstoText + g.PassWord[k]));
+    print(RAM_OFF_mesarea);
+}
+
+/* Turn the password into the playoff state */
+void DecodePW(void) { PWtoBits(); ReadPassBits(); }
+
+/* Erase the scouting report name line of side a2 */
+void ClearRosterName(uint16_t a2)
+{
+    ScoutNamePos(a2);
+    eraser(0x0B, 2, g.blankchar);
+}
+
+/* Score lo / hi above the star's (signed words, high first) */
+static int star_above(uint16_t lo, uint16_t hi, const uint16_t *s)
+{
+    if (hi != s[1]) return (int16_t)hi > (int16_t)s[1];
+    return (int16_t)lo > (int16_t)s[0];
+}
+
+/* A 32-bit score (low word, high word) plus v */
+static void star_add(uint16_t *lo, uint16_t *hi, uint32_t v)
+{
+    uint32_t s = (uint32_t)*lo + (uint16_t)v;
+    *lo = (uint16_t)s;
+    *hi = (uint16_t)(*hi + (v >> 16) + (s >> 16));
+}
+
+/* Star score of player x (+$1A for the visitors): his team's goal difference (a 32-bit value), then for a
+ * goalie with enough shots against (40 / the period length's low byte: the divider's operands swapped)
+ * $7D00 below 3 goals per 100 shots and $124F8 more for none; for a skater $B71B0 for the overtime
+ * winner, $2AF8 a goal, $2774 an assist and $0A a shot. Scaled for the 15-bit low word. */
+static void star_score(uint16_t x, uint16_t *lo, uint16_t *hi)
+{
+    uint16_t a2 = 0, a1 = 2;
+    if (!((uint16_t)(x - 0x1A) & 0x8000)) { a2 = 2; a1 = 0; }
+    uint16_t s2 = r16(RAM_OFF_tmscore + a2), s1 = r16(RAM_OFF_tmscore + a1);
+    *lo = (uint16_t)(s2 - s1);
+    *hi = s2 < s1 ? 0xFFFF : 0;
+    if ((uint16_t)(x - g.stargoalieend) & 0x8000) {
+        uint16_t d1 = DivX8U(0x28, GetPeriodTime());
+        uint16_t shots = g.tmpshots[x];
+        if (!((uint16_t)(shots - d1) & 0x8000)) {
+            uint16_t r0 = Div16U(Mul8U(g.tmgoals[x], 0x64), shots);
+            if ((uint16_t)(r0 - 3) & 0x8000) {
+                star_add(lo, hi, 0x7D00);
+                if (!r0) star_add(lo, hi, 0x124F8);
+            }
+        }
+    } else {
+        if (x == g.otgoalscorer) star_add(lo, hi, 0xB71B0);
+        star_add(lo, hi, Mul16U(g.tmgoals[x], 0x2AF8));
+        star_add(lo, hi, Mul16U(g.tmassists[x], 0x2774));
+        star_add(lo, hi, Mul16U(g.tmpshots[x], 0x000A));
+    }
+    *hi = (uint16_t)((uint16_t)(*hi << 1) + (*lo >> 15));
+    *lo &= 0x7FFF;
+}
+
+/* Choose the three stars: every player's star score, the best three kept in order (the overtime winner
+ * read from the word before the score summary, the faceoff spot: a quirk of the original) */
+static void choose_stars(void)
+{
+    g.star1score[0] = g.star1score[1] = 0;
+    g.star2score[0] = g.star2score[1] = 0;
+    g.star3score[0] = g.star3score[1] = 0;
+    g.otgoalscorer = 0xFFFF;
+    uint32_t a1 = ScoreSum - 6;
+    if ((m16(a1) >> 14 & 3) == 3) {
+        g.otgoalscorer = m8(a1 + 3);
+        if (m8(a1 + 2) & 0xF0) g.otgoalscorer = (uint16_t)(g.otgoalscorer + 0x1A);
+    }
+    g.starplayerend = GetPlayerCount(0);
+    g.stargoalieend = GetGoalieCount(0);
+    uint16_t x = 0;
+    do {
+        if ((uint16_t)(x - g.starplayerend) & 0x8000) {
+            uint16_t lo, hi;
+            star_score(x, &lo, &hi);
+            uint16_t p = x;
+            int slot = star_above(lo, hi, g.star1score) ? 1 : star_above(lo, hi, g.star2score) ? 2 : star_above(lo, hi, g.star3score) ? 3 : 0;
+            if (slot == 1) {
+                g.starswapplayer = g.star1;
+                g.starswapscore[0] = g.star1score[0];
+                g.starswapscore[1] = g.star1score[1];
+                g.star1 = p;
+                g.star1score[0] = lo;
+                g.star1score[1] = hi;
+                p = g.starswapplayer;
+                lo = g.starswapscore[0];
+                hi = g.starswapscore[1];
+            }
+            if (slot == 1 || slot == 2) {
+                g.starswapplayer = g.star2;
+                g.starswapscore[0] = g.star2score[0];
+                g.starswapscore[1] = g.star2score[1];
+                g.star2 = p;
+                g.star2score[0] = lo;
+                g.star2score[1] = hi;
+                p = g.starswapplayer;
+                lo = g.starswapscore[0];
+                hi = g.starswapscore[1];
+            }
+            if (slot) {
+                g.star3 = p;
+                g.star3score[0] = lo;
+                g.star3score[1] = hi;
+            }
+        }
+        x++;
+        if ((uint16_t)(g.starplayerend - 0x1A) & 0x8000 && !((uint16_t)(x - 0x1A) & 0x8000)) {
+            g.starplayerend = (uint16_t)(GetPlayerCount(2) + 0x1A);
+            g.stargoalieend = (uint16_t)(GetGoalieCount(2) + 0x1A);
+        }
+    } while ((uint16_t)(x - 0x34) & 0x8000);
+}
+
+/* Stars of the Game: a frame with the three stars' teams and names */
+void ShowThreeStars(void)
+{
+    print(SYM_ShowStarsPos);
+    eraser(0x13, 8, g.blankchar);
+    print(SYM_ShowStarsPos2);
+    Framer(0x15, 7);
+    print(SYM_StarsOfTheGame);
+    choose_stars();
+    uint16_t *stars[3] = { &g.star1, &g.star2, &g.star3 };
+    g.printy = 5;
+    for (int k = 0; k < 3; k++) {
+        if (k) g.printy++;
+        g.printx = 0x0D;
+        uint16_t d3 = 0, a2 = 0;
+        if (!((uint16_t)(*stars[k] - 0x1A) & 0x8000)) {
+            *stars[k] = (uint16_t)(*stars[k] - 0x1A);
+            d3 = 1;
+            a2 = 2;
+        }
+        printscores1_ps_name(d3);
+        g.printy = (uint16_t)(5 + k);
+        g.printx = 0x11;
+        print(PlayerInitialName(a2, *stars[k]));
+    }
+}
+
+/* Unpack the rink map to rinkmapbuf and paste the home team's centre ice logo map (CenterIceTable+4: its
+ * width, height, then the tiles from +6) into its middle, a row higher when 6 or more rows tall */
+void BuildRinkMap(void)
+{
+    Decompress(SYM_IceRinkMap, rinkmapbuf);
+    uint16_t x = (uint16_t)(g.HomeTeam << 3);
+    uint32_t p0 = (uint32_t)rom16(SYM_CenterIceTable + 4 + x) | (uint32_t)rom16(SYM_CenterIceTable + 6 + x) << 16;
+    uint32_t b0 = p0 & 0xFF0000, b1 = rinkmapbuf & 0xFF0000;
+    uint16_t p1 = (uint16_t)((uint16_t)(rinkmapbuf + 0x10B6) - m16(p0));
+    uint16_t r3 = (uint16_t)(m16(p0) << 1);
+    uint16_t lo = (uint16_t)(p0 + 2);
+    uint16_t y = m16(b0 | lo);
+    if (y >= 6) p1 = (uint16_t)(p1 - 0x60);
+    lo = (uint16_t)(lo + 4);
+    do {
+        uint16_t k = 0;
+        do {
+            uint32_t s = (uint32_t)m16(b0 | lo) + g.centericechars;
+            mset16(b1 | p1, (uint16_t)(s + 0x1400 + (s >> 16)));   /* (the first add's carry) */
+            k += 2;
+            lo += 2;
+            p1 += 2;
+        } while (k != r3);
+        p1 = (uint16_t)(p1 + 0x60 - r3);
+    } while (--y);
+}
+
+/* The home team's centre ice logo tiles: unpacked, made planar after the source, sent to VRAM after the
+ * rink tiles (faceoffvrcset the tile after them), then the rink map */
+void LoadCenterIce(void)
+{
+    uint16_t x = (uint16_t)(g.HomeTeam << 3);
+    uint32_t p0 = (uint32_t)rom16(SYM_CenterIceTable + x) | (uint32_t)rom16(SYM_CenterIceTable + 2 + x) << 16;
+    uint16_t n = Decompress(p0, unpackbuf);
+    LinearToPlanar(unpackbuf, n, n);
+    p0 = (unpackbuf & 0xFF0000) | n;
+    uint32_t s = (uint32_t)(n >> 5) + g.centericechars + (n >> 4 & 1);   /* (lsr's carry) */
+    g.faceoffvrcset = (uint16_t)s;
+    uint16_t y = (uint16_t)((uint16_t)(g.centericechars << 4) + 0x1000 + (g.centericechars >> 12 & 1));   /* (asl's carry) */
+    DMAToVRAM(&p0, n, y, 0);
+    BuildRinkMap();
+}
+
+/* A tied highlight game decided at random (a goal to one side), then over (period 5) */
+static void hl_decide(uint16_t a0)
+{
+    uint16_t s1 = r16(RAM_OFF_gss1 + a0);
+    if (s1 == r16(RAM_OFF_gss2 + a0)) {
+        uint16_t r = RandomWord() & 1;
+        uint32_t s = (uint32_t)s1 + r;
+        w16(RAM_OFF_gss1 + a0, (uint16_t)s);
+        w16(RAM_OFF_gss2 + a0, (uint16_t)((r ^ 1) + r16(RAM_OFF_gss2 + a0) + (s >> 16)));   /* (the first add's carry) */
+    }
+    w16(RAM_OFF_gsper + a0, 5);
+}
+
+/* (SaveRegsStartHL2: the game state back from hlsavebuf after an other game's highlight, as hl_save
+ * left it) */
+static void hl_restore(void)
+{
+    uint16_t x;
+    for (x = 0; x < 0x0781; x += 2) w16(RAM_OFF_OOlist + 0x10 + x, r16(RAM_OFF_hlsavebuf + x));
+    g.ScoreSumbytes[0] = r16(RAM_OFF_hlsavebuf + x);
+}
+
+/* The highlight copy of the game state: OOlist+$10 .. +$780 and ScoreSumbytes into hlsavebuf, no goalies,
+ * no pads, no penalties */
+static void hl_save(void)
+{
+    uint16_t x;
+    for (x = 0; x < 0x0781; x += 2) w16(RAM_OFF_hlsavebuf + x, r16(RAM_OFF_OOlist + 0x10 + x));
+    w16(RAM_OFF_hlsavebuf + x, g.ScoreSumbytes[0]);
+    g.tmgoalie[0] = g.tmgoalie[1] = 0;
+    g.teampads[0] = g.teampads[1] = 0;
+    for (x = 0; x < 0x18; x += 2) w16(RAM_OFF_playerpad + x, 0xFFFF);
+    ClearPenaltyBuffer();
+}
+
+/* Team a2 for a highlight: full energy, its players on the ice, no touches */
+static void hl_team(uint16_t a2)
+{
+    reenergizeteam(a2);
+    setpersonel(a2);
+    forcepldata(a2);
+    w16(RAM_OFF_tmtouch1 + a2, 0xFFFF);
+    w16(RAM_OFF_tmtouch2 + a2, 0xFFFF);
+    w16(RAM_OFF_tmtouch3 + a2, 0xFFFF);
+}
+
+/* The highlight of playoff game a0 / 2 (d1): its ticker box and "Highlight from" for 3 seconds (Start skips
+ * it, and the rest), then the game played from a faceoff with the cpu on both sides for a few seconds of
+ * clock (a button ends it, a tied game given a goal), the score kept, the menu screen and music back. Over
+ * at the end of the period (4) unless still tied (then again); the game state is put back. */
+void StartHL2(uint16_t a0, uint16_t d1)
+{
+    for (;;) {
+        if (g.sflags3[0] & 8) { hl_decide(a0); goto skipped; }
+        hl_save();
+        NewTicker3(d1);
+        if (g.sflags3[0] & 8) goto skip_rest;
+        g.printx = 4;
+        g.printy = 0x14;
+        Framer(0x18, 3);
+        g.printx++;
+        g.printy -= 2;
+        print(SYM_HighlightFrom);
+        if (waitx(0xB4).held & 0x1000) goto skip_rest;
+        g.padchangeany = 0;
+        forcefade();
+        WaitFadeOut();
+        forceblack();
+        FadeOutSound();
+        if (g.sndbank[0] != SoundBankGame) SPCGameUpload();
+        g.HomeTeam = r16(RAM_OFF_gst1 + a0);
+        g.VisTeam[0] = r16(RAM_OFF_gst2 + a0);
+        clearTeamStats();
+        restoreteams();
+        LoadTeamLines(0);
+        LoadTeamLines(2);
+        reenergizeteam(0);
+        reenergizeteam(2);
+        LoadCenterIce();
+        for (int x = 8; x >= 0; x -= 2) {
+            w16(RAM_OFF_c1playernum + x, 0xFFFF);
+            w16(RAM_OFF_padside + x, 0xFFFF);
+        }
+        g.cont1team = g.cont2team = g.cont3team = g.cont4team = g.cont5team[0] = 0;
+        g.gameclock[0] = (uint16_t)(randoma8(0x78) + 0x78);
+        g.gsp = (uint16_t)(r16(RAM_OFF_gsper + a0) - 1);
+        g.tmscore[0] = r16(RAM_OFF_gss1 + a0);
+        g.tmscore[1] = r16(RAM_OFF_gss2 + a0);
+        g.gmode = 0x0010;
+        g.gmclock = 0;
+        if (g.gsp & 1) g.gmode |= gmdir;
+        g.sflags3[0] = 0;
+        g.sflags = 0x0400;
+        g.sfhormode = 0;
+        g.iflags = 0;
+        g.RefCnt = -1;
+        g.puckcross[1] = 0xFFFF;
+        g.puckcross[3] = 0xFFFF;
+        setupice_reset();
+        ClrHor();
+        g.Vpos = 0;
+        g.Hpos = 0;
+        ResetBench();
+        hl_team(0);
+        hl_team(2);
+        resetplstuff();
+        g.hattrick = 0;
+        for (uint16_t x = 0; x < 0x18; x += 2) {
+            uint16_t p = r16(RAM_OFF_position + x);
+            if (!r16(RAM_OFF_pfgoal + x)) p = (uint16_t)(p + 6);
+            uint16_t y = (uint16_t)(p << 2);
+            w16(RAM_OFF_Xpos + x, rom16(SYM_StartHL2_20 + y));
+            w16(RAM_OFF_Ypos + x, rom16(SYM_StartHL2_20 + (uint16_t)(y + 2)));
+            w16(RAM_OFF_Xvel + x, 0);
+            w16(RAM_OFF_Yvel + x, 0);
+        }
+        if (g.puckc < 0) g.puckc = (int16_t)(randomd0A(0x0C) << 1);
+        uint16_t x = (uint16_t)g.puckc;
+        if (!r16(RAM_OFF_position + x)) g.puckc = (int16_t)(x - 2);
+        SprSort();
+        uint16_t left = 0xB4;
+        g.oldvcount = g.vcount[0];
+        for (;;) {
+            while (g.vcount[0] == g.oldvcount) hal_wait_interrupt();
+            uint16_t v = g.vcount[0];
+            frame_steps((uint16_t)(v - g.oldvcount));
+            g.lastframevc = v;
+            g.oldvcount = v;
+            ReadPads();
+            if (!(g.sflags & sfpz) && !g.gmclock) {
+                for (uint16_t k = g.d7; k; k--) {
+                    if (!g.gameclock[0]) continue;
+                    uint16_t f = g.gameclock[1];
+                    g.gameclock[1] = (uint16_t)(f - 0x0AAA);
+                    if (f < 0x0AAA) g.gameclock[0]--;
+                }
+            }
+            uint16_t d7 = g.d7;
+            DoGameFrame();
+            g.d7 = d7;
+            g.timestep = d7;
+            if (g.gmclock) {
+                left = (uint16_t)(left - d7);
+                if (left & 0x8000) break;
+            }
+            if (!(ReadAnyPad() & 0x9080)) continue;
+            if (g.tmscore[0] == g.tmscore[1]) {
+                uint16_t t = RandomWord() & 2;
+                w16(RAM_OFF_tmscore + t, (uint16_t)(r16(RAM_OFF_tmscore + t) + 1));
+            }
+            break;
+        }
+        FadeOutSound();
+        w16(RAM_OFF_gss1 + a0, g.tmscore[0]);
+        w16(RAM_OFF_gss2 + a0, g.tmscore[1]);
+        SetupTeamForIntermission();
+        for (uint16_t k = 0; k < 0x18; k += 2) {
+            w16(RAM_OFF_Xpos + k, 0xFF10);
+            w16(RAM_OFF_Ypos + k, 0);
+            w16(RAM_OFF_frame + k, 1);
+        }
+        forcefade();
+        WaitFadeOut();
+        forceblack();
+        hl_restore();
+        setplayercolors();
+        SetHor();
+        SpriteFrameStart();
+        setvideo();
+        SpriteFrameEnd();
+        while (g.SoundFadeSpeed || g.MusicOn) hal_wait_interrupt();
+        SPCMenuUpload();
+        if (g.OptPlayMode && g.OptPlayMode != 4 && g.playoffRoundIdx >= 2) MusicStart(SYM_PlayoffSong);
+        else MusicStart(SYM_MenuSong);
+        print(SYM_SaveRegsStartHL2Pos);
+        Framer(0x16, 7);
+        printscores1();
+        SetupPauseScreen();
+        FadeIn();
+        ScreenOn();
+        w16(RAM_OFF_gsper + a0, 4);
+        if (r16(RAM_OFF_gss1 + a0) == r16(RAM_OFF_gss2 + a0)) continue;
+        w16(RAM_OFF_gsper + a0, 5);
+        NewTicker3(d1);
+        if (waitx(0xB4).press & 0x1000) goto skip_on;
+        goto skipped;
+    skip_rest:
+        g.printx = 4;
+        g.printy = 0x14;
+        eraser(0x18, 3, g.blankchar);
+        SendTextMap();
+        WaitFrame();
+        hl_restore();
+        hl_decide(a0);
+    skip_on:
+        g.sflags3[0] |= 8;
+        break;
+    skipped:
+        g.sflags3[0] &= (uint16_t)~8;
+        break;
+    }
+    LoadCenterIce();
+    uint16_t n = Decompress(SYM_FaceOffTiles, unpackbuf);
+    uint32_t p0 = unpackbuf;
+    uint16_t y = (uint16_t)((uint16_t)(g.faceoffvrcset << 4) + 0x1000 + (g.faceoffvrcset >> 12 & 1));   /* (asl's carry) */
+    DMAToVRAM(&p0, n, y, 0);
+}
+
+/* The highlight of playoff game a0 / 2 (d1) (the registers kept around it) */
+void SaveRegsStartHL2(uint16_t a0, uint16_t d1) { StartHL2(a0, d1); }
+
+/* Bad password: wait for a button, then offer retry or exit. 0: the password is good (the password
+ * screen ends; Y, exit, has restarted at the option screens), 1: back to the entry (PasswordRedraw) */
+int BadPasswordPrompt(void)
+{
+    DecodePW();
+    if (!(g.postarts & 0x8000)) return 0;
+    while (r16(RAM_OFF_JoyPad) & 0xC080) hal_wait_interrupt();
+    print(SYM_BadPassword);
+    print(SYM_ARetryTxt);
+    print(SYM_YExitScreenTxt);
+    print(SYM_BadPasswordPromptPos);
+    QueueTextDMA();
+    for (;;) {
+        uint16_t d0, d1, d2, d3;
+        ReadPads();
+        Readjoy1(&d0, &d1, &d2, &d3);
+        if (!d3) continue;
+        if (d3 & 0x4000) {
+            g.OptPlayMode = 2;
+            Opening2();
+            return 0;
+        }
+        if (d3 & 0x8080) break;
+    }
+    print(SYM_BadPasswordPromptPos2);
+    eraser(0x0F, 3, g.blankchar);
+    PrintPasswordHelp();
+    QueueTextDMA();
+    WaitNoButtons();
+    return 1;
+}
+
+/* (the password character d5 at the cursor printed in the one-character string PWCharStr) */
+static void print_pw_char(uint16_t d5)
+{
+    g.PWCharStr[1] = rom16(SYM_PasstoText + d5);
+    g.printx++;
+    g.printy -= 2;
+    print(RAM_OFF_PWCharStr);
+}
+
+/* The password entry: the cursor on character d4 of the password (A / B next and back, the d-pad
+ * picks its character d5), Start checks it (BadPasswordPrompt). Returns d2 as it is left: $FFFF
+ * (ReadPassBits' loop count, through DecodePW). */
+uint16_t PasswordRedraw(uint16_t d4, uint16_t d5)
+{
+    uint16_t d0, d1, d2, d3;
+    PrintPasswordHelp();
+    for (;;) {
+        print(SYM_PasswordScreenPos2);
+        PWprint();
+        QueueTextDMA();
+        do {
+            WaitFrame();
+            ReadPads();
+            Readjoy1(&d0, &d1, &d2, &d3);
+            d1 = ProcessInputWithRepeat(d1, d2, d3);
+        } while (!d1);
+        if (d1 & 0x1000) {
+            if (!BadPasswordPrompt()) return 0xFFFF;
+            PrintPasswordHelp();
+            continue;
+        }
+        if (d1 & 0xC080) {
+            d0 = d1 & 0x4000 ? 0xFFFF : 1;
+            uint16_t a = (uint16_t)(d4 + d0);
+            if (a >= 0x10) continue;
+            d4 = a;
+            PrintSelectLeft(d4);
+            d0 = 0;
+            uint16_t c = g.PassWord[d4];
+            if (c < 0x1E) d0 = (uint16_t)(c - d5);
+        } else if (d1 & 0x0100) d0 = 1;
+        else if (d1 & 0x0200) d0 = 0xFFFF;
+        else if (d1 & 0x0400) d0 = 6;
+        else if (d1 & 0x0800) d0 = 0xFFFA;
+        else continue;
+        uint16_t a = (uint16_t)(d5 + d0);
+        if (a >= 0x1E) continue;
+        PlacePasswordCursor(d5);
+        eraser(3, 3, g.blankchar);
+        g.PWCharStr[0] = 3;
+        print_pw_char(d5);
+        d5 = a;
+        PlacePasswordCursor(d5);
+        FramerOutline(3, 3);
+        print_pw_char(d5);
+        g.PassWord[d4] = (uint8_t)d5;
+    }
+}
+
+/* The password entry screen: the characters in five rows of six, the cursor on the password's first
+ * character; returns d2 as PasswordRedraw leaves it */
+uint16_t PasswordScreen(void)
+{
+    forcefade();
+    WaitFadeOut();
+    w16(RAM_OFF_PassWord, r16(RAM_OFF_PassWord) & 0xFF7F);
+    ClearTextMap();
+    g.textdirtylo = 0;
+    g.textdirtyhi = 0x03FF;
+    ReadPads();
+    ReadAnyPad();
+    SpriteFrameStart();
+    PrintLetterSprites(SYM_PasswordLabel, 0x53, 0x18);
+    g.setupvis = 0x1C;
+    g.setuphome = 0x1D;
+    DrawMatchupPictures(0);
+    SpriteFrameEnd();
+    SendColours();
+    print(SYM_PasswordScreenPos);
+    FramerOutline(0x11, 5);
+    print(SYM_PasswordTxt);
+    g.printx -= 2;
+    uint32_t a0 = SYM_PasstoText;
+    for (int row = 0; row < 5; row++) {
+        uint16_t a1 = RAM_OFF_mesarea;
+        w16(a1, 0x0D);
+        a1 += 2;
+        for (int k = 0; k < 6; k++) {
+            w16(a1, m16(a0));
+            a0 = (a0 & 0xFF0000) | (uint16_t)(a0 + 1);
+            a1++;
+            w16(a1, 0x20);
+            a1++;
+        }
+        print(RAM_OFF_mesarea);
+        g.printy += 2;
+        g.printx -= 0x0B;
+    }
+    uint16_t d4 = 0, d5 = 0;
+    PrintSelectLeft(d4);
+    if (g.PassWord[0] < 0x1E) d5 = g.PassWord[0];
+    PlacePasswordCursor(d5);
+    FramerOutline(3, 3);
+    g.PWCharStr[0] = 3;
+    print_pw_char(d5);
+    g.fadestep = 0x0A;
+    return PasswordRedraw(d4, d5);
+}
+
+/* Intro: the video registers from the table at p0 (BGMODE, M7SEL, TM, TS, BG1-4SC, BG12NBA,
+ * BG34NBA) */
+#define introbuf24 (0x7E0000u + RAM_OFF_introbuf)
+
+void IntroSequence_33(uint32_t p0)
+{
+    io_w8(0x2101, 0x03);
+    io_w8(0x2115, 0x80);
+    io_w8(0x2105, m8(p0));
+    io_w8(0x211A, m8(p0 + 1));
+    io_w8(0x212C, m8(p0 + 2));
+    io_w8(0x212D, m8(p0 + 3));
+    for (uint16_t k = 0; k < 4; k++) io_w8((uint16_t)(0x2107 + k), (uint8_t)(m8(p0 + 5 + 3 * k) | m8(p0 + 6 + 3 * k)));
+    io_w8(0x210B, (uint8_t)(m8(p0 + 17) >> 4 | m8(p0 + 19)));
+    io_w8(0x210C, (uint8_t)(m8(p0 + 21) >> 4 | m8(p0 + 23)));
+}
+
+/* Intro: x + 1 colours of CGRAM from colour y filled with colour a */
+void IntroSequence_31(uint16_t a, uint16_t x, uint16_t y)
+{
+    io_w8(0x2121, (uint8_t)y);
+    uint8_t n = (uint8_t)x;
+    do {
+        io_w8(0x2122, (uint8_t)a);
+        io_w8(0x2122, (uint8_t)(a >> 8));
+    } while (!(--n & 0x80));
+}
+
+/* Intro: the palettes, the work buffer cleared, the logo's tiles and map unpacked and sent to VRAM in
+ * the mode 7 layout, the map block copy that .28 sends, the sprites unpacked */
+void IntroSequence_2(void)
+{
+    io_w8(0x2121, 0);
+    io_w8(0x2122, 0xFF);
+    io_w8(0x2122, 0xFF);
+    DMAToCGRAM(SYM_EALogoEPalette, 0x10, 0x30);
+    DMAToCGRAM(SYM_EALogoEPalette, 0x10, 0xB0);
+    DMAToCGRAM(SYM_EALogoAPalette, 0x10, 0x40);
+    DMAToCGRAM(SYM_EALogoAPalette, 0x10, 0xC0);
+    IntroSequence_31(0xFFFF, 0x0F, 0x20);
+    IntroSequence_31(0xFFFF, 0x0F, 0x10);
+    memset(WRAM_BYTES + RAM_OFF_introbuf, 0, 0x4000);
+    Decompress(SYM_EALogoTiles, 0x7E0000u + RAM_OFF_introchars);
+    Decompress(SYM_EALogoMap, introbuf24);
+    io_w16(0x2116, 0);
+    io_w8(0x2115, 0x80);
+    for (uint32_t x = 0; x < 0x4000; x++) {
+        io_w8(0x2118, r8(RAM_OFF_introbuf + 6 + x));
+        io_w8(0x2119, r8(RAM_OFF_introchars + x));
+    }
+    for (uint32_t x = 0x1C00, y = 0; y < 0x0A00; x++, y += 2) {
+        w8(RAM_OFF_introbuf + 0x40 + y, r8(RAM_OFF_introbuf + x));
+        w8(RAM_OFF_introbuf + 0x41 + y, r8(RAM_OFF_introchars + x));
+    }
+    Decompress(SYM_EALogoSprites, introbuf24 + 0xA40);
+}
+
+/* Intro: the mode 7 matrix A and D = $100 (normal size) / 1 (smallest) */
+void IntroSequence_23(void) { g.introM7A = g.introM7D = 0x0100; }
+
+void IntroSequence_24(void) { g.introM7A = g.introM7D = 0x0001; }
+
+/* Intro: the Mode 7 centre (X $200, Y $200) and the matrix $100 0 0 $100 */
+void IntroSequence_22(void)
+{
+    io_w8(0x211F, 0x00);
+    io_w8(0x211F, 0x02);
+    io_w8(0x2120, 0x00);
+    io_w8(0x2120, 0x02);
+    io_w8(0x211B, 0x00);
+    io_w8(0x211B, 0x01);
+    io_w8(0x211C, 0x00);
+    io_w8(0x211C, 0x00);
+    io_w8(0x211D, 0x00);
+    io_w8(0x211D, 0x00);
+    io_w8(0x211E, 0x00);
+    io_w8(0x211E, 0x01);
+    IntroSequence_23();
+}
+
+/* Intro: the 18 by 10 block of map bytes in the buffer's copy (row stride 128 words from word $37),
+ * copied from the map at p0 (from its byte 6) or, d1 = 0, cleared */
+void IntroSequence_27(uint32_t p0, uint16_t d1)
+{
+    uint16_t y = 6;
+    for (uint16_t row = 0; row < 10; row++) {
+        uint16_t x = (uint16_t)((uint16_t)((row << 7) + 0x37) << 1);
+        for (int k = 0; k < 0x12; k++, y++, x += 2)
+            w8(RAM_OFF_introbuf + 0x40 + x, d1 ? m8(p0 + y) : (uint8_t)d1);
+    }
+}
+
+void IntroSequence_25(void) { IntroSequence_27(0, 0); }
+
+void IntroSequence_26(uint32_t p0) { IntroSequence_27(p0, 1); }
+
+/* Intro: the buffer's map block copy to VRAM word $1C00 ($A00 bytes) */
+void IntroSequence_28(void) { IntroSequence_t1xxxxxxxxxxxx(0x0A00, 0x1C00, introbuf24 + 0x40); }
+
+/* Intro: $20 bytes from [p0] to the buffer (the palette a fade works on) */
+void IntroSequence_32(uint32_t p0)
+{
+    for (uint16_t y = 0; y < 0x20; y += 2) w16(RAM_OFF_introbuf + y, m16(p0 + y));
+}
+
+/* Intro: the palette at p0 into the buffer, the palette job's source the buffer, 16 colours */
+void IntroSequence_29(uint32_t p0)
+{
+    IntroSequence_32(p0);
+    g.tmp1 = 0x10;
+    g.tmp2 = (uint16_t)introbuf24;
+    g.tmp3 = introbuf24 >> 16;
+}
+
+/* Intro: one fade step of the buffer's 16 colours, each component +1 up to 31; 1 when all are white */
+uint16_t IntroSequence_30(void)
+{
+    uint16_t y = 1;
+    for (uint16_t x = 0; x < 0x20; x += 2) {
+        uint32_t o = RAM_OFF_introbuf + x;
+        uint16_t v = r16(o), a;
+        a = v & 0x001F;
+        if (a != 0x001F) a = (a + 1) & 0x001F;
+        w16(o, a);
+        a = v & 0x03E0;
+        if (a != 0x03E0) a = (a + 0x20) & 0x03E0;
+        w16(o, a |= r16(o));
+        uint16_t b = v & 0x7C00;
+        if (b != 0x7C00) b = (b + 0x0400) & 0x7C00;
+        w16(o, b |= r16(o));
+        if ((b & 0x7FFF) != 0x7FFF) y = 0;
+    }
+    return y;
+}
+
+/* Intro: the start state: BG1 scroll $180 / $190 (job $10 sends it), next state 3, d6 the timeout
+ * (vcount + $2D0), d7 the earliest end (vcount + $F0), the Mode 7 registers. (The skip flag d5+2 is
+ * cleared here and never set: its branches are dead.) */
+void IntroSequence_3(IntroDP *s)
+{
+    w16(RAM_OFF_introBG1H, 0x0180);
+    g.BG1HScroll = 0x0180;
+    w16(RAM_OFF_introBG1H + 2, 0x0190);
+    g.BG1VScroll = 0x0190;
+    g.introHookFlags |= 0x0010;
+    s->next = 3;
+    s->d6 = (uint16_t)(g.vcount[0] + 0x02D0);
+    g.d7 = (uint16_t)(g.vcount[0] + 0x00F0);
+    IntroSequence_22();
+}
+
+/* Intro states (.4's jump table), each 0 to go on, 1 at the end. State 0: zoom in, matrix A and D
+ * growing by $C a frame to $100, then state d5 */
+uint16_t IntroSequence_6(IntroDP *s)
+{
+    g.introM7A = (uint16_t)(g.introM7A + 0x0C);
+    g.introM7D = g.introM7A;
+    if (!((uint16_t)(g.introM7A - 0x0100) & 0x8000)) {
+        IntroSequence_23();
+        g.introHookFlags |= 0x0040;
+        s->next = s->d5;
+    } else g.introHookFlags |= 0x0040;
+    return 0;
+}
+
+/* State 1: the palette toward white, up to 3 steps a frame; once white, reloaded from p0, then state d5 */
+uint16_t IntroSequence_7(IntroDP *s)
+{
+    if (IntroSequence_30() || IntroSequence_30() || IntroSequence_30()) {
+        IntroSequence_32(s->p0);
+        g.introHookFlags |= 0x0008;
+        s->next = s->d5;
+    } else g.introHookFlags |= 0x0008;
+    return 0;
+}
+
+/* State 2: wait until vcount reaches d6+2, then state d5 */
+uint16_t IntroSequence_8(IntroDP *s)
+{
+    if (!((uint16_t)(g.vcount[0] - s->d6h) & 0x8000)) s->next = s->d5;
+    return 0;
+}
+
+/* (states 3 and 5: the logo's map block into the buffer from scale 1, zoomed in (state 0), then state
+ * d5) */
+static uint16_t intro_logo(IntroDP *s, uint32_t map, uint16_t d5)
+{
+    IntroSequence_24();
+    s->p0 = map;
+    IntroSequence_26(map);
+    g.introHookFlags |= 0x00C0;
+    s->d5 = d5;
+    s->next = 0;
+    return 0;
+}
+
+/* State 3: sound 0 and the E logo */
+uint16_t IntroSequence_9(IntroDP *s)
+{
+    PlaySound(0);
+    return intro_logo(s, SYM_EALogoEMap, 4);
+}
+
+/* (states 4 and 6: sprites 0 to n - 1 at ($38, $2F), then state next) */
+static uint16_t intro_sprites(IntroDP *s, uint16_t n, uint16_t next)
+{
+    SpriteFrameStart();
+    for (uint16_t k = 0; k < n; k++) DrawSprite(0, 0x38, 0x2F, k, introbuf24 + 0xA40);
+    SpriteFrameEnd();
+    s->next = next;
+    return 0;
+}
+
+/* State 4: sprite 0, then state 9 */
+uint16_t IntroSequence_10(IntroDP *s) { return intro_sprites(s, 1, 9); }
+
+/* State 5: the A logo */
+uint16_t IntroSequence_11(IntroDP *s) { return intro_logo(s, SYM_EALogoAMap, 6); }
+
+/* State 6: sprites 0 and 1, then state 10 */
+uint16_t IntroSequence_12(IntroDP *s) { return intro_sprites(s, 2, 10); }
+
+/* State 7: the map block cleared, the sports palette job (16 colours from $20), zoomed (state 0), then
+ * state $B */
+uint16_t IntroSequence_13(IntroDP *s)
+{
+    IntroSequence_24();
+    IntroSequence_25();
+    g.tmp2 = (uint16_t)SYM_EALogoSportsPalette;
+    g.tmp3 = 0x9A;
+    g.tmp0 = 0x20;
+    g.tmp1 = 0x10;
+    g.introHookFlags |= 0x00C8;
+    s->d5 = 0x0B;
+    s->next = 0;
+    return 0;
+}
+
+/* State 8: the text palette job (16 colours from $10), then state $D */
+uint16_t IntroSequence_14(IntroDP *s)
+{
+    g.tmp2 = (uint16_t)SYM_EALogoTextPalette;
+    g.tmp3 = 0x9A;
+    g.tmp0 = 0x10;
+    g.tmp1 = 0x10;
+    g.introHookFlags |= 0x0008;
+    s->next = 0x0D;
+    return 0;
+}
+
+/* (states 9 and 10: the palette at p0 for colours from tmp0 into the buffer, faded in (state 1), then
+ * state d5) */
+static uint16_t intro_fade(IntroDP *s, uint32_t pal, uint16_t colour, uint16_t d5)
+{
+    s->p0 = pal;
+    g.tmp0 = colour;
+    IntroSequence_29(pal);
+    s->d5 = d5;
+    s->next = 1;
+    return 0;
+}
+
+/* State 9: the E palette (colours from $30), then state 5; state 10: the A palette ($40), then 7 */
+uint16_t IntroSequence_15(IntroDP *s) { return intro_fade(s, SYM_EALogoEPalette, 0x30, 5); }
+
+uint16_t IntroSequence_16(IntroDP *s) { return intro_fade(s, SYM_EALogoAPalette, 0x40, 7); }
+
+/* State 11: state 8 */
+uint16_t IntroSequence_17(IntroDP *s) { s->next = 8; return 0; }
+
+/* State 12: 30 frames in state 2, then state 8 */
+uint16_t IntroSequence_18(IntroDP *s)
+{
+    s->d6h = (uint16_t)(g.vcount[0] + 0x1E);
+    s->next = 2;
+    s->d5 = 8;
+    return 0;
+}
+
+/* State 13: the end once at full brightness and d7 is reached, with a button or at the d6 timeout */
+uint16_t IntroSequence_19(IntroDP *s)
+{
+    if (g.brightness != 0x0F) return 0;
+    if ((uint16_t)(g.vcount[0] - g.d7) & 0x8000) return 0;
+    if (r16(RAM_OFF_JoyPad)) return 1;
+    return !((uint16_t)(g.vcount[0] - s->d6) & 0x8000);
+}
+
+/* Intro: one step of the state machine (d4 = d4+2), unless the frame hook still has jobs; 1 at the end */
+uint16_t IntroSequence_4(IntroDP *s)
+{
+    static uint16_t (*const state[14])(IntroDP *) = {
+        IntroSequence_6, IntroSequence_7, IntroSequence_8, IntroSequence_9, IntroSequence_10,
+        IntroSequence_11, IntroSequence_12, IntroSequence_13, IntroSequence_14, IntroSequence_15,
+        IntroSequence_16, IntroSequence_17, IntroSequence_18, IntroSequence_19,
+    };
+    uint16_t d4 = s->next;
+    if (g.introHookFlags) return 0;
+    return state[d4](s);
+}
+
+/* The power-on sequence before the title (the publisher's logo in mode 7): its own sample set and song, until it
+ * ends or a button. Its state machine (.4) runs round a busy loop; each state's work is done by the
+ * frame hook's jobs before the next one runs. */
+void IntroSequence(void)
+{
+    IntroDP s = { 0, 0, 0, 0, SYM_EALogoSprites };         /* (p0 as .2 leaves it) */
+    g.brightness = 0;
+    forceblack();
+    CheckPAL();
+    SPCIntroUpload();
+    g.Mode7InUse = 0xFF;
+    InitSprites(0x6000, 0, 0x01A0);
+    g.DMAQueueHead = 0;
+    g.DMAQueueTail = 0;
+    IntroSequence_33(SYM_IntroSequence_1);
+    IntroSequence_2();
+    g.introHookFlags = 0;
+    IntroSequence_3(&s);
+    g.fadestep = 0;
+    g.brightness = 0;
+    SpriteFrameStart();
+    SpriteFrameEnd();
+    SetFrameHook(SYM_IntroSequence_framehook);
+    ScreenOn();
+    g.SfxVelocity = 0x7000;
+    for (uint16_t x = 0x3C; !(x & 0x8000); x--) WaitFrame();
+    SetFrameHook(SYM_IntroSequence_framehook);
+    do RandomWord(); while (!IntroSequence_4(&s));
+    forceblack();
+}
+
+/* The two digit (BCD) number d0 as two characters at [a1], a blank for a leading zero; returns a1
+ * past them */
+uint32_t ConvertByteToDigits(uint16_t d0, uint32_t a1)
+{
+    uint16_t lo = 0x20;
+    if ((d0 & 0xFF) >= 10) lo = (uint16_t)(((d0 & 0xFF) >> 4) + 0x30);
+    uint16_t w = (uint16_t)(lo | ((d0 & 0xF) + 0x30) << 8);
+    if (is_wram(a1)) { w8(wram_off(a1), (uint8_t)w); w8(wram_off((a1 + 1) & 0xFFFFFF), (uint8_t)(w >> 8)); }
+    return (a1 & 0xFF0000) | (uint16_t)(a1 + 2);
+}
+
+/* Clear the objects ($76E bytes from Xpos) and set the 16 sort objects up from their start table
+ * (9 words each: x, y, height, frame, attribute, collision width and height, assignment, flags),
+ * the sort lists in order; then sort them */
+void defaultsprites_0(void)
+{
+    for (int x = 0; x < 0x76E; x += 2) w16(RAM_OFF_Xpos + x, 0);
+    g.puckz = 0;
+    for (int o = 0; o < 16; o++) {
+        uint32_t t = SYM_defaultsprites_0_3 + (uint32_t)o * 18;
+        uint16_t y = (uint16_t)(o * 2);
+        w16(RAM_OFF_SCnum + y, (uint16_t)o);
+        w16(RAM_OFF_oldframe + y, 0xFFFF);
+        w16(RAM_OFF_pnum + y, 0xFFFF);
+        w16(RAM_OFF_Xpos + y, rom16(t));
+        w16(RAM_OFF_Ypos + y, rom16(t + 2));
+        w16(RAM_OFF_frame + y, rom16(t + 6));
+        w16(RAM_OFF_attribute + y, rom16(t + 8));
+        w16(RAM_OFF_radiusx + y, rom16(t + 10));
+        w16(RAM_OFF_radiusy + y, rom16(t + 12));
+        w16(RAM_OFF_asslist + o * 8, rom16(t + 14));
+        w16(RAM_OFF_asscur + y, rom16(t + 14));
+        w16(RAM_OFF_pflags + y, rom16(t + 16));
+        w16(RAM_OFF_pfnc + y, y == 0x1E);
+        w16(RAM_OFF_pfgoal + y, o * 18 < 0x6C);
+        if (o * 18 >= 0x6C && o * 18 < 0xD8) w16(RAM_OFF_pfteam + y, 0x34);
+        g.OOlist[o] = (uint8_t)(o * 2);
+        w16(RAM_OFF_OOlistpos + y, (uint16_t)o);
+    }
+    w16(RAM_OFF_position + netobj1, 0xFFFF);
+    w16(RAM_OFF_position + netobj2, 0xFFFF);
+    SprSort();
+}
+
+/* The intro's frame hook: the jobs of introHookFlags, $80 the map block to VRAM (.28), else $08 the
+ * palette tmp2/3 (colour tmp0, tmp1 of them; with $200 the second one, introPal2Src); $10 the BG1
+ * scroll; $40 the mode 7 matrix A and D */
+void IntroSequence_framehook(void)
+{
+    if (g.introHookFlags & 0x0080) {
+        IntroSequence_28();
+        g.introHookFlags &= ~0x0080;
+    } else if (g.introHookFlags & 0x0008) {
+        DMAToCGRAM(((uint32_t)g.tmp3 << 16 | g.tmp2) & 0xFFFFFF, g.tmp1, g.tmp0);
+        if (g.introHookFlags & 0x0200) DMAToCGRAM(g.introPal2Src & 0xFFFFFF, g.tmp5, g.tmp4);
+        g.introHookFlags &= ~0x0208;
+    }
+    if (g.introHookFlags & 0x0010) {
+        io_w8(0x210D, g.introBG1H[0]);
+        io_w8(0x210D, g.introBG1H[1]);
+        io_w8(0x210E, r8(RAM_OFF_introBG1H + 2));
+        io_w8(0x210E, r8(RAM_OFF_introBG1H + 3));
+        g.introHookFlags &= ~0x0010;
+    }
+    nmi_b = (uint8_t)(g.introHookFlags >> 8);   /* (the last load: the flags, or $0040) */
+    if (g.introHookFlags & 0x0040) {
+        io_w8(0x211B, (uint8_t)g.introM7A);
+        io_w8(0x211B, (uint8_t)(g.introM7A >> 8));
+        io_w8(0x211E, (uint8_t)g.introM7D);
+        io_w8(0x211E, (uint8_t)(g.introM7D >> 8));
+        g.introHookFlags &= ~0x0040;
+        nmi_b = 0;
+    }
+}
+
+/* Intro: DMA channel 0, a bytes from p0 to VRAM address x */
+void IntroSequence_t1xxxxxxxxxxxx(uint16_t a, uint16_t x, uint32_t p0)
+{
+    io_w16(0x4305, a);
+    io_w16(0x4302, (uint16_t)p0);
+    io_w16(0x2116, x);
+    io_w8(0x4304, (uint8_t)(p0 >> 16));
+    io_w8(0x4300, 0x01);
+    io_w8(0x4301, 0x18);
+    io_w8(0x420B, 0x01);
+}

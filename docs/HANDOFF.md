@@ -26,6 +26,16 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 
 2026-11-04: CONTRIBUTING.md added. Work stays on `claude/project-thread-4gad59`; do not merge to main.
 
+2026-11-06: aligned to current NHL94SNES (leftover recut #387 on asm `main`, plus later cleaned names).
+`claude/project-thread-4gad59` was already merged; this work is on `cursor/94s-cport-align-9908`. Do not merge to main.
+
+* Names: 30 routines renamed to current 94S labels (`Start`, `VBlank`, `ManualGoalieMenu`, `puckunflip`,
+  `waitx`, `forcefade`, `TitleScreen_ret`, `PlayShootout_ret`, `Reset_Fast_ret`, pause/stats/scout labels).
+  Six parked locals unchanged (C `SYM_*_t1`/`_t2` at other addresses than the asm's `Parent.t1`/`.t2`).
+* Re-cut: `ManualGoalieMenu` into `period.c` (94S leftover); new `game/system/print.c` and `game/screen/title.c`;
+  remaining other_module routines into their asm module files. Names gate **844 ok / 0 other_module / 6 renamed
+  / 5 missing**. `test/check.sh` 7 of 7, clock table 851, vanilla PASS.
+
 ## Next, in order
 
 1. **Ask INDIO for ninety-four-snes's oracle tools** (snes9x hook, recordings, the routine-by-routine checker),
@@ -33,8 +43,9 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 2. Otherwise build them (plan S2): a libretro SNES core with a CPU hook, recorded sessions, a lockstep player in
    `test/oracle/`, resyncing at lag frames as 1nput's Genesis player does.
 3. Coverage report (plan S3), and the cost model measured against the oracle (plan S4).
-4. ~~Renames~~ and ~~re-cut~~ done (6 renames parked: they need the symbol file regenerated from the current asm,
-   or names for the asm's anonymous locals). Order inside each file (ROM order, docs/RULES.md) is not yet checked.
+4. ~~Renames~~ and ~~re-cut~~ done, including leftover recut alignment to current 94S (6 renames parked: C
+   `SYM_*_t1`/`_t2` at other cartridge addresses than the asm locals). Order inside each file (ROM order,
+   docs/RULES.md) is not yet checked.
 
 ## Needs
 

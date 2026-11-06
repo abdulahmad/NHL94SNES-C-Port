@@ -1,6 +1,35 @@
 /* cards: player cards and ratings (src/routines/cards). */
 #include "game.h"
 
+/* Add base to every word of the map unpacked at picboxmap (its width and height first, the words from +6) */
+static void picboxmap_add(uint16_t base)
+{
+    uint32_t p1 = 0x7E0000 + RAM_OFF_picboxmap;
+    uint16_t r3 = (uint16_t)(g.picboxmap[0] << 1), x = g.picboxmap[1];
+    uint16_t lo = (uint16_t)(p1 + 6);
+    do {
+        for (uint16_t y = (uint16_t)(r3 - 2); !(y & 0x8000); y -= 2) {
+            uint32_t a = (p1 & 0xFF0000) + (uint16_t)lo + y;
+            mset16(a, (uint16_t)(m16(a) + base));
+        }
+        lo = (uint16_t)(lo + r3);
+    } while (--x);
+}
+
+/* The six starters' roster bytes of team a2 (its team data + the word at +$C) */
+static uint32_t card_starters(uint16_t a2)
+{
+    uint32_t bank = SYM_TeamList & 0xFF0000;
+    uint16_t t = r16(RAM_OFF_tmdata + a2);
+    return bank | (uint16_t)(t + m16((bank | t) + 0x0C));
+}
+/* (PlayerCards: whether roster player p is one of the six starters at a3, whose cards come first) */
+static int card_starter(uint32_t a3, uint16_t p)
+{
+    for (uint16_t y = 0; y < 6; y++) if (m8(a3 + y) == p) return 1;
+    return 0;
+}
+
 /* The rating (0-100) of player d0 of team a2 (0 home, 2 visitors) from the attributes of mask d4+2
  * (bit 15: the weighted overall rating, r2 = 0 skater / 16 goalie weights; otherwise the one
  * attribute), with the hot / cold table when usehotcold is set. Attribute bits 6 and 13 counted
@@ -254,4 +283,218 @@ void DrawPlayerCard(uint16_t a2)
     SpriteFrameEnd();
     g.colourbuf[0] = 0x3568;
     SendColours();
+}
+
+/* Copy the card team's two colours (a2 nonzero: colours $67-$68, else $77-$78) to colours $4E-$4F */
+void SetCardTeamColours(uint16_t a2)
+{
+    uint16_t x = a2 ? 0xCE : 0xEE;
+    w16(RAM_OFF_colourbuf + 0x9C, r16(RAM_OFF_colourbuf + x));
+    w16(RAM_OFF_colourbuf + 0x9E, r16(RAM_OFF_colourbuf + x + 2));
+}
+
+/* Draw the logo of team a as sprites at x, y with its LogoPaletteTable palette */
+void DrawLogoSprite(uint16_t a, uint16_t x, uint16_t y)
+{
+    uint32_t e = SYM_LogoPaletteTable + (uint16_t)(a << 2);
+    SetColours((uint32_t)rom16(e) | (uint32_t)rom16(e + 2) << 16, 0x10, 0xA0);
+    DrawSprite(0x2400, x, y, a, logosprbuf);
+}
+
+/* Draw string [a1] with the small letter sprites from x, y: letters, digits and '.' (2 wide), a space 3
+ * wide, other characters skipped */
+void PrintSmallLetterSprites(uint16_t x, uint16_t y, uint32_t a1)
+{
+    g.letterx[0] = x;
+    g.lettery[0] = y;
+    for (uint16_t k = 2; k != m16(a1); k++) {
+        uint16_t c = m8(a1 + k), w;
+        if (c == 0x20) w = 3;
+        else {
+            uint16_t f;
+            if (c == 0x2E) f = 0x24;
+            else if (c >= 0x30 && c < 0x3A) f = (uint16_t)(c - 0x30 + 0x1A);
+            else if (c >= 0x61 && c < 0x7B) f = (uint16_t)(c - 0x61);
+            else if (c >= 0x41 && c < 0x5B) f = (uint16_t)(c - 0x41);
+            else continue;
+            DrawSprite(0x2000, g.letterx[0], g.lettery[0], f, SYM_SmallLetterSprites);
+            w = f == 0x24 ? 2 : 4;
+        }
+        g.letterx[0] = (uint16_t)(g.letterx[0] + w);
+    }
+}
+
+/* The short name of team a2's player in line slot y (a3) in small letter sprites centred on x, at printy */
+void PrintLineSlotName(uint16_t x, uint16_t y, uint32_t a3, uint16_t a2)
+{
+    uint32_t a1 = FormatPlayerNumInitial(a2, (uint16_t)(m8(a3 + y) - 1));
+    uint16_t w = (uint16_t)((uint16_t)((uint16_t)(m16(a1) - 2) >> 1) << 2);
+    PrintSmallLetterSprites((uint16_t)(x - w), g.printy, a1);
+}
+
+/* The player card screen's graphics: the team logo sprites, the screen registers, the fonts (remapped), the
+ * team block, card back and frame tiles to VRAM, the card picture map, the card back map into text map 2,
+ * the palettes, the "switch cards" text, the sprites and the scroll */
+void LoadPlayerCardScreen(void)
+{
+    forcefade();
+    Decompress(SYM_TeamLogoSprites, logosprbuf);
+    WaitFadeOut();
+    forceblack();
+    io_w8(0x2107, 0x00);
+    io_w8(0x2108, 0x04);
+    io_w8(0x210B, 0x12);
+    io_w8(0x2101, 0x03);
+    io_w8(0x212C, 0x13);
+    g.charofs = 0xFF00;
+    g.printfontset = 0xFF00;
+    g.printm = 0;
+    g.charofs2 = 0;
+    ClearTextMap();
+    ClearTextMap2();
+    io_w16(0x2116, (uint16_t)((uint16_t)(g.smallfontchars << 4) + 0x1000 + (g.smallfontchars >> 12 & 1)));   /* (asl's carry) */
+    uint16_t n = Decompress(SYM_SmallFontTiles, unpackbuf);
+    remap(unpackbuf, SYM_PixelRemap8F, (uint16_t)(n >> 5));
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    n = Decompress(SYM_TeamBlocksTiles, unpackbuf);
+    g.picchars = (uint16_t)((n >> 5) + g.scorechars + (n >> 4 & 1) - 0x100);   /* (lsr's carry) */
+    uint32_t p0 = unpackbuf;
+    DMAToVRAM(&p0, n, (uint16_t)((uint16_t)(g.scorechars << 4) + 0x1000 + (g.scorechars >> 12 & 1)), 0);
+    g.cardbackchars = 0;
+    n = Decompress(SYM_CardBackTiles, unpackbuf);
+    g.cardframechars = (uint16_t)((n >> 5) + g.cardbackchars + (n >> 4 & 1));
+    LinearToPlanar(unpackbuf, n, n);
+    p0 = (unpackbuf & 0xFF0000) | n;
+    uint16_t r3 = DMAToVRAM(&p0, n, 0x1000, 0);
+    n = Decompress(SYM_CardFrameTiles, unpackbuf);
+    p0 = unpackbuf;
+    DMAToVRAM(&p0, n, 0xFFFF, r3);
+    Decompress(SYM_CardPictureMap, 0x7E0000 + RAM_OFF_picboxmap);
+    picboxmap_add((uint16_t)(g.cardframechars + g.charofs2 + 0x1000));
+    Decompress(SYM_CardBackMap, unpackbuf);
+    p0 = unpackbuf;
+    uint32_t p1 = 0x7E0000 + RAM_OFF_textmap2;
+    PasteMap(&p0, &p1, (uint16_t)(g.cardbackchars + g.charofs2 + 0x1000), 0, 0, 0x20);
+    Decompress(SYM_SetupScreenPalette, unpackbuf);
+    SetColours(unpackbuf, 0x40, 0);
+    io_w8(0x2121, 0);
+    io_w8(0x2122, 0);
+    io_w8(0x2122, 0);
+    Decompress(SYM_CardBackPalette, unpackbuf);
+    SetColours(unpackbuf, 0x10, 0x40);
+    SetColours(SYM_CardSpritePalette, 0x10, 0x80);
+    w16(RAM_OFF_colourbuf, 0);
+    SendColours();
+    print(SYM_SwitchCardsYSwitchTeamsTxt);
+    SendTextMap2();
+    InitSprites(0x6000, 0, 0x0180);
+    SpriteFrameStart();
+    WaitFrame();
+    SpriteFrameEnd();
+    g.BG1HScroll = 4;
+    g.BG1VScroll = 0xFFFB;
+}
+
+/* The player cards of the pausing team: right / left the next / previous card (the team card, the six line
+ * slots, then the roster without the starters), Y the other team, Start leaves */
+void PlayerCards(void)
+{
+    uint16_t a2 = GetPauseTeam();
+    g.FrameByNumber = 0;
+    LoadPlayerCardScreen();
+    g.curitem[0] = 0;
+    g.listend[0] = (uint16_t)(GetPlayerCount(a2) + 6);
+    ScreenOn();
+    DrawPlayerCard(a2);
+    SendTextMap();
+    for (;;) {
+        WaitFrame();
+        ReadPads();
+        Pad p = getpzjoy();
+        uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
+        if (d1 & 0x1000) return;
+        if (d1 & 0x0100) {
+            if (!((uint16_t)(g.curitem[0] - g.listend[0]) & 0x8000)) continue;
+            g.curitem[0]++;
+            uint16_t v = (uint16_t)(g.curitem[0] - 7);
+            if (!(v & 0x8000)) {
+                g.curplayer[0] = v;
+                uint32_t a3 = card_starters(a2);
+                do g.curplayer[0]++; while (card_starter(a3, g.curplayer[0]));
+                g.curplayer[0]--;
+                g.curitem[0] = (uint16_t)(g.curplayer[0] + 7);
+            }
+        } else if (d1 & 0x0200) {
+            if (!g.curitem[0]) continue;
+            g.curitem[0]--;
+            uint16_t v = (uint16_t)(g.curitem[0] - 7);
+            if (!(v & 0x8000)) {
+                g.curplayer[0] = (uint16_t)(v + 2);
+                uint32_t a3 = card_starters(a2);
+                for (;;) {
+                    g.curplayer[0]--;
+                    if (!g.curplayer[0] || (g.curplayer[0] & 0x8000)) break;
+                    if (!card_starter(a3, g.curplayer[0])) break;
+                }
+                g.curplayer[0]--;
+                g.curitem[0] = (uint16_t)(g.curplayer[0] + 7);
+            }
+        } else if (d1 & 0x4000) {
+            a2 ^= 2;
+            g.curitem[0] = 0;
+            g.listend[0] = (uint16_t)(GetPlayerCount(a2) + 6);
+        } else continue;
+        DrawPlayerCard(a2);
+        SendTextMap();
+    }
+}
+
+/* Insert rating column d1 of player curplayer of team a2 (GetPlayerRating) into the best-three list
+ * strengths (column, rating pairs) */
+void AddStrength(uint16_t d1, uint16_t a2)
+{
+    uint16_t d0 = GetPlayerRating(d1, a2), r0, r1;
+    uint16_t a = (uint16_t)(d0 - 1);
+    if ((uint16_t)(a - g.strengths[1]) & 0x8000) {
+        if ((uint16_t)(a - g.strengths[3]) & 0x8000) {
+            if ((uint16_t)(a - g.strengths[5]) & 0x8000) return;
+            goto two;
+        }
+        goto one;
+    }
+    r0 = g.strengths[1]; r1 = g.strengths[0];
+    g.strengths[1] = d0; g.strengths[0] = d1;
+    d0 = r0; d1 = r1;
+one:
+    r0 = g.strengths[3]; r1 = g.strengths[2];
+    g.strengths[3] = d0; g.strengths[2] = d1;
+    d0 = r0; d1 = r1;
+two:
+    g.strengths[5] = d0;
+    g.strengths[4] = d1;
+}
+
+/* The player card strengths of skater curplayer of team a2: the best three of eleven rating columns */
+void FindSkaterStrengths(uint16_t a2)
+{
+    static const uint8_t cols[] = { 4, 6, 8, 0xF, 7, 0xB, 9, 3, 0xA, 0xD, 0xE };
+    for (int k = 0; k < 6; k++) g.strengths[k] = 0xFFFF;
+    for (int k = 0; k < 11; k++) AddStrength(cols[k], a2);
+}
+
+/* The player card strengths of goalie curplayer of team a2: the best three goalie rating columns
+ * (columns 8 and 9, or 7 and 10 when column 4 is under 50) */
+void FindGoalieStrengths(uint16_t a2)
+{
+    for (int k = 0; k < 6; k++) g.strengths[k] = 0xFFFF;
+    AddStrength(5, a2);
+    AddStrength(2, a2);
+    AddStrength(6, a2);
+    if (GetPlayerRating(4, a2) >= 0x32) {
+        AddStrength(8, a2);
+        AddStrength(9, a2);
+    } else {
+        AddStrength(7, a2);
+        AddStrength(0xA, a2);
+    }
 }

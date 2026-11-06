@@ -5,7 +5,6 @@
 void StartDumpIn(int o);
 void SetSPAFromA(int o, uint16_t anim);
 void puckunflip(void);
-uint16_t GetGoalieCount(uint16_t a2);
 void AssignPadPlayer(uint16_t d0, uint16_t d4);
 void StartPenaltyShot(void);
 void GoaliePuckVector(int o, uint16_t *d0, uint16_t *d1);
@@ -129,3 +128,4 @@ void freezewindow(void);
 void checkwindow(void);
 void updateanim(int o);
 void updateplayers(void);
+void SetSPAUpdate(int o, uint16_t anim);

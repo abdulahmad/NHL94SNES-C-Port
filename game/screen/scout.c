@@ -2,6 +2,26 @@
 #include "game.h"
 
 #define NEG(a, b) (((uint16_t)((a) - (b))) & 0x8000)   /* cmp, then bmi */
+#define SCOUT_NEG(a, b) NEG(a, b)
+#define SCOUT_INC(p) (((p) & 0xFF0000) | (uint16_t)((p) + 1))
+
+/* (team data a1's strings: city, name, nickname, arena) */
+static uint32_t scout_team_strings(uint16_t a1)
+{
+    uint32_t bank = SYM_TeamList & 0xFF0000;
+    return bank | (uint16_t)(a1 + m16((bank | a1) + 4));
+}
+
+/* (ShowMatchups: team a2's matchup player for the line slot curitem into curplayer, his rating
+ * printed; returns it) */
+static uint16_t matchup_rating(uint16_t a2)
+{
+    uint16_t q;
+    g.curplayer[0] = GetMatchupPlayer(g.curitem[0], a2);
+    uint16_t d0 = GetPlayerRating(1, a2);
+    print(PushNumberWrap(d0, 3, &q));
+    return d0;
+}
 
 /* The roster slot (from 0) of team a2's player for matchup k (centre, wings, defence, goalie). */
 uint16_t GetMatchupPlayer(uint16_t k, uint16_t a2)
@@ -219,4 +239,325 @@ later:
         g.matchuptimer = 0;
     }
     g.matchupphotos = 0;
+}
+
+void ScoutingHDMA(void) { start_hdma(0x0C, 0xB3, (uint16_t)SYM_ScoutingHDMA_2, (uint16_t)SYM_ScoutingHDMA_4); }
+
+/* Where a scouting report name is printed: the record's position, column $14 for the home side */
+void ScoutNamePos(uint16_t a2)
+{
+    print(SYM_ScoutNamePosAt + 5);
+    if (!a2) g.printx = 0x14;
+}
+
+/* Blank the 6 x 6 picture area at column x, row y of the text map */
+void ClearPictureBox(uint16_t x, uint16_t y)
+{
+    uint32_t s = (uint32_t)(uint16_t)(y << 5) + x + (y >> 11 & 1);   /* (the shifts' carries) */
+    uint16_t t = (uint16_t)s;
+    uint16_t p1 = (uint16_t)((uint16_t)(t << 1) + (uint16_t)(0x7E0000 + RAM_OFF_textmap) + (t >> 15));
+    for (int r = 0; r < 6; r++) {
+        MemFill(0x7E0000 | p1, 0x0C, (uint16_t)(g.blankchar + g.charofs));
+        p1 = (uint16_t)(p1 + 0x40);
+    }
+}
+
+/* Type the word at a1 (d1 characters) at the report's line column: on a new line when the column
+ * d0 is past 20, its leading spaces dropped at the start of a line */
+void ScoutTypeWord(uint32_t a1, uint16_t d0, uint16_t d1)
+{
+    if ((int16_t)d0 > 0x14) ScrollDisplayUp();
+    if (!g.DispAttribCtr)
+        for (uint16_t y = 2; m8(a1 + y) == 0x20; y++) {   /* (y and a1 both step: every other character looked at) */
+            uint16_t n = (uint16_t)(m16(a1) - 1);
+            a1 = SCOUT_INC(a1);
+            mset16(a1, n);
+            d1--;
+        }
+    print(SYM_ScoutNamePosAt);
+    g.printx = (uint16_t)(g.printx + g.DispAttribCtr);
+    g.printy = (uint16_t)(g.printy + g.VertLineScrolling);
+    print(a1);
+    g.DispAttribCtr = (uint16_t)(g.DispAttribCtr + d1);
+}
+
+/* Copy the next plain word of the script a2 (with the spaces after it) into mesarea and type it at
+ * column d0; a "," or "." adds 40 frames to the report timer. PlayerScrollCtr = the script position
+ * from a1 after it, $FFFF at the end of the paragraph (a carriage return) */
+void ScoutPlainWord(uint32_t a1, uint32_t a2, uint16_t d0)
+{
+    g.PlayerScrollCtr = 0xFFFF;
+    uint16_t a0 = (uint16_t)(RAM_OFF_mesarea + 2), d1 = 0;
+    uint8_t c;
+loop:
+    if (m8(a2) == 0x0D) goto type;
+    d0++;
+loop2:
+    c = m8(a2);
+    w8(a0++, c);
+    d1++;
+    if (c == 0x2C || c == 0x2E) g.ScoutingReportTimer = (uint16_t)(g.ScoutingReportTimer + 0x28);
+    a2 = SCOUT_INC(a2);
+    if (c != 0x20) goto loop;
+    if (m8(a2) == 0x20) goto loop2;
+    g.PlayerScrollCtr = (uint16_t)(a2 - a1);
+type:
+    g.mesarea[0] = (uint16_t)(d1 + 2);
+    ScoutTypeWord(RAM_OFF_mesarea, d0, d1);
+}
+
+/* (ScoutTypeText's .3: type the string at a1 as one word, a word more counted in PlayerScrollCtr;
+ * returns the column d0 moved on by its length) */
+uint16_t GetTeamCity_home_3(uint32_t a1, uint16_t d0)
+{
+    g.PlayerScrollCtr++;
+    uint16_t n = m16(a1);
+    d0 = (uint16_t)(d0 + n - 1);
+    uint16_t d1 = (uint16_t)(n - 2);
+    if (!m8(a1 + (uint16_t)(n - 1))) d1--;
+    ScoutTypeWord(a1, d0, d1);
+    return d0;
+}
+
+/* Type the string at a1 word by word from column d0, the words wrapping at 20 columns */
+void ScoutTypeText(uint32_t a1, uint16_t d0)
+{
+    uint16_t y = 3;
+    do {
+        if (m8(a1 + y) == 0x20) {
+            uint16_t n = m16(a1), d4 = (uint16_t)(y - 2);
+            mset16(a1, y);
+            d0 = GetTeamCity_home_3(a1, d0);
+            g.PlayerScrollCtr--;
+            a1 = (a1 & 0xFF0000) | (uint16_t)(a1 + d4);
+            mset16(a1, (uint16_t)(n - d4));
+            if (!SCOUT_NEG(d0, 0x15)) d0 = d4;
+            y = 2;
+        }
+        y++;
+    } while (SCOUT_NEG(y, m16(a1)));
+    GetTeamCity_home_3(a1, d0);
+}
+
+/* Type string a1 (copied to a fresh mesarea) from column d0 */
+void ScoutAppend(uint32_t a1, uint16_t d0)
+{
+    g.mesarea[0] = 2;
+    appstring(a1, RAM_OFF_mesarea);
+    ScoutTypeText(RAM_OFF_mesarea, d0);
+}
+
+/* Script code %e: "extremely " when the hot / cold totals differ by 8 or more (hotextreme), else the
+ * script's next word (a2 past the code) */
+void ScoutExtremely(uint32_t a1, uint32_t a2, uint16_t d0)
+{
+    a2 = SCOUT_INC(a2);
+    if (g.hotextreme) ScoutAppend(SYM_ScoutFragments, d0);
+    else ScoutPlainWord(a1, a2, d0);
+}
+
+/* Script code %t: the full name of the hotter team, then " has" (" have" for the two New York teams) */
+void ScoutHotTeam(uint16_t d0)
+{
+    uint32_t a1 = GetTeamLongName(g.hotterteam);
+    g.mesarea[0] = 2;
+    appstring(a1, RAM_OFF_mesarea);
+    uint16_t k = g.hotterteam == 0x0D || g.hotterteam == 0x0E ? 18 : 12;
+    appstring((SYM_ScoutFragments & 0xFF0000) | (uint16_t)(SYM_ScoutFragments + k), RAM_OFF_mesarea);
+    ScoutTypeText(RAM_OFF_mesarea, d0);
+}
+
+/* Type the name of player d0 of team a2 (0 home, 2 visitors) from column x */
+void ScoutPlayerName(uint16_t d0, uint16_t a2, uint16_t x)
+{
+    uint32_t a0 = GetPlayerNamePointer(a2, d0);
+    g.mesarea[0] = 2;
+    appstring(a0, RAM_OFF_mesarea);
+    ScoutTypeText(RAM_OFF_mesarea, x);
+}
+
+/* Name player a of the home team / the visitors from column d0 */
+void ScoutHomePlayer(uint16_t a, uint16_t d0) { ScoutPlayerName(a, 0, d0); }
+
+void ScoutVisPlayer(uint16_t a, uint16_t d0) { ScoutPlayerName(a, 2, d0); }
+
+/* The city / the nickname (the first / the third string) of team data a1, from column d0 */
+void GetTeamCity(uint16_t a1, uint16_t d0) { ScoutAppend(scout_team_strings(a1), d0); }
+
+void GetTeamNickname(uint16_t a1, uint16_t d0) { ScoutAppend(AdvanceStringPtr(scout_team_strings(a1), 2), d0); }
+
+/* Script codes %r (the home arena), %H / %V (the full names), %h / %v (the cities), %n / %m (the
+ * nicknames) */
+void GetTeamArena_home(uint16_t d0) { ScoutAppend(AdvanceStringPtr(scout_team_strings(g.tmdata[0]), 3), d0); }
+
+void ScoutHomeName(uint16_t d0) { ScoutAppend(GetTeamLongName(g.HomeTeam), d0); }
+
+void ScoutVisName(uint16_t d0) { ScoutAppend(GetTeamLongName(g.VisTeam[0]), d0); }
+
+void GetTeamCity_home(uint16_t d0) { GetTeamCity(g.tmdata[0], d0); }
+
+void GetTeamCity_vis(uint16_t d0) { GetTeamCity(g.tmdata[1], d0); }
+
+void GetTeamNickname_home(uint16_t d0) { GetTeamNickname(g.tmdata[0], d0); }
+
+void GetTeamNickname_vis(uint16_t d0) { GetTeamNickname(g.tmdata[1], d0); }
+
+/* Script codes %0-%5 / %6-%b: the home / visitors' three hottest and three coldest players */
+void ScoutHomeHot1(uint16_t d0) { ScoutHomePlayer(g.hotplayer1[0], d0); }
+
+void ScoutHomeHot2(uint16_t d0) { ScoutHomePlayer(g.hotplayer2[0], d0); }
+
+void ScoutHomeHot3(uint16_t d0) { ScoutHomePlayer(g.hotplayer3[0], d0); }
+
+void ScoutHomeCold1(uint16_t d0) { ScoutHomePlayer(g.coldplayer1[0], d0); }
+
+void ScoutHomeCold2(uint16_t d0) { ScoutHomePlayer(g.coldplayer2[0], d0); }
+
+void ScoutHomeCold3(uint16_t d0) { ScoutHomePlayer(g.coldplayer3[0], d0); }
+
+void ScoutVisHot1(uint16_t d0) { ScoutVisPlayer(g.hotplayer1[1], d0); }
+
+void ScoutVisHot2(uint16_t d0) { ScoutVisPlayer(g.hotplayer2[1], d0); }
+
+void ScoutVisHot3(uint16_t d0) { ScoutVisPlayer(g.hotplayer3[1], d0); }
+
+void ScoutVisCold1(uint16_t d0) { ScoutVisPlayer(g.coldplayer1[1], d0); }
+
+void ScoutVisCold2(uint16_t d0) { ScoutVisPlayer(g.coldplayer2[1], d0); }
+
+void ScoutVisCold3(uint16_t d0) { ScoutVisPlayer(g.coldplayer3[1], d0); }
+
+/* The matchups box of the scouting report: both team blocks; for the line slot curitem (0 the teams)
+ * the two players' pictures, ratings and names (or the teams' logos and overall ratings), then the
+ * slot's name and who has the advantage (arrows up / down for the visitors, or none) */
+void ShowMatchups(void)
+{
+    uint16_t a2 = r16(RAM_OFF_a2);   /* (as the caller left it) */
+    uint16_t vis, home, q;
+    print(SYM_ShowMatchupsPos);
+    eraser(0x20, 0x0B, g.blankchar);
+    SpriteFrameStart();
+    PrintLetterSprites(SYM_MatchupsLabel, 0x56, 0x10);
+    print(SYM_ShowMatchupsPos2);
+    DrawTeamBlocks(g.VisTeam[0], 0, a2);
+    print(SYM_ShowMatchupsPos3);
+    DrawTeamBlocks(g.HomeTeam, 0, a2);
+    if (g.curitem[0]) {
+        g.curitem[0]--;
+        g.setupvis = 0xFFFF;
+        g.setuphome = 0xFFFF;
+        g.matchuphome = g.curitem[0];
+        g.matchupvis = g.curitem[0];
+        DrawMatchupPictures(2);
+        g.colourbuf[0] = 0x3568;
+        SendColours();
+        print(SYM_ShowMatchupsPos4);
+        vis = matchup_rating(2);
+        print(SYM_ShowMatchupsPos5);
+        print(PlayerInitialName(2, g.curplayer[0]));
+        print(SYM_ShowMatchupsPos6);
+        home = matchup_rating(0);
+        print(SYM_ShowMatchupsPos7);
+        uint32_t a1 = PlayerInitialName(0, g.curplayer[0]);
+        g.printx = (uint16_t)(0x21 - m16(a1));
+        print(a1);
+        g.curitem[0]++;
+    } else {
+        g.setuphome = g.HomeTeam;
+        g.setupvis = g.VisTeam[0];
+        DrawMatchupPictures(a2);
+        SendColours();
+        print(SYM_OverallTxt);
+        vis = GetTeamRating(2);
+        print(PushNumberWrap(vis, 3, &q));
+        print(SYM_OverallTxt2);
+        home = GetTeamRating(0);
+        print(PushNumberWrap(home, 3, &q));
+    }
+    print(SYM_ShowMatchupsPos8);
+    print(AdvanceStringPtr(SYM_LineSlotNames, g.curitem[0]));
+    print(SYM_AdvantageTxt);
+    if (vis == home) print(SYM_NoneTxt);
+    else if (SCOUT_NEG(vis, home)) print(SYM_DownArrowsTxt);
+    else print(SYM_UpArrowsTxt);
+    WaitFrame();
+    SpriteFrameEnd();
+}
+
+/* Set up the scouting report screen: fade out (the team logo sprites unpacked meanwhile), the PPU's
+ * maps and sprites, the small font, framer, team block, outline, menu back and Ron Barr tiles, the
+ * menu back and Ron Barr maps in text map 2, the palettes, a clear text map, the sprites and the
+ * picture map */
+void LoadScoutingScreen(void)
+{
+    forcefade();
+    Decompress(SYM_TeamLogoSprites, logosprbuf);
+    WaitFadeOut();
+    forceblack();
+    io_w8(0x2107, 0x00);
+    io_w8(0x2108, 0x04);
+    io_w8(0x210B, 0x12);
+    io_w8(0x2101, 0x03);
+    io_w8(0x212C, 0x13);
+    g.charofs = 0xFF00;
+    g.printfontset = 0xFF00;
+    g.charofs2 = 0;
+    io_w16(0x2116, (uint16_t)((uint16_t)(g.blankchar << 4) + 0x1000 + (g.blankchar >> 12 & 1)));   /* (asl's carry) */
+    g.smallfontchars = (uint16_t)(g.blankchar + 1);
+    g.outlinechars = g.smallfontchars;
+    FillVRAM(0, 0x20, 0xFFFF, 0);
+    uint16_t n = Decompress(SYM_SmallFontTiles, unpackbuf);
+    uint16_t d0 = n >> 5;
+    g.outlinechars = (uint16_t)(g.outlinechars + d0);
+    g.Framercset = (uint16_t)(d0 + g.smallfontchars);
+    remap(unpackbuf, SYM_PixelRemap8F, d0);
+    g.outlinechars = (uint16_t)(g.outlinechars + 4);
+    g.scorechars = (uint16_t)(g.Framercset + 4);
+    remap(SYM_FramerTiles, SYM_PixelRemap87, 4);
+    n = Decompress(SYM_TeamBlocksTiles, unpackbuf);
+    g.outlinechars = (uint16_t)(g.outlinechars + (n >> 5));
+    uint32_t p0 = unpackbuf;
+    DMAToVRAM(&p0, n, (uint16_t)((uint16_t)(g.scorechars << 4) + 0x1000 + (g.scorechars >> 12 & 1)), 0);
+    p0 = SYM_FramerOutlineTiles;
+    DMAToVRAM(&p0, 0x120, 0xFFFF, 0);
+    n = Decompress(SYM_MenuBackTiles, unpackbuf);
+    g.backchars = n >> 5;
+    p0 = unpackbuf;
+    DMAToVRAM(&p0, n, 0x1000, 0);
+    Decompress(SYM_MenuBackMap, unpackbuf);
+    p0 = unpackbuf;
+    uint32_t p1 = 0x7E0000u + RAM_OFF_textmap2;
+    PasteMap(&p0, &p1, (uint16_t)(g.charofs2 + 0x0C00), 0, 0, 0x20);
+    Decompress(SYM_SetupScreenPalette, unpackbuf);
+    SetColours(unpackbuf, 0x30, 0);
+    n = Decompress(SYM_RonBarrTiles, unpackbuf);
+    p0 = unpackbuf;
+    DMAToVRAM(&p0, n, 0xFFFF, 0);
+    n = Decompress(SYM_RonBarrMap, unpackbuf);
+    uint16_t y = (uint16_t)(n - 8);
+    do {
+        uint16_t v = m16(unpackbuf + 6 + y);
+        if (v) w16(RAM_OFF_textmap2 + y, (uint16_t)(v + g.backchars + g.charofs2 + 0x0800));
+        y = (uint16_t)(y - 2);
+    } while (!(y & 0x8000));
+    Decompress(SYM_SetupScreenPalette, unpackbuf);
+    SetColours(unpackbuf, 0x10, 0);
+    SetColours(unpackbuf + 0x20, 0x10, 0x10);
+    Decompress(SYM_RonBarrPalette, unpackbuf);
+    SetColours(unpackbuf, 0x10, 0x20);
+    io_w8(0x2121, 0);
+    io_w8(0x2122, 0);
+    io_w8(0x2122, 0);
+    Decompress(SYM_MenuBackPalette, unpackbuf);
+    SetColours(unpackbuf, 0x20, 0x30);
+    g.outlinechars = (uint16_t)(g.outlinechars + 0x1000);
+    SetColours(SYM_SetupSpritePalette, 0x10, 0x80);
+    SetColours(SYM_UnusedSetupSpritePalette, 0x10, 0xC0);
+    SendColours();
+    ClearTextMap();
+    SendTextMap2();
+    WaitFrame();
+    InitSprites(0x6000, 0, 0x0180);
+    SpriteFrameStart();
+    LoadPictureMap();
 }

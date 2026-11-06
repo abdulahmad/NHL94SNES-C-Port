@@ -454,3 +454,6 @@ out:
     if (g.OptPlayMode && g.OptPlayMode != 4 && g.playoffRoundIdx >= 2) MusicStart(SYM_PlayoffSong);
     else MusicStart(SYM_MenuSong);
 }
+
+/* ReadjoyA for the controller that owns the pause menu */
+Pad getpzjoy(void) { return ReadjoyA(g.pausepad >> 1); }

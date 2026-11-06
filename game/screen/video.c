@@ -3,6 +3,38 @@
  * (src/routines/video). */
 #include "game.h"
 
+/* Arithmetic shifts of a word right */
+static uint16_t asr4(uint16_t v) { return (uint16_t)((int16_t)v >> 4); }
+
+/* One frame of hat k's flight: it moves; in the air it falls (hatvz, its own: launching clears only the
+ * first hat's); on the ice it slides, slowing by a sixteenth, until it stops */
+static void hat_move(uint16_t x)
+{
+    if (!(r16(RAM_OFF_hatvx + x) | r16(RAM_OFF_hatvy + x))) return;
+    w16(RAM_OFF_hatx + x, (uint16_t)(r16(RAM_OFF_hatx + x) + r16(RAM_OFF_hatvx + x)));
+    w16(RAM_OFF_haty + x, (uint16_t)(r16(RAM_OFF_haty + x) + r16(RAM_OFF_hatvy + x)));
+    uint16_t z = r16(RAM_OFF_hatz + x);
+    if (z) {
+        uint16_t a = (uint16_t)(z - (uint16_t)((int16_t)r16(RAM_OFF_hatvz + x) >> 2));
+        if (a & 0x8000) { w16(RAM_OFF_hatz + x, 0); return; }
+        w16(RAM_OFF_hatz + x, a);
+        w16(RAM_OFF_hatvz + x, (uint16_t)(r16(RAM_OFF_hatvz + x) + 6));
+        return;
+    }
+    w16(RAM_OFF_hatvz + x, 0);
+    w16(RAM_OFF_hatz + x, 0);
+    w16(RAM_OFF_hattimer + x, 0x03E8);
+    uint16_t vx = r16(RAM_OFF_hatvx + x);
+    if (vx < 0x10 || vx >= 0xFFF0) {
+        w16(RAM_OFF_hatvx + x, 0);
+        w16(RAM_OFF_hatvy + x, 0);
+        return;
+    }
+    w16(RAM_OFF_hatvx + x, (uint16_t)(vx - asr4(vx)));
+    uint16_t vy = r16(RAM_OFF_hatvy + x);
+    w16(RAM_OFF_hatvy + x, (uint16_t)(vy - asr4(vy)));
+}
+
 /* Referee graphics: only clears the referee flag here */
 void showref(void) { g.sflags &= (uint16_t)~sf2refref; }
 
@@ -1703,8 +1735,6 @@ void WaitFrames_Inc(uint16_t x, uint16_t y) { WaitFrames(x, (uint16_t)(y + 1)); 
 /* Fade the screen in after a 5-frame delay, or out: BrightnessHook as the frame hook */
 void FadeIn(void) { g.fadestep = 5; SetFrameHook(SYM_BrightnessHook); }
 
-void forcefade(void) { g.fadestep = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
-
 /* Set the frame hook back to the empty routine */
 void ClearFrameHook(void) { SetFrameHook(SYM_NullHook); }
 
@@ -1760,4 +1790,143 @@ uint16_t DrawSpritePieces_cacheframe(uint16_t a, uint32_t p1, uint16_t x)
     uint32_t lo = (uint32_t)m16(s + k) + (uint16_t)p1;
     uint16_t hi = (uint16_t)(m16(s + (uint16_t)(k + 2)) + (uint16_t)(p1 >> 16) + (lo >> 16));
     return DrawSpritePieces_cacheat((uint16_t)lo | (uint32_t)hi << 16, x);
+}
+
+/* Set the rink scroll from the camera position (horizontal mode has its own) */
+void updatescroll(void)
+{
+    if (g.sfhormode) return;
+    g.Hscroll = (int16_t)(g.Hpos - 0x80);
+    g.Vscroll = (int16_t)((uint16_t)-g.Vpos - 0x70);
+}
+
+/* Project rink position d0 / d1 (height d2) to the screen: d0 = x, d1 = y ($4E20 off the screen) */
+void find3d(uint16_t *d0, uint16_t *d1, uint16_t d2)
+{
+    uint16_t x = *d0, y = *d1;
+    if (g.sfhormode) { uint16_t t = x; x = (uint16_t)-y; y = (uint16_t)(t - 0xC5); }
+    else { x = (uint16_t)(x - g.Hpos); y = (uint16_t)(y - g.Vpos); }
+    *d0 = x;
+    if (((uint16_t)(x - 0xFF6F) & 0x8000) || !((uint16_t)(x - 0x91) & 0x8000)) { *d1 = 0x4E20; return; }
+    *d0 = (uint16_t)(x + 0x80);
+    uint16_t h = (uint16_t)(d2 * 3);
+    h = (uint16_t)((h & 0x8000) | h >> 1);              /* (asl then ror: the sign kept) */
+    y = (uint16_t)(h + y);
+    *d1 = y;
+    if (((uint16_t)(y - 0xFF6F) & 0x8000) || !((uint16_t)(y - 0x91) & 0x8000)) { *d1 = 0x4E20; return; }
+    *d1 = (uint16_t)(0x70 - y);
+}
+
+/* Queue the rink map rows that the vertical scroll brought on screen (at most $1D: the whole
+ * screen) into the BG2 ring of rows, and set BG2's scroll */
+void updatescroll_rows(void)
+{
+    if (g.sfhormode) return;
+    uint16_t x = (uint16_t)((uint16_t)(g.Vscroll + 0x170) >> 3);
+    uint16_t a = (uint16_t)(x - g.Oldrow);
+    if (a) {
+        uint16_t tmp1, tmp2;
+        g.Oldrow = x;
+        if (a & 0x8000) {
+            a = (uint16_t)-a;
+            if (a >= 0x19) goto all;
+            tmp1 = a;
+            g.vramrow[0] = (uint16_t)(g.vramrow[0] - tmp1) & 0x1F;
+            tmp2 = g.vramrow[0];
+        } else {
+            if (a >= 0x19) goto all;
+            tmp1 = a;
+            uint32_t s = (uint32_t)a + g.vramrow[0];
+            g.vramrow[0] = (uint16_t)s & 0x1F;
+            tmp2 = (uint16_t)(g.vramrow[0] + 0x1D + (s >> 16) - tmp1) & 0x1F;
+            x = (uint16_t)(x + 0x1D - tmp1);
+        }
+        if (0) {
+        all:
+            tmp1 = 0x1D;
+            g.vramrow[0] = 0;
+            tmp2 = 0;
+        }
+        uint16_t t5 = (uint16_t)(x << 5);
+        uint32_t s = (uint32_t)(uint16_t)(t5 << 1) + t5 + (t5 >> 15);   /* (the carries of asl, adc, adc) */
+        s = (s & 0xFFFF) + (uint16_t)rinkmapbuf + (s >> 16);
+        uint16_t tmp0 = (uint16_t)((s & 0xFFFF) + 6 + (s >> 16));
+        tmp2 = (uint16_t)((uint16_t)(tmp2 << 5) + 0x400 + (tmp2 >> 11 & 1));
+        uint16_t r1 = tmp1;
+        do {
+            uint32_t p0 = (rinkmapbuf & 0xFF0000) | tmp0;
+            DMAToVRAM(&p0, 0x40, tmp2, 0);
+            p0 = (p0 & 0xFFFF0000u) | (uint16_t)(tmp0 + 0x40);
+            DMAToVRAM(&p0, 0x20, (uint16_t)(tmp2 + 0x400), 0);
+            tmp0 = (uint16_t)(tmp0 + 0x60);
+            tmp2 = (uint16_t)(((tmp2 + 0x20) & 0x3FF) | 0x400);
+        } while (--r1);
+    }
+    g.BG2HScroll = (uint16_t)(g.Hscroll + 0xC0);
+    g.BG2VScroll = (uint16_t)((uint16_t)(g.vramrow[0] << 3) | (g.Vscroll & 7));
+}
+
+/* While the hat trick is on (not on the horizontal rink or in a replay): the ten hats, each launched at
+ * random (a chance in 32 a frame) on an arc onto the ice, animated, moved timestep frames and drawn with
+ * its shadow */
+void UpdateHatTrick(void)
+{
+    if (g.sfhormode || (g.sflags & 0x0800) || !g.hattrick) return;
+    for (uint16_t x = 0x12; !(x & 0x8000); x -= 2) {
+        if (!r16(RAM_OFF_hatstep + x)) {
+            if (RandomWord() & 0x07C0) continue;
+            uint16_t r = RandomWord() & 0x3F;
+            uint16_t d0 = (uint16_t)((uint16_t)((r >> 1) + r + (r & 1) + 0x50) << 4);   /* (lsr's carry) */
+            uint16_t d1 = (uint16_t)((uint16_t)((RandomWord() & 0x3F) + 0x60) << 4);
+            w16(RAM_OFF_haty + x, (uint16_t)((RandomWord() & 0xFF) << 4));
+            uint16_t d2 = (uint16_t)((RandomWord() & 0x3F) + 0x78);
+            w16(RAM_OFF_hatvy + x, DivX8S((uint16_t)(d1 - r16(RAM_OFF_haty + x)), d2));
+            uint16_t hx = d0 & 0x0100 ? 0x1100 : 0xFF00;
+            w16(RAM_OFF_hatx + x, hx);
+            w16(RAM_OFF_hatvx + x, DivX8S((uint16_t)(d0 - hx), d2));
+            uint16_t p = Mul8U((uint16_t)(d2 >> 2), (uint16_t)(d2 >> 2));
+            w16(RAM_OFF_hatz + x, (uint16_t)((uint16_t)(p << 1) + p + (p >> 15)));
+            uint16_t kind = (uint16_t)(RandomWord() >> 2 & 3);
+            if (kind) kind--;
+            w16(RAM_OFF_hatkind + x, (uint16_t)(kind * 3));
+            g.hatvz[0] = 0;
+            w16(RAM_OFF_hatstep + x, 1);
+            w16(RAM_OFF_hattimer + x, rom16(SYM_UpdateHatTrick_9 + x));
+        } else {
+            uint16_t t = (uint16_t)(r16(RAM_OFF_hattimer + x) - g.timestep);
+            if (t & 0x8000) {
+                w16(RAM_OFF_hattimer + x, (uint16_t)(t + rom16(SYM_UpdateHatTrick_9 + x)));
+                uint16_t s = (uint16_t)(r16(RAM_OFF_hatstep + x) + 1);
+                w16(RAM_OFF_hatstep + x, s == 4 ? 1 : s);
+            } else w16(RAM_OFF_hattimer + x, t);
+            for (uint16_t y = g.timestep; y; y--) hat_move(x);
+        }
+        uint16_t f = (uint16_t)(r16(RAM_OFF_hatkind + x) + r16(RAM_OFF_hatstep + x) + 967 - 2);
+        uint16_t hy = r16(RAM_OFF_haty + x), hx = r16(RAM_OFF_hatx + x);
+        DrawSprite(0x2000, asr4(hx), asr4((uint16_t)(hy - (r16(RAM_OFF_hatz + x) >> 4))), f, SYM_SpriteFrames);
+        DrawSprite(0x2000, asr4(r16(RAM_OFF_hatx + x)), asr4(r16(RAM_OFF_haty + x)), 976 - 1, SYM_SpriteFrames);
+    }
+}
+
+/* Horizontal rink: both team blocks (home at column $14, visitors at 3, row 2) and their palette rows */
+void DrawHorTeams(void)
+{
+    g.horblocks = 1;
+    g.printx = 0x14;
+    g.printy = 2;
+    DrawTeamBlocks(g.HomeTeam, 0, 0);
+    g.printx = 3;
+    DrawTeamBlocks(g.VisTeam[0], 0, 2);
+    g.horblocks = 0;
+    g.redrawblocks = 0;
+    g.colourbuf[0xE1] = 0x1D47;
+    g.colourbuf[0xF1] = 0x1D47;
+    if (!g.pausemenuon) {
+        g.colourbuf[0xEF] = 0xFFFF;
+        g.colourbuf[0xFF] = 0xFFFF;
+    }
+    DMAToCGRAM(0x7E0000 + RAM_OFF_colourbuf + 0xC0, 0x20, 0x60);
+    WaitFrame();
+    DMAToCGRAM(0x7E0000 + RAM_OFF_colourbuf + 0x1C0, 0x20, 0xE0);
+    SendTextMap();
 }

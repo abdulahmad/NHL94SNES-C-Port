@@ -4,9 +4,6 @@
 #define NEG(a, b) (((uint16_t)((a) - (b))) & 0x8000)   /* cmp, then bmi */
 #define YPOS(o) r16(RAM_OFF_Ypos + 2 * (o))           /* (objects past the array: by address) */
 
-/* a long pointer's byte or word, indexed as [p],y does (the carry goes into the bank) */
-static uint32_t lp(uint32_t bank, uint16_t ptr, uint16_t y) { return ((bank << 16 | ptr) + y) & 0xFFFFFF; }
-
 /* Replace player o's assignment with assdumpin ($14). */
 void StartDumpIn(int o) { assreplace(o, 0x14); }
 
@@ -26,20 +23,6 @@ void puckunflip(void)
     g.facedir[14] |= 4;
     g.SPAnum[14] = 0;
     g.SPAcnt[14] = 0xFFFF;
-}
-
-/* The number of goalies of team a2: the nibbles of its goalie odds word (byte-swapped) until the
- * rest is zero. */
-uint16_t GetGoalieCount(uint16_t a2)
-{
-    uint32_t bank = SYM_TeamList >> 16;
-    uint16_t t = r16(RAM_OFF_tmdata + a2);
-    t = (uint16_t)(t + m16(lp(bank, t, 10)));          /* (GoalieOdds) */
-    uint16_t a = m16(lp(bank, t, 0));
-    a = (uint16_t)(a << 8 | a >> 8);
-    uint16_t n = 0;
-    do { n++; a = (uint16_t)(a << 4); } while (a);
-    return n;
 }
 
 /* Pad d4 takes control of player d0: its old player is released (pfna set, his pad bit cleared,
@@ -4508,4 +4491,14 @@ void updateplayers(void)
         }
     }
     if (!(g.puckc & 0x8000)) g.carriedy = (uint16_t)g.pucky[0];
+}
+
+/* Start sprite animation anim on object o (as SetSPAFromA) and update it at once */
+void SetSPAUpdate(int o, uint16_t anim)
+{
+    if (anim == g.SPA[o]) return;
+    g.SPA[o] = anim;
+    g.SPAnum[o] = 0;
+    g.SPAcnt[o] = 0xFFFF;
+    updateanim(o);
 }

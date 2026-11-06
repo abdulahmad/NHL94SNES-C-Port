@@ -332,16 +332,6 @@ uint32_t Fprint(uint16_t d0, uint32_t a1)
     return print(a1);
 }
 
-/* One ticker line at column px (NewTicker3's, on the stack): team d0's name, its score d1 at px + $17 */
-uint32_t PrintGameInfo(uint16_t d0, uint16_t d1, uint16_t px)
-{
-    g.printx = px;
-    g.printy++;
-    print(GetTeamLongName(d0));
-    g.printx = (uint16_t)(px + 0x17);
-    return print(PushNumber(d1));
-}
-
 /* Print the label of the current period (overtime's one column to the left) */
 uint32_t printscores1_per(void)
 {
@@ -1305,4 +1295,19 @@ void Intermission(void)
     g.pausemenuon = 0;
     g.InIntermission = 0;
     g.demoflag = 0;
+}
+
+/* Clear the text screen and draw the horizontal rink's scoreboard background: the screen erased
+ * between its two print positions, the two halves of the rink map (rinkmapbuf, columns 0 and $10
+ * of row $55, 32 by 28) to the screen maps at $0400 and $0800, then USBoard. */
+void SetHor_rink(void)
+{
+    print(SYM_StatsReportPos);
+    eraser(0x20, 0x1D, g.blankchar);
+    print(SYM_StatsReportPos2);
+    g.MapVRAM = 0x400;
+    MapPartToVRAM(SYM_rinkmapbuf, 0, 0, 0, 0x55, 0x20, 0x1C);
+    g.MapVRAM = 0x800;
+    MapPartToVRAM(SYM_rinkmapbuf, 0, 0, 0x10, 0x55, 0x20, 0x1C);
+    USBoard();
 }

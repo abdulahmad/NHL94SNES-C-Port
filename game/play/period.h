@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 uint16_t GetTeamRating(uint16_t a2);
-void SetHor_rink(void);
 void ClearGameStatBraces(void);
 void SendGameStatsPage(void);
 void DisplayStats(void);
