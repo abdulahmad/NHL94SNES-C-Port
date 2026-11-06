@@ -1,108 +1,6 @@
 /* period: periods (src/routines/period). */
 #include "game.h"
 
-/* The team rating of team a2: byte 4 of its scouting report. */
-uint16_t GetTeamRating(uint16_t a2)
-{
-    uint32_t bank = SYM_TeamList >> 16;
-    uint16_t t = r16(RAM_OFF_tmdata + a2);
-    t = (uint16_t)(m16(((bank << 16 | t) + 8) & 0xFFFFFF) + t + 4);
-    return m8(bank << 16 | t);
-}
-
-
-/* Erase the braces around the visible game-stat rows / player-stat rows / other-scores rows */
-void ClearGameStatBraces(void)
-{
-    clear_braces(1, (uint16_t)(g.listtop[0] << 1), (uint16_t)((uint16_t)(g.listtop[0] + g.listrows[0]) << 1));
-}
-
-/* Send the stats page rows shown (from listtop, listrows + 1 of them) to VRAM $0180 */
-void SendGameStatsPage(void)
-{
-    uint16_t t = (uint16_t)(g.listtop[0] << 8 | g.listtop[0] >> 8);
-    uint32_t p0 = (statspage & 0xFF0000) | (uint16_t)((t >> 1) + (uint16_t)statspage + (t & 1));   /* (lsr's carry) */
-    uint16_t n = (uint16_t)(g.listrows[0] + 1);
-    DMAToVRAM(&p0, (uint16_t)((n << 8 | n >> 8) >> 1), 0x0180, 0);
-}
-
-/* Game stats: one team's (a2) number of stat row curitem at printx (centred): a count, a ratio as a
- * percentage, a pair "a/b", or a time, from the TeamStatSources entry (penalty rows only with penalties) */
-static void teamstat_value(uint16_t a2)
-{
-    uint32_t bank = SYM_TeamStatSources & 0xFF0000;
-    uint16_t a0 = (uint16_t)SYM_TeamStatSources, d0 = g.curitem[0];
-    uint16_t e;
-    for (;;) {
-        e = m16(bank | a0);
-        if (e & 0x8000) return;
-        if (((e & 0xF0) | g.statpenrows) && ((d0 = (uint16_t)(d0 - 1)) & 0x8000)) break;
-        a0 = (uint16_t)(a0 + 6);
-    }
-    uint16_t type = e & 0x0F;
-    a0 += 2;
-    uint32_t a1;
-    if (type == 1) {
-        uint16_t s = m16(bank | a0);
-        a0 += 2;
-        a1 = PushNumber(r16((uint16_t)(s + a2)));
-        uint16_t d1 = m16(bank | a0);
-        g.mesarea[0] = 2;
-        appstring(a1, RAM_OFF_mesarea);
-        appstring(SYM_StatSlash, RAM_OFF_mesarea);
-        appstring(PushNumber(r16((uint16_t)(a2 + d1))), RAM_OFF_mesarea);
-        a1 = RAM_OFF_mesarea;
-    } else if (type == 2) {
-        uint16_t v0 = r16((uint16_t)(m16(bank | a0) + a2));
-        a0 += 2;
-        uint16_t v1 = r16((uint16_t)(m16(bank | a0) + a2));
-        uint16_t p;
-        if ((uint16_t)(v0 - v1) & 0x8000) p = v1 ? DivX8U(Mul8U(v0, 0x64), v1) : 0;
-        else p = v0 ? 0x64 : 0;
-        a1 = PushNumber(p);
-        g.mesarea[0] = 2;
-        appstring(a1, RAM_OFF_mesarea);
-        appstring(SYM_StatPercent, RAM_OFF_mesarea);
-        a1 = RAM_OFF_mesarea;
-    } else if (type == 3) a1 = PushTime(r16((uint16_t)(m16(bank | a0) + a2)));
-    else a1 = PushNumber(r16((uint16_t)(m16(bank | a0) + a2)));
-    g.printx = (uint16_t)(g.printx - ((uint16_t)(m16(a1) + 1) >> 1));
-    PrintToStatsPage(a1);
-}
-
-/* The game stats page: each team stat's name (the list without penalties when they are off) and both
- * teams' numbers */
-void DisplayStats(void)
-{
-    MemFill(statspage, 0x4D80, (uint16_t)(g.smallfontchars + g.printfontset));
-    g.printy = 0;
-    g.curitem[0] = 0;
-    uint16_t d4 = g.listcount[0];
-    do {
-        g.printa = 0x2800;
-        g.printx = 9;
-        uint32_t a1 = g.OptPen ? SYM_TeamStatNames : (SYM_TeamStatNames & 0xFF0000) | (uint16_t)SYM_TeamStatNamesNoPen;
-        PrintToStatsPage(AdvanceStringPtr(a1, g.curitem[0]));
-        g.printa = 0x2400;
-        g.printx = 0x1C;
-        teamstat_value(0);
-        g.printx = 7;
-        teamstat_value(2);
-        g.printy += 2;
-        g.curitem[0]++;
-    } while (!((d4 = (uint16_t)(d4 - 1)) & 0x8000));
-}
-
-/* Goalie control (manual or automatic): A / B / left / right switch it for the pause controller's team */
-uint16_t ManualGoalieMenu(uint16_t d1)
-{
-    if (d1 & 0x8380) {
-        uint16_t a2 = seta2();
-        w16(RAM_OFF_goaliemode1 + a2, r16(RAM_OFF_goaliemode1 + a2) ^ 1);
-    }
-    return PauseMenuPoll();
-}
-
 /* The game stats screen's braces round the rows shown (when rows are hidden above / below), the page sent;
  * then up / down scroll the rows (a row at a time, the IRQ split moving), Start leaves */
 static void gamestats_loop(void)
@@ -206,6 +104,133 @@ void StatsReport(void)
     gamestats_loop();
 }
 
+/* Erase the braces around the visible game-stat rows / player-stat rows / other-scores rows */
+void ClearGameStatBraces(void)
+{
+    clear_braces(1, (uint16_t)(g.listtop[0] << 1), (uint16_t)((uint16_t)(g.listtop[0] + g.listrows[0]) << 1));
+}
+
+/* Send the stats page rows shown (from listtop, listrows + 1 of them) to VRAM $0180 */
+void SendGameStatsPage(void)
+{
+    uint16_t t = (uint16_t)(g.listtop[0] << 8 | g.listtop[0] >> 8);
+    uint32_t p0 = (statspage & 0xFF0000) | (uint16_t)((t >> 1) + (uint16_t)statspage + (t & 1));   /* (lsr's carry) */
+    uint16_t n = (uint16_t)(g.listrows[0] + 1);
+    DMAToVRAM(&p0, (uint16_t)((n << 8 | n >> 8) >> 1), 0x0180, 0);
+}
+
+/* Game stats: one team's (a2) number of stat row curitem at printx (centred): a count, a ratio as a
+ * percentage, a pair "a/b", or a time, from the TeamStatSources entry (penalty rows only with penalties) */
+static void teamstat_value(uint16_t a2)
+{
+    uint32_t bank = SYM_TeamStatSources & 0xFF0000;
+    uint16_t a0 = (uint16_t)SYM_TeamStatSources, d0 = g.curitem[0];
+    uint16_t e;
+    for (;;) {
+        e = m16(bank | a0);
+        if (e & 0x8000) return;
+        if (((e & 0xF0) | g.statpenrows) && ((d0 = (uint16_t)(d0 - 1)) & 0x8000)) break;
+        a0 = (uint16_t)(a0 + 6);
+    }
+    uint16_t type = e & 0x0F;
+    a0 += 2;
+    uint32_t a1;
+    if (type == 1) {
+        uint16_t s = m16(bank | a0);
+        a0 += 2;
+        a1 = PushNumber(r16((uint16_t)(s + a2)));
+        uint16_t d1 = m16(bank | a0);
+        g.mesarea[0] = 2;
+        appstring(a1, RAM_OFF_mesarea);
+        appstring(SYM_StatSlash, RAM_OFF_mesarea);
+        appstring(PushNumber(r16((uint16_t)(a2 + d1))), RAM_OFF_mesarea);
+        a1 = RAM_OFF_mesarea;
+    } else if (type == 2) {
+        uint16_t v0 = r16((uint16_t)(m16(bank | a0) + a2));
+        a0 += 2;
+        uint16_t v1 = r16((uint16_t)(m16(bank | a0) + a2));
+        uint16_t p;
+        if ((uint16_t)(v0 - v1) & 0x8000) p = v1 ? DivX8U(Mul8U(v0, 0x64), v1) : 0;
+        else p = v0 ? 0x64 : 0;
+        a1 = PushNumber(p);
+        g.mesarea[0] = 2;
+        appstring(a1, RAM_OFF_mesarea);
+        appstring(SYM_StatPercent, RAM_OFF_mesarea);
+        a1 = RAM_OFF_mesarea;
+    } else if (type == 3) a1 = PushTime(r16((uint16_t)(m16(bank | a0) + a2)));
+    else a1 = PushNumber(r16((uint16_t)(m16(bank | a0) + a2)));
+    g.printx = (uint16_t)(g.printx - ((uint16_t)(m16(a1) + 1) >> 1));
+    PrintToStatsPage(a1);
+}
+
+/* The game stats page: each team stat's name (the list without penalties when they are off) and both
+ * teams' numbers */
+void DisplayStats(void)
+{
+    MemFill(statspage, 0x4D80, (uint16_t)(g.smallfontchars + g.printfontset));
+    g.printy = 0;
+    g.curitem[0] = 0;
+    uint16_t d4 = g.listcount[0];
+    do {
+        g.printa = 0x2800;
+        g.printx = 9;
+        uint32_t a1 = g.OptPen ? SYM_TeamStatNames : (SYM_TeamStatNames & 0xFF0000) | (uint16_t)SYM_TeamStatNamesNoPen;
+        PrintToStatsPage(AdvanceStringPtr(a1, g.curitem[0]));
+        g.printa = 0x2400;
+        g.printx = 0x1C;
+        teamstat_value(0);
+        g.printx = 7;
+        teamstat_value(2);
+        g.printy += 2;
+        g.curitem[0]++;
+    } while (!((d4 = (uint16_t)(d4 - 1)) & 0x8000));
+}
+
+/* The team rating of team a2: byte 4 of its scouting report. */
+uint16_t GetTeamRating(uint16_t a2)
+{
+    uint32_t bank = SYM_TeamList >> 16;
+    uint16_t t = r16(RAM_OFF_tmdata + a2);
+    t = (uint16_t)(m16(((bank << 16 | t) + 8) & 0xFFFFFF) + t + 4);
+    return m8(bank << 16 | t);
+}
+
+/* The team with more players on the ice gets one more tick of power play time */
+void updatePPTeamTime(void)
+{
+    uint16_t d = (uint16_t)(g.tmap[0] - g.tmap[1]);
+    if (!d) return;
+    g.tmPwrPlayTime[d & 0x8000 ? 1 : 0]++;
+}
+
+/* The period stats screen: Y switches goals / shots, Start leaves */
+void PeriodStatsScreen(void)
+{
+    g.setupvis = g.VisTeam[0];
+    g.setuphome = g.HomeTeam;
+    SetupScreen();
+    SpriteFrameEnd();
+    SendColours();
+    g.listtop[0] = 0;
+    g.listrows[0] = 6;
+    g.curitem[0] = 0;
+    MenuScreenHDMA();
+    ScreenOn();
+    DrawPeriodStats();
+    for (;;) {
+        SendTextMap();
+        WaitFrame();
+        ReadPads();
+        Pad p = getpzjoy();
+        uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
+        if (d1 & 0x1000) return;
+        if (d1 & 0x4000) {
+            g.curitem[0] ^= 1;
+            DrawPeriodStats();
+        }
+    }
+}
+
 /* One column of the period stats at printx: the period's label (none past lastperiod), the total's, then
  * both teams' goals (curitem 0) or shots in that period, and the title of what is shown */
 static void period_column(uint16_t x, uint16_t px)
@@ -260,40 +285,14 @@ void DrawPeriodStats(void)
     SpriteFrameEnd();
 }
 
-/* The period stats screen: Y switches goals / shots, Start leaves */
-void PeriodStatsScreen(void)
-{
-    g.setupvis = g.VisTeam[0];
-    g.setuphome = g.HomeTeam;
-    SetupScreen();
-    SpriteFrameEnd();
-    SendColours();
-    g.listtop[0] = 0;
-    g.listrows[0] = 6;
-    g.curitem[0] = 0;
-    MenuScreenHDMA();
-    ScreenOn();
-    DrawPeriodStats();
-    for (;;) {
-        SendTextMap();
-        WaitFrame();
-        ReadPads();
-        Pad p = getpzjoy();
-        uint16_t d1 = ProcessInputWithRepeat(p.press, p.change, p.held);
-        if (d1 & 0x1000) return;
-        if (d1 & 0x4000) {
-            g.curitem[0] ^= 1;
-            DrawPeriodStats();
-        }
-    }
-}
-
 void Reset_Fast_ret(void) {}
 
-/* The team with more players on the ice gets one more tick of power play time */
-void updatePPTeamTime(void)
+/* Goalie control (manual or automatic): A / B / left / right switch it for the pause controller's team */
+uint16_t ManualGoalieMenu(uint16_t d1)
 {
-    uint16_t d = (uint16_t)(g.tmap[0] - g.tmap[1]);
-    if (!d) return;
-    g.tmPwrPlayTime[d & 0x8000 ? 1 : 0]++;
+    if (d1 & 0x8380) {
+        uint16_t a2 = seta2();
+        w16(RAM_OFF_goaliemode1 + a2, r16(RAM_OFF_goaliemode1 + a2) ^ 1);
+    }
+    return PauseMenuPoll();
 }
