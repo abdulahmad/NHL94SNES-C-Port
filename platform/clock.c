@@ -10,7 +10,7 @@
  * handler runs (its own events moving the beam on), and the rest of the step comes after. The NMI
  * comes at line 225, cycle 90 when enabled; the IRQ when the H/V timer fires, unless masked: inside
  * the IRQ handler, and in SetIRQ and IRQOff (the original's sei; the NMI handler takes IRQs,
- * NMI_Fast's cli). A wait (hal_wait_interrupt) runs the console to the next interrupt; the step
+ * VBlank's cli). A wait (hal_wait_interrupt) runs the console to the next interrupt; the step
  * after it is the cost from the wait loop's exit (WAIT) to the next event. A DMA adds its bytes'
  * time (8 cycles a byte) at its $420B write.
  *

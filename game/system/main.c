@@ -47,7 +47,7 @@ void Reset_Fast(void)
         g.ReplayBufferEnd[k] = c;
     }
     for (int k = 0x10; k; k--) g.OAMHiMasks[k - 1] = rom8(SYM_OAMHighMasks + k - 1);
-    ResetStub();
+    Reset_Fast_ret();
     g.IniDispShadow[0] = 0x8F;
     for (int k = 0x0C; k >= 0; k--) w8(RAM_OFF_FrameHook + k, rom8(SYM_InitHooks + k));
     for (int k = 0x24; k >= 0; k--) w8(RAM_OFF_FrameCount + k, 0);
@@ -59,7 +59,7 @@ void Reset_Fast(void)
     Opening();
 }
 
-void ResetStub(void) {}
+void Reset_Fast_ret(void) {}
 
 /* The reset vector (native mode, the stack at $1FFF, the direct page 0: the machine's) */
-void Reset(void) { Reset_Fast(); }
+void Start(void) { Reset_Fast(); }

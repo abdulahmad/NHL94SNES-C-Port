@@ -26,7 +26,7 @@ struct G {
     uint16_t ClipTopUnused; /* ResetPPURegs is the only access: sta.b $30 = $FFF0 (with $2C = $FFF0, $2E = $0100, $32 = $00E0: ... */
     uint16_t ClipBottomUnused; /* ResetPPURegs sta.b $32 = $00E0 (224, screen height); never read anywhere */
     uint32_t SoundTable; /* Long pointer to the sound/instrument offset table; $36 = SoundTable+2 (bank, stored as a word so ... */
-    uint16_t NMISkip; /* NMI_Fast: lda.b $38 : beq -> nonzero = just pla/plb/rti (no hook, DMA, OAM, sound) */
+    uint16_t NMISkip; /* VBlank: lda.b $38 : beq -> nonzero = just pla/plb/rti (no hook, DMA, OAM, sound) */
     uint16_t DMAQueueHead; /* Read index into the DMAQueue ring ($0100, 8-byte entries, and #$03FF): NMI_HookReturn ldx $3A ... */
     uint16_t DMAQueueTail; /* Write index of the DMAQueue ring: QueueVRAMDMA, DMAToVRAMHigh, FillVRAM, FillVRAMSplit, ... */
     uint16_t MulCand[2]; /* Multiplicand of the software multiply (taken when Mode7InUse bit 6 is set): MulFrac8 $3E = A low ... */
@@ -111,12 +111,12 @@ struct G {
     uint16_t CGDMASrc; /* DMAToCGRAM sta CGDMASrc ($0C); NMI_HookReturn -> A1T0L */
     uint8_t CGDMABank[2]; /* DMAToCGRAM sta CGDMABank ($0E); NMI_HookReturn ldx CGDMABank -> A1B0 */
     uint8_t FrameHookNext[3]; /* SetFrameHook sta FrameHookNext / stx $0772 (bank); NMI_SendOAM: when $0771 (address high byte) is nonzero copies ... */
-    uint8_t NMIHookNext[3]; /* ClearNMIHook sta NMIHookNext / stx $0775 (bank); NMI_Fast: when $0774 is nonzero copies it to NMIHook ... */
+    uint8_t NMIHookNext[3]; /* ClearNMIHook sta NMIHookNext / stx $0775 (bank); VBlank: when $0774 is nonzero copies it to NMIHook ... */
     uint16_t JoyPad[5]; uint8_t JoyPad_end_; /* buttons held, a word per pad (5 pads) */
     uint8_t Multi5Sig[6]; /* Multi5ConnectCheck rol.w JOYSER0/1 bit 1 into $0782/Multi5Sig (port 1) and $0784/$0783 (port 2); $FF then ... */
     uint16_t FrameCountHold; /* NMI_SendOAM: lda FrameCountHold bne skips inc FrameCount; no writer in routines apart from the Reset_Fast clear */
     uint8_t FrameHook[3]; /* NMI_SendOAM jml [FrameHook] (returns to NMI_FrameHookReturn); loaded from FrameHookNext; Reset_Fast copies ... */
-    uint8_t NMIHook[3]; /* NMI_Fast jml [NMIHook] (returns to NMI_HookReturn); loaded from NMIHookNext */
+    uint8_t NMIHook[3]; /* VBlank jml [NMIHook] (returns to NMI_HookReturn); loaded from NMIHookNext */
     uint8_t IRQHook[3]; /* IRQ_Fast jml [IRQHook]; SetIRQ sta IRQHook / stx $0791 (bank = IRQHook+2); IRQOff sets IRQHook_Off; the IRQ_* ... */
     uint16_t seed[2]; /* RandomWord's two 16-bit generators (seed, $0794); FallDown/chk4shot/asspuckc/chk4lc read seed where 93S ... */
     uint8_t RAMTag[6]; /* Reset_Fast copies InitTag 'EACDSI' here (and to RAMTag2 and ReplayBufferEnd); no reader found - a RAM marker */
@@ -141,7 +141,7 @@ struct G {
     uint16_t FrameTilesFail; /* GetFrameTiles stores $FFFF here when LoadFrameTiles finds no room; never read */
     uint16_t CacheUseMark; /* InitSprites sets 2; GetFrameTiles stores it in the entry's FrameCacheUse word, which SpriteFrameStart shifts ... */
     uint16_t DrawFrameNum; /* DrawSprite/FreeFrameTiles/GetFrameTiles store the frame number here; with FrameByNumber set the cache ... */
-    uint16_t FrameByNumber; /* Nonzero ($FFFF from StartGame/ReloadRink): GetFrameTiles/FreeFrameTiles/DrawSpritePieces find the entry by ... */
+    uint16_t FrameByNumber; /* Nonzero ($FFFF from StartGame/ExitStatsScreen): GetFrameTiles/FreeFrameTiles/DrawSpritePieces find the entry by ... */
     uint16_t PieceX; /* DrawSprite/DrawSpritePieces: x offset of the current frame piece (with $1C); ... */
     uint16_t PieceY; /* DrawSprite/DrawSpritePieces: y offset of the piece (from $1E); LoadFrameTiles reuses it for the 8x8 tile ... */
     uint16_t PieceTile; /* DrawSpritePieces: piece tile/attribute word, + first tile $16, eor $14 -> OAM +2 */
@@ -312,7 +312,7 @@ struct G {
     uint16_t percue; /* StartPer sets $FFFF (cleared in some modes); puckfaceoff2 then plays team song slot 0 (the period start ... */
     uint16_t cursong; /* PlayTeamSong stores the TeamSongs slot + 1 of the song started; the SPC uploads and UpdateStreamSfx (no ... */
     uint16_t sprhflip; /* addframe parameter: nonzero = x flip (attribute $4000); setsortcords/checkfo set attribute & $0800 as 93S ... */
-    uint16_t reloadtime; /* StartPer clears it, ReloadRink adds 60 each time it reloads the rink; never read. */
+    uint16_t reloadtime; /* StartPer clears it, ExitStatsScreen adds 60 each time it reloads the rink; never read. */
     uint16_t sprattr; /* addframe parameter: the OAM attribute word for DrawSprite (priority, palette $0200; addframe ORs in the ... */
     uint16_t sprpriority; /* checkfo sets $3000 for the faceoff sprites and $2000 after, ORed into sprattr; setoptions sets 0: as 93S ... */
     uint16_t sprframe; /* addframe parameter: sprite frame number (1-based, at most $3D0), as 93S sprframe; set by setsortcords, ... */
@@ -499,7 +499,7 @@ struct G {
     uint16_t tmOneTimers[2]; /* one-timers (asspassrec) */
     uint16_t tmOneTimerGoals[2]; /* one-timer goals */
     uint16_t tmflags[2]; /* team flags */
-    uint16_t tmtimeouts[2]; /* timeouts left (StartGame sets 1; PauseTimeout) */
+    uint16_t tmtimeouts[2]; /* timeouts left (StartGame sets 1; TimeoutMenu) */
     uint16_t tmlcchoice[2]; /* the chosen line change row (lcfound, SetLCmode2) */
     uint16_t tmpde[52]; /* energy of each roster player (word per player) */
     uint16_t tmpdst[52]; /* bench/ice/box state of each roster player */
@@ -509,7 +509,7 @@ struct G {
     uint8_t tmpshots[52]; /* shots (goalies: shots against) */
     uint8_t ppenmin[52]; /* penalty minutes */
     uint16_t CwdExciteLvl; /* crowd excitement: raised by hits and goals, set per playoff stage at a period start */
-    uint16_t CrowdLoud; /* 1 at 110 dB or more; cleared under 105 dB (CheckCrowdMeter) */
+    uint16_t CrowdLoud; /* 1 at 110 dB or more; cleared under 105 dB (Crowd_Noise) */
     uint16_t CurCrowdMeter; /* the crowd meter in dB: Sroot(CwdExciteLvl * 4) + 65, at most 128 */
     uint16_t CrowdPeak; /* the highest CurCrowdMeter of the game */
     uint16_t CrowdAvg; /* the game's average meter (CrowdMeterSum / CrowdMeterCount) */
@@ -622,9 +622,9 @@ struct G {
     uint16_t BA_Skater_Offset; /* Roster index of the penalty shot shooter: StartPenaltyShot = pnum of BA_Sktr_SCnum, PlayShootout = shooter ... */
     uint16_t BA_Team; /* Shooting team of the penalty shot / shootout turn (0 home, 2 visitors): StartPenaltyShot, PlayShootout; ... */
     uint16_t pspad[2]; /* Pad index (into padside) controlling the penalty shooter, $FFFF none: Bcheck copies playerpad,y, PlayShootout ... */
-    uint16_t psfoxsave; /* StartPenaltyShot saves the faceoff spot x (fox) here and zeroes it; EndPenaltyShot puts it back into ... */
-    uint16_t psfoysave; /* StartPenaltyShot saves the faceoff spot y (foy); EndPenaltyShot puts it into lty (last touch y) */
-    uint16_t penshot; /* Penalty shot pending / under way: StartPenaltyShot sets 1, EndPenaltyShot and StartGame clear; Goal, ... */
+    uint16_t psfoxsave; /* StartPenaltyShot saves the faceoff spot x (fox) here and zeroes it; EndPenaltyShotPlay puts it back into ... */
+    uint16_t psfoysave; /* StartPenaltyShot saves the faceoff spot y (foy); EndPenaltyShotPlay puts it into lty (last touch y) */
+    uint16_t penshot; /* Penalty shot pending / under way: StartPenaltyShot sets 1, EndPenaltyShotPlay and StartGame clear; Goal, ... */
     uint16_t penshotlive; /* Set 1 by SetupPenaltyShot when the shot starts, cleared by puckfaceoff (.9) and StartGame; ... */
     uint16_t pstimer; /* Penalty shot time limit: SetupPenaltyShot sets 1000, Gameloop subtracts d7 outside the shootout and calls ... */
     uint16_t sopathx; /* assbreakaway: x of the current point of the CPU breakaway skater's path to the net (from the .10 point ... */
@@ -654,7 +654,7 @@ struct G {
     uint8_t TileRunPrev[97]; /* previous run of each tile run ($FF = none) */
     uint16_t carriedy; /* updateplayers stores pucky here while puckc >= 0, as 93S updateplayers .cy stores carriedy. */
     uint16_t ltplayer; /* a2touchpuck stores the touching player (index / 2) here like 93S a2touchpuck sta ltplayer. */
-    uint16_t ltx; /* a2touchpuck stores Xpos,y (93S ltx); Stop4Pen loads it as the OOP faceoff x like 93S; EndPenaltyShot ... */
+    uint16_t ltx; /* a2touchpuck stores Xpos,y (93S ltx); Stop4Pen loads it as the OOP faceoff x like 93S; EndPenaltyShotPlay ... */
     uint8_t lty[38]; /* a2touchpuck stores Ypos,y (93S lty); Stop4Pen loads it into d1 like 93S. */
     uint16_t fobox; /* puckfaceoff2 sets it (FaceOffMap+6) when the faceoff box is drawn, Endfaceoff clears it, SetLCmode2 / ... */
     uint16_t fodir1; /* Endfaceoff loads it into d3 (home pull direction) as 93S lda fodir1; puckfaceoff2 sets $FFFF. */
@@ -691,7 +691,7 @@ struct G {
     uint16_t horblocks; /* Set while DrawHorTeams draws the blocks: DrawTeamBlocks skips the map when redrawblocks is 0, ... */
     uint16_t cardblock; /* Set while DrawPlayerCard draws its team block: DrawTeamBlocks moves the name sprites (x -8, +4 / +4). */
     uint16_t bigtextchar; /* RenderBigText: next letter tile (+2 per letter), used by the BigLetter hooks and by SendBigText / ... */
-    uint16_t drawlinesback; /* LineEditor sets 1; DrawEditLinesTitle then draws DrawEditLinesBack first and clears it. */
+    uint16_t drawlinesback; /* LineEditor sets 1; DrawTeamScreen_title then draws DrawTeamScreen first and clears it. */
     uint16_t pausesubmenu; /* PauseEditLines / PauseShootoutSetup set it around LineEditor / ShootoutShooters run from the pause ... */
     uint16_t phototeams[2]; /* LoadMatchupPhotos: team (home +0, visitors +2) whose matchup photos are unpacked in the $7F photo buffer, ... */
     uint16_t homepicaddr; /* DrawPlayerPicture: bank $7F address of the home picture tiles ($6F00 or $5100+MatchupPhotoOffsets); ... */
@@ -725,7 +725,7 @@ struct G {
     uint16_t gss2[8]; /* SetScore: team 2 score (93S gss2,y). */
     uint16_t gsflags[8]; /* ReadPassBits / InitScores test and set bit 2 (series over) as 93S gsflags,y. */
     uint16_t printfontset; /* tile base of the selected print font */
-    uint16_t charofs; /* Tile offset added to text map words: setupice / ReloadRink set $FF00, PlayoffScreen 0; PushRef, EASNLogo, ... */
+    uint16_t charofs; /* Tile offset added to text map words: setupice / ExitStatsScreen set $FF00, PlayoffScreen 0; PushRef, EASNLogo, ... */
     uint16_t charofs2; /* Second tile offset, cleared with charofs by the screen setups (SetupScreen, LoadScoutingScreen, setupice) ... */
     uint16_t BigFontChars; /* setupice sets it to Framercset+4 ahead of the BigFontTiles; printbig adds it, as 93S BigFontChars. */
     uint16_t EASNcset; /* setupice: first tile of RinkLogoTiles after the faceoff tiles; EASNLogo pastes EASNLogoMap with it (93S ... */

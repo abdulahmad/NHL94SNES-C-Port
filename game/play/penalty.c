@@ -886,7 +886,7 @@ void printscores1(void)
 void ClrHor(void)
 {
     if (g.brightness) {
-        FadeOut();
+        forcefade();
         WaitFadeOut();
         FadeIn();
         g.fadestep = 0x0A;
@@ -1157,7 +1157,7 @@ void chkprogress(void)
     }
     g.sflags |= 0x0400;
     if (g.brightness) {
-        FadeOut();
+        forcefade();
         WaitFadeOut();
     }
     SetHor();

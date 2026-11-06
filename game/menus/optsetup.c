@@ -182,7 +182,7 @@ void setoptions(void)
 {
     uint16_t a2 = g.a2[0];
     uint16_t d0, d1, d2 = 0, d3, d6;
-    FadeOut();
+    forcefade();
     g.matchupphotos = 1;
     g.playerstatson = 0;
     g.phototeams[0] = 0xFFFF;

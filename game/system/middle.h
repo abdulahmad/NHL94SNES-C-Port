@@ -35,7 +35,7 @@ void defaultsprites_0(void);
 void forceblack(void);
 void QueueTextDMA(void);
 void updatescroll_rows(void);
-Pad waitxsr(uint16_t d0);
+Pad waitx(uint16_t d0);
 uint16_t Mul8XS(uint16_t a, uint16_t x);
 uint16_t Mul8S(uint16_t a, uint16_t x);
 uint32_t Mul16x8U(uint16_t x, uint16_t a);

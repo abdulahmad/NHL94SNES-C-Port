@@ -1525,11 +1525,11 @@ void Mode7MapToVRAM_t1(uint32_t p0, uint32_t p1, uint16_t a, uint16_t x, uint16_
     } while (--n);
 }
 
-/* The NMI vector: NMI_Fast, then NMI_FrameHookReturn unless NMISkip was set when it came */
+/* The NMI vector: VBlank, then NMI_FrameHookReturn unless NMISkip was set when it came */
 void NMI(void)
 {
     uint16_t skip = g.NMISkip;
-    NMI_Fast();
+    VBlank();
     if (!skip) NMI_FrameHookReturn(nmi_b);
 }
 
@@ -1537,7 +1537,7 @@ void NMI(void)
  * for the frame, the NMI hook (NMIHookNext taken when set), then NMI_HookReturn. The NMI_Tick at its
  * end runs the frame hook; the frame hook's own return, NMI_FrameHookReturn (the pads, SoundUpdate,
  * the sound stream), is the caller's (NMI). */
-void NMI_Fast(void)
+void VBlank(void)
 {
     io_r16(0x4210);
     if (g.NMISkip) return;
@@ -1703,7 +1703,7 @@ void WaitFrames_Inc(uint16_t x, uint16_t y) { WaitFrames(x, (uint16_t)(y + 1)); 
 /* Fade the screen in after a 5-frame delay, or out: BrightnessHook as the frame hook */
 void FadeIn(void) { g.fadestep = 5; SetFrameHook(SYM_BrightnessHook); }
 
-void FadeOut(void) { g.fadestep = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
+void forcefade(void) { g.fadestep = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
 
 /* Set the frame hook back to the empty routine */
 void ClearFrameHook(void) { SetFrameHook(SYM_NullHook); }

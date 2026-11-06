@@ -445,7 +445,7 @@ out:
     SpriteFrameEnd();
     g.textdirtylo = 0;
     g.textdirtyhi = 0x3FF;
-    FadeOut();
+    forcefade();
     FadeOutSound();
     while (g.brightness || g.SoundFadeSpeed) hal_wait_interrupt();
     forceblack();

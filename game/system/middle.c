@@ -505,7 +505,7 @@ void defaultsprites_0(void)
 void forceblack(void)
 {
     if (g.brightness) {
-        FadeOut();
+        forcefade();
         WaitFadeOut();
     }
     BlankScreen();
@@ -576,7 +576,7 @@ void updatescroll_rows(void)
 
 /* Wait d0 + 1 frames (drawing each one) or until a pad with a team holds a button (ReadjoyA's d3);
  * returns the pad read last (zero when no pad has a team: the direct page's d0-d3 as they were) */
-Pad waitxsr(uint16_t d0)
+Pad waitx(uint16_t d0)
 {
     Pad p = { 0, 0, 0, 0 };
     uint16_t n = d0;

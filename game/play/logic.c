@@ -20,7 +20,7 @@ void SetSPAFromA(int o, uint16_t anim)
 }
 
 /* The puck slides and its spin restarts: during the spin frames its face turns around. */
-void pucknothing(void)
+void puckunflip(void)
 {
     if (g.SPAnum[14] >= 8 && g.SPAnum[14] < 0x18) g.facedir[14] ^= 2;
     g.facedir[14] |= 4;
@@ -412,7 +412,7 @@ uint16_t StartBreakaway(uint16_t d0)
 
 /* End the penalty shot or shootout attempt under way: no shooter, ShootoutWonBy 10, the faceoff
  * spot saved at its start back as the last touch. */
-void EndPenaltyShot(int o)
+void EndPenaltyShotPlay(int o)
 {
     if (!g.PenShotActive || !g.penshot) return;
     g.penshot = 0;
@@ -3018,7 +3018,7 @@ void pucknorm_move(int x, int a3, uint16_t d0, uint16_t a0)
         if (back) {
             g.pspuckback++;
             if (g.pspuckback < 0x30) goto l10;
-            EndPenaltyShot(x);
+            EndPenaltyShotPlay(x);
         }
     }
     g.pspuckback = 0;
@@ -3031,7 +3031,7 @@ l10:
 l12:
     g.temp2b[14] = 0x78;
 l13:
-    if (!(((uint16_t)g.puckvz & 0xFF00) | (uint16_t)g.puckz)) pucknothing();
+    if (!(((uint16_t)g.puckvz & 0xFF00) | (uint16_t)g.puckz)) puckunflip();
     checkpuckcoll(x, a3, a0);
 }
 
@@ -3239,7 +3239,7 @@ void puckfaceoff2(int o, int a3)
     g.hattrick = 0;
     if (g.Crowdlevel >= 0x258) g.Crowdlevel = 0x258;
     if (g.brightness) {
-        FadeOut();
+        forcefade();
         WaitFadeOut();
         g.brightness = 0;
     }
@@ -4110,7 +4110,7 @@ void doinput(int o, uint16_t d0, uint16_t d1, uint16_t d2, uint16_t d3, uint16_t
 {
     setpads(o, d4);
     d4 = (uint16_t)(d4 - 2);
-    if (d3 & 0x1000) { PauseFromPad(d4); return; }
+    if (d3 & 0x1000) { startpause_pad(d4); return; }
     if (g.sfhormode && !(d0 & 8)) d0 = (uint16_t)(d0 + 2) & 7;
     if (g.sflags & 0x100) { faceoffinput(o, d0, d1); return; }
     if (r16(RAM_OFF_asscur + 2 * o) == 0xBCC7) return;
@@ -4193,7 +4193,7 @@ static void run_assignment(uint32_t addr, int o, uint16_t a2)
     case SYM_assfaceoffpl: assfaceoffpl(o); break;
     case SYM_pucknorm: pucknorm(o, o, r16(RAM_OFF_d0), r16(RAM_OFF_a0)); break;   /* (d0, a0: the direct page's) */
     case SYM_puckshadow: puckshadow(o); break;
-    case SYM_pucknothing: pucknothing(); break;
+    case SYM_puckunflip: puckunflip(); break;
     case SYM_puckfaceoff: puckfaceoff(o, o, r16(RAM_OFF_d0), r16(RAM_OFF_a0)); break;   /* (d0, a0: the direct page's) */
     case SYM_puckfaceoff2: puckfaceoff2(o, o); break;
     }

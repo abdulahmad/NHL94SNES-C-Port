@@ -526,13 +526,13 @@ void UpdateScoutingDisplay_para(uint32_t a1, uint16_t d0)
     uint8_t c = m8(a2);
     g.PlayerScrollCtr++;
     switch (c) {
-    case 'r': ScoutHomeArena(d0); return;
-    case 'v': ScoutVisCity(d0); return;
-    case 'h': ScoutHomeCity(d0); return;
+    case 'r': GetTeamArena_home(d0); return;
+    case 'v': GetTeamCity_vis(d0); return;
+    case 'h': GetTeamCity_home(d0); return;
     case 'V': ScoutVisName(d0); return;
     case 'H': ScoutHomeName(d0); return;
-    case 'm': ScoutVisNick(d0); return;
-    case 'n': ScoutHomeNick(d0); return;
+    case 'm': GetTeamNickname_vis(d0); return;
+    case 'n': GetTeamNickname_home(d0); return;
     case 't': ScoutHotTeam(d0); return;
     case 'e': ScoutExtremely(a1, a2, d0); return;
     case '0': ScoutHomeHot1(d0); return;
@@ -621,7 +621,7 @@ void GameOver(void)
  * cartridge. */
 void PeriodOver(void)
 {
-    FadeOut();
+    forcefade();
     FadeOutSound();
     WaitFrame();
     WaitFrame();
@@ -656,7 +656,7 @@ final:
     if (g.gsp == 4) { GameOver(); return; }
     g.lastperiod = g.gsp;
     FadeOutSound();
-    FadeOut();
+    forcefade();
     while (g.SoundFadeSpeed) hal_wait_interrupt();
     SPCGameUpload();
     g.BA_Sktr_SCnum = 0xFFFF;

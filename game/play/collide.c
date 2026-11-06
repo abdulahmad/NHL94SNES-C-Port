@@ -291,7 +291,7 @@ void wallcoll(int o, uint16_t cos, uint16_t sin, int a3)
     if (!(g.puckvz & 0x8000)) g.puckvz = 0;
 done:
     if (x != 14 || !(g.puckc & 0x8000)) return;
-    EndPenaltyShot(14);
+    EndPenaltyShotPlay(14);
     g.breakaway = 0;
     g.onetimer = 0;
 }
@@ -306,7 +306,7 @@ void wallcollb_out(void)
     if (g.pucky[0] < 0) g.attribute[14] |= 0x8000;
     g.frame[15] = 0;
     if (!g.gmclock) ShootoutWonBy((uint16_t)(g.ltplayer << 1) >> 1, 6);   /* (the last toucher) */
-    EndPenaltyShot(14);                                   /* (X the puck: wallcollb comes here only for it) */
+    EndPenaltyShotPlay(14);                                   /* (X the puck: wallcollb comes here only for it) */
     g.breakaway = 0;
     g.onetimer = 0;
 }
@@ -551,7 +551,7 @@ void puckglue(int o, uint16_t a2)
 {
     if (a2 != (uint16_t)g.puckc) {
         PuckSfx(3);
-        EndPenaltyShot(o);                                /* (o: the X it was called with) */
+        EndPenaltyShotPlay(o);                                /* (o: the X it was called with) */
         g.breakaway = 0;
         g.onetimer = 0;
     }

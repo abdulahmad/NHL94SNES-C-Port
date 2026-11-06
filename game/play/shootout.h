@@ -2,7 +2,7 @@
 #pragma once
 #include <stdint.h>
 
-void ShootoutStub(void);
+void PlayShootout_ret(void);
 void InitShooters(uint16_t a2);
 void SetShooter(uint16_t a2);
 void ShootersSetGoalie(uint16_t a, uint16_t y);

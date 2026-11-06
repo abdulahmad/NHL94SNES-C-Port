@@ -2,7 +2,7 @@
 #include "game.h"
 
 /* Does nothing */
-void ShootoutStub(void) {}
+void PlayShootout_ret(void) {}
 
 /* Shootout: the 8 bytes of team a2's starters list (team data + its word at +$0C) as its shooter list */
 void InitShooters(uint16_t a2)
@@ -360,7 +360,7 @@ void PlayShootout(void)
         PlayShootout_t1(2);
         if (!((uint16_t)(g.shootoutround - 5) & 0x8000)) g.shootoutdecider = 1;
         PlayShootout_t1(0);
-        ShootoutStub();
+        PlayShootout_ret();
         g.shootoutround++;
     } while (((uint16_t)(g.shootoutround - 6) & 0x8000) || g.tmscore[0] == g.tmscore[1]);
     g.shootoutmode = 0;

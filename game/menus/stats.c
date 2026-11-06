@@ -250,7 +250,7 @@ void ShowRosterLine(uint16_t a2)
 void SetupScreen(void)
 {
     g.FrameByNumber = 0;
-    FadeOut();
+    forcefade();
     Decompress(SYM_TeamLogoSprites, logosprbuf);
     WaitFadeOut();
     forceblack();

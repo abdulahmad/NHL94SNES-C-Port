@@ -110,7 +110,7 @@ void console_run(void)
     machine.write_a = write_a;
     call_long_other = call_by_address;
     if (setjmp(top)) resume_fn();
-    else Reset();
+    else Start();
     fprintf(stderr, "the game returned from its top level\n");
     exit(3);
 }

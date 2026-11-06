@@ -4,7 +4,7 @@
 
 void StartDumpIn(int o);
 void SetSPAFromA(int o, uint16_t anim);
-void pucknothing(void);
+void puckunflip(void);
 uint16_t GetGoalieCount(uint16_t a2);
 void AssignPadPlayer(uint16_t d0, uint16_t d4);
 void StartPenaltyShot(void);
@@ -24,7 +24,7 @@ void PassPadToTeammate(int o, uint16_t d4);
 void FaceoffPads(int a3);
 int assdumpin(int o, int a3);
 uint16_t StartBreakaway(uint16_t d0);
-void EndPenaltyShot(int o);
+void EndPenaltyShotPlay(int o);
 void assgoalie(int o, uint16_t a2, int a3);
 
 void assfaceoff(int o);
