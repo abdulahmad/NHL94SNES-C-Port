@@ -33,3 +33,13 @@
 #include "print.h"
 #include "decompress.h"
 #include "main.h"
+
+/* src/data/tables/asstab.asm slot indexes (this ROM's numbers; 92G a* / p* names, 94S extras) */
+enum {
+    anull = 0x00, adefo = 0x01, adefd = 0x02, awingd = 0x03, awingo = 0x04,
+    acenterd = 0x05, acentero = 0x06, agoalie = 0x07, ascore = 0x08, astanley = 0x09,
+    aeben = 0x0A, aepen = 0x0B, abench = 0x0C, apenalty = 0x0D, adopen = 0x0E,
+    agoalietopuck = 0x0F, abreakaway = 0x10, apuckc = 0x11, anearest = 0x12, ashoot = 0x13,
+    adumpin = 0x14, apassrec = 0x15, afaceoff = 0x16, afaceoffpl = 0x17, pnorm = 0x18,
+    pshad = 0x19, pnothing = 0x1A, pfaceoff = 0x1B, pfaceoff2 = 0x1C
+};

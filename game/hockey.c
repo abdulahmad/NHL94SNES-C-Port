@@ -137,7 +137,7 @@ static void start_period(void)
     }
     g.fox = 0;
     g.foy = 0;
-    assreplace(14, 0x1B);
+    assreplace(14, pfaceoff);
     ClearTextMap();
     g.sflags |= 0x0400;
     g.recsfx = 0xFFFF;
@@ -345,12 +345,12 @@ void periodicevents(void)
  * pad flags are taken from gamenum * 2 on, and the messages' player is wherever that count ended.) */
 void clockcont_0(void)
 {
-    uint16_t x = 0x1C, d0 = 0x18;
+    uint16_t x = 0x1C, d0 = pnorm;
     int p0 = 0;
-    assinsert(14, 0x18);
+    assinsert(14, pnorm);
     StreamSfx(1);
     if (g.gsp < 2) goto tied;
-    d0 = 8;
+    d0 = ascore;
     x = 0;
     if (g.playoffRoundIdx == 3) {
         int won = g.bosgames == 7;
@@ -363,7 +363,7 @@ void clockcont_0(void)
         }
         if (won && g.OptPlayMode) {
             p0 = 1;
-            d0 = 9;
+            d0 = astanley;
             for (int k = 0; k < 12; k++, x += 2) w16(RAM_OFF_pflags + x, r16(RAM_OFF_pflags + x) & 0xFFF7);
             x = 0;
         }
@@ -375,7 +375,7 @@ void clockcont_0(void)
         for (int k = 0; k < 6; k++, x += 2) {
             if ((int16_t)r16(RAM_OFF_position + x) <= 0) continue;
             assinsert(x >> 1, (uint8_t)d0);
-            d0 = 8;
+            d0 = ascore;
         }
     }
 over:
