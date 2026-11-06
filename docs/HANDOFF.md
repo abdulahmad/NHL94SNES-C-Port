@@ -7,7 +7,7 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 
 ## Now
 
-S3 `ram.h` stacked on ROM order [#6](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/6). Field names follow `ram94s.asm` equates; offsets stay. Names 844/0/6/5. Clock 851. `test/check.sh` 7 of 7. vanilla PASS. Windowed `snes94` not built here (no SDL2). Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked. Do not merge to main.
+S0–S3 of the C-port finish are on `main` (checker, flatten, ROM order, `ram.h`). Names 844/0/6/5. Clock 851. `test/check.sh` 7 of 7. vanilla PASS. Windowed `snes94` not built here (no SDL2). Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked.
 
 ## Done
 
