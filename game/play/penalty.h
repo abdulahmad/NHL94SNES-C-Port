@@ -9,7 +9,6 @@ uint16_t loadTeamStruct(int o);
 void ChkShotStat_add(int o, uint16_t stat, uint16_t amount);
 void AlignBigNumber(uint32_t a1);
 void ClearPenaltyBuffer(void);
-void updatePPTeamTime(void);
 uint16_t RemovePlayerFromList(uint16_t a0);
 void reenergizeteam(uint16_t a2);
 void chkatop(void);

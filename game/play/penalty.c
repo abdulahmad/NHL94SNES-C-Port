@@ -43,14 +43,6 @@ void ClearPenaltyBuffer(void)
     for (int i = 0; i < 32; i++) w16(PenBuf + 2 * i, 0);
 }
 
-/* The team with more players on the ice gets one more tick of power play time */
-void updatePPTeamTime(void)
-{
-    uint16_t d = (uint16_t)(g.tmap[0] - g.tmap[1]);
-    if (!d) return;
-    g.tmPwrPlayTime[d & 0x8000 ? 1 : 0]++;
-}
-
 /* Remove the box list entry before index a0 by moving the rest down to the end marker (bit 7); returns a0
  * stepped back */
 uint16_t RemovePlayerFromList(uint16_t a0)

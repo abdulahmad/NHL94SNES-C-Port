@@ -59,7 +59,5 @@ void Reset_Fast(void)
     Opening();
 }
 
-void Reset_Fast_ret(void) {}
-
 /* The reset vector (native mode, the stack at $1FFF, the direct page 0: the machine's) */
 void Start(void) { Reset_Fast(); }
