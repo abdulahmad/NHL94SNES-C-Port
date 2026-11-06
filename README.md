@@ -33,6 +33,8 @@ make
 (Windows: run it from the UCRT64 shell, or `make dist` for `build/dist/snes94.exe`, one file
 with SDL2 in it. Drag a ROM onto it, or put it beside it: any `.smc` that is the game.)
 
+**PortMaster / RG35XX:** zip layout and launch script are in [`portmaster/`](portmaster/). Handheld is 60 Hz, overlay only, fullscreen SDL_Renderer / KMSDRM (no desktop OpenGL, no message box). Copy your dump to `roms/nhl94.smc`. `./portmaster/pack.sh` builds `nhl94s.zip`. Private zip; the ROM is never included.
+
 ## Controls
 
 | | Pad 1 | Pad 2 | Controller | In play |

@@ -33,8 +33,9 @@ RUNTIME := $(wildcard runtime/src/*.c)
 GAMEO   := $(GAME:%.c=build/obj/%.o)
 RTO     := $(RUNTIME:%.c=build/obj/%.o)
 CONSOLEO := build/obj/platform/hal.o build/obj/platform/clock.o build/obj/fnsyms_gen.o build/obj/uncounted_gen.o
-OVERBARO := build/obj/overbar/scaler.o build/obj/overbar/host.o build/obj/overbar/menu.o \
-	build/obj/overbar/overlay.o build/obj/overbar/filemenu.o build/obj/overbar/pulseman_menu.o
+OVERBARO := build/obj/overbar/scaler.o build/obj/overbar/host.o build/obj/overbar/present.o \
+	build/obj/overbar/menu.o build/obj/overbar/overlay.o build/obj/overbar/filemenu.o \
+	build/obj/overbar/pulseman_menu.o
 WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o \
 	build/obj/platform/overbar_client.o $(OVERBARO)
 

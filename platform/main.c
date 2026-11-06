@@ -591,7 +591,12 @@ static const char *find_rom(char *found, size_t size)
 
 int main(int argc, char *argv[])
 {
+    ob_profile profile = ob_profile_from_env();
+    Uint32 wflags, rflags;
+    SDL_RendererInfo rinfo;
+    ob_present_apply_hints(profile);
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    profile = ob_profile_detect(SDL_GetCurrentVideoDriver(), ob_handheld_env());
     char *where = SDL_GetBasePath();
     if (where) { snprintf(base, sizeof base, "%s", where); SDL_free(where); }
     settings_load();
@@ -600,19 +605,30 @@ int main(int argc, char *argv[])
     const char *why = NULL;
     if (rom && *rom) why = not_nhl94(rom);
     else if (!(rom = find_rom(found, sizeof found))) rom = "none", why = "no " ROM_EXT " file beside the program is NHL '94";
-    if (why) {                                            /* (a box: a player who opened the program sees it) */
+    if (why) {                                            /* (a box: a player who opened the program sees it; KMSDRM has no box) */
         char msg[1600];
         snprintf(msg, sizeof msg, "No game ROM: %s: %s.\n\nDrag your NHL '94 ROM onto the program, or put it beside the program (any "
                  "name ending " ROM_EXT "), or give its path as game.rom in " SETTINGS " (beside the program).", rom, why);
         fprintf(stderr, "%s\n", msg);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NHL '94", msg, NULL);
+        if (profile != OB_PROFILE_HANDHELD)
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NHL '94", msg, NULL);
         return 1;
     }
-    overbar_client_init(ob_profile_detect(SDL_GetCurrentVideoDriver(), getenv("OVERBAR_HANDHELD") != NULL));
+    overbar_client_init(profile);
     overbar_client_set_stats(show_fps);
-    win = SDL_CreateWindow("NHL '94", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 320 * SCALE, 240 * SCALE, SDL_WINDOW_RESIZABLE);
-    ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED) : NULL;
+    wflags = SDL_WINDOW_RESIZABLE;
+    rflags = SDL_RENDERER_ACCELERATED;
+    if (profile == OB_PROFILE_HANDHELD) {
+        wflags = SDL_WINDOW_FULLSCREEN_DESKTOP;
+        if (overbar_client_host()->vsync) rflags |= SDL_RENDERER_PRESENTVSYNC;
+    }
+    win = SDL_CreateWindow("NHL '94", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 320 * SCALE, 240 * SCALE, wflags);
+    ren = win ? SDL_CreateRenderer(win, -1, rflags) : NULL;
     if (!ren && win) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
+    if (ren && SDL_GetRendererInfo(ren, &rinfo) == 0 && rinfo.name) {
+        int gles = strstr(rinfo.name, "opengles") || strstr(rinfo.name, "gles");
+        ob_host_set_present(overbar_client_host(), gles, 0);
+    }
     tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SNRT_WIDTH, SNRT_HEIGHT) : NULL;
     setup_tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SNRT_WIDTH, SNRT_HEIGHT) : NULL;
     fps_tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, FPS_W, FPS_H) : NULL;
