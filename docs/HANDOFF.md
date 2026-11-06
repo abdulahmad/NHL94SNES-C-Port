@@ -7,7 +7,7 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 
 ## Now
 
-Asstab slot indexes named from cleaned 94S (`anull`, `adefo`, `abreakaway` $10, `adumpin` $14) on `cursor/asstab-index-names-7e4c`. Values stay this ROM's numbers. S0–S3 remain on `main`. Names 844/0/6/5. Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked. Do not merge to `main` without Abdul.
+Asstab slot indexes named from cleaned 94S (`anull`, `adefo`, `abreakaway` $10, `adumpin` $14) on `cursor/asstab-index-names-7e4c` ([#8](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/8)). Values stay this ROM's numbers. S0–S3 remain on `main`. Names 844/0/6/5. Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked. Do not merge to `main` without Abdul.
 
 ## Done
 
@@ -54,7 +54,7 @@ Asstab slot indexes named from cleaned 94S (`anull`, `adefo`, `abreakaway` $10, 
 6. ~~**S1 flatten**~~ (2026-11-06): `game/play|menus|screen|sound|system` → `game/<module>.c`; Makefile `GAME`/`GAMEH` are `game/*.c` / `game/*.h`.
 7. ~~**S2 ROM order**~~ (2026-11-06): 20 original-routine files in name_map address order. Parked 6 renamed / 5 missing stay (C `SYM_*_t1`/`_t2` at other addresses; title/intro framehooks have no asm label).
 8. ~~**S3 RAM**~~ (2026-11-06): `game/ram.h` field names follow `ram94s.asm` equates; offsets stay. Oracle (plan S1/S2) still parked.
-9. **Asstab index names** (2026-11-06): C immediates use `asstab.asm` slot names at this ROM's numbers. No 94G extras. Review PR; do not merge.
+9. **Asstab index names** (2026-11-06, [#8](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/8)): C immediates use `asstab.asm` slot names at this ROM's numbers. No 94G extras. Review PR; do not merge.
 
 ## Needs
 
