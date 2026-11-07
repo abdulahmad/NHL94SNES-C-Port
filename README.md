@@ -26,6 +26,7 @@ checked with has the SHA-1 `10dcd21be9c5542e82b0b94473bf5ff569b36cf5` (without a
 one is fine).
 
 ```
+git submodule update --init     # Overbar, the host menu (platform/overbar); or clone with --recurse-submodules
 make
 ./build/snes94 nhl94.smc
 ```
