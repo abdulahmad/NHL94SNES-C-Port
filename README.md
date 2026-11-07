@@ -52,13 +52,28 @@ with SDL2 in it. Drag a ROM onto it, or put it beside it: any `.smc` that is the
 ## The overlay
 
 `` ` `` or F11 (or a controller's Back) opens Overbar; F12 toggles stats. Escape does not open it.
-The game waits while it is open. Up / Down choose, Enter (or Left / Right) changes.
+The game waits while it is open (not in an online session). Up / Down choose, Enter (or Left / Right) changes.
 
 - **Video**: Scale Mode (Sharp / CRT / MiSTer / RetroArch / Scale2x / …). The picture is always
   4:3 as if 240 lines existed; the source stays 256×224 (PAR 5:4). There is no Native 1:1.
 - **Controllers...**: the controller setup screen, each button asked for in turn, then the stick's
   dead zone.
 - **Game Speed** (Original): see below. Stats (F12) is the old Show FPS.
+- **Online Play**: see below.
+
+## Online play
+
+The overlay's Online page (or the menu bar's Online Play) hosts or joins a game over the network,
+two to four machines and up to five players, on Overbar's lockstep netplay (`platform/netplay.c`):
+every machine runs the game with every pad's buttons, each frame. Its Role is host, join (type the host's
+address) or both connect (each types the other's). Name, Address and Port take typed text
+(Backspace, Enter, Escape; Ctrl+V pastes). Every machine must run the same build on the same
+cartridge. Once everyone is in, the game starts again from power on on every machine, at the host's
+Game Speed, with the multitap in when the host's game has more than two players. In a session the
+game never waits: the overlay and the controller setup screen draw over it, and that machine's pads
+read 0 while they are open. A difference between the machines ends the session ("desync at step N"),
+as does Leave or a machine not heard from for 10 seconds; then the local game starts again.
+`make netsmoke` and `test/netsmoke.sh ROM` play a session headless between two games on 127.0.0.1.
 
 ## Players
 

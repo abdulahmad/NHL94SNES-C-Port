@@ -27,8 +27,12 @@ ICONO   := build/obj/icon.o   # (the exe's icon, res/icon.ico)
 # from PATH, which are often the 32-bit ones from a 95PC tree → 0xc000007b).
 WINLIB  ?= -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic
 SDL_DLL := $(shell sdl2-config --prefix 2>/dev/null)/bin/SDL2.dll
+NETLIB  := -lws2_32   # (Winsock: online play, Overbar's src/net.c)
 endif
 WINLIB  ?=
+NETLIB  ?=
+# the build, in online play's identity (the machines of a session must run the same one)
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 ROM     ?= $(firstword $(wildcard *.smc *.sfc))
 # the first Python 3 that runs (on Windows python3 may be the Store's stand-in, which only says so)
 PYTHON  ?= $(firstword $(foreach p,python3 python,$(if $(shell $(p) -c "import sys; print(sys.version_info[0])" 2>/dev/null | grep -x 3),$(p))) python3)
@@ -43,7 +47,7 @@ OVERBAR_DIR := platform/overbar
 -include $(OVERBAR_DIR)/overbar.mk
 OVERBARO := $(OVERBAR_LIB_NAMES:%=build/obj/overbar/%.o) build/obj/overbar/pulseman_menu.o
 WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o \
-	build/obj/platform/overbar_client.o $(OVERBARO)
+	build/obj/platform/overbar_client.o build/obj/platform/netplay.o $(OVERBARO)
 
 all: build/snes94$(EXE) build/golden$(EXE)
 
@@ -52,7 +56,13 @@ build/obj/game/%.o: game/%.c $(GAMEH)
 	$(CC) $(CFLAGS) $(INSTR) $(GAMEDEF) $(GAMEINC) -c $< -o $@
 build/obj/platform/%.o: platform/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(OVERBAR_INC) $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF)) -c $< -o $@
+	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(OVERBAR_INC) $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF)) $(if $(findstring netplay,$<),-Ibuild) -c $< -o $@
+build/obj/platform/netplay.o: build/build_id.h
+# rewritten only when the build's name changes (so netplay.o is rebuilt then, and only then)
+build/build_id.h: FORCE
+	@mkdir -p $(dir $@)
+	@echo '#define BUILD_ID "$(BUILD_ID)"' > $@.tmp; if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
+FORCE:
 build/obj/overbar/%.o: $(OVERBAR_DIR)/src/%.c $(OVERBAR_HDRS) | overbar
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(OVERBAR_DEFS) $(OVERBAR_INC) $(SDLCF) -c $< -o $@
@@ -67,7 +77,7 @@ build/obj/runtime/%.o: runtime/%.c $(RTH)
 build/obj/runtime/src/spc.o: build/spc_program.inc
 build/obj/test/%.o: test/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(GAMEINC) -c $< -o $@
+	$(CC) $(CFLAGS) $(GAMEINC) $(OVERBAR_INC) -c $< -o $@
 
 # the sound CPU's programs as C, from the player's ROM
 build/spc_program.inc: tools/gen_spc.py game/symbols_gen.h $(ROM)
@@ -92,17 +102,21 @@ build/obj/icon.o: res/icon.rc res/icon.ico
 	@mkdir -p $(dir $@)
 	$(WINDRES) -I res $< -O coff -o $@
 build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
-	$(CC) -o $@ $^ $(SDLLIB) $(WINLIB) -lm
+	$(CC) -o $@ $^ $(SDLLIB) $(WINLIB) -lm $(NETLIB)
 	@if [ -n "$(SDL_DLL)" ] && [ -f "$(SDL_DLL)" ]; then cp -f "$(SDL_DLL)" build/SDL2.dll; fi
 build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
 	$(CC) -o $@ $^ -lm
+# online play headless, two of it on one machine (test/netsmoke.sh)
+netsmoke: build/netsmoke$(EXE)
+build/netsmoke$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/netsmoke.o build/obj/platform/netplay.o build/obj/overbar/net.o
+	$(CC) -o $@ $^ -lm $(NETLIB)
 # one file to give a player: SDL2 and the compiler's runtime in it, nothing but the system's DLLs needed
 dist: build/dist/snes94$(EXE)
 build/dist/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
 	@mkdir -p $(dir $@)
-	$(CC) -static -s -o $@ $^ $(SDLSTATIC) -lm
+	$(CC) -static -s -o $@ $^ $(SDLSTATIC) -lm $(NETLIB)
 
 clean:
 	rm -rf build
 
-.PHONY: all clean dist overbar
+.PHONY: all clean dist netsmoke overbar FORCE

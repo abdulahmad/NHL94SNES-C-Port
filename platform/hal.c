@@ -30,6 +30,21 @@ void hal_stack_reset(void (*resume)(void))
     longjmp(top, 1);
 }
 
+/* power on again: as the program starts (the work RAM zero, as it is before the game runs) */
+static uint8_t restart_tap;
+static void power_on(void)
+{
+    clock_reset();
+    memset(&g, 0, sizeof g);
+    machine.io.multitap = restart_tap;
+    Start();
+}
+void console_restart(int multitap)
+{
+    restart_tap = (uint8_t)(multitap != 0);
+    hal_stack_reset(power_on);
+}
+
 static int sorted_fn, sorted_addr;
 static FnSym by_addr[4096];
 

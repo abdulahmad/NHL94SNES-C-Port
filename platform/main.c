@@ -10,7 +10,9 @@
  * Back) open the Overbar overlay; F12 toggles stats. Escape does not open it. The game waits while
  * the overlay or the controller setup screen is open. Video is the shared Scale Mode tree; the
  * picture has the pixel shape of a 4:3 screen of 240 lines (PAR 5:4), the 224 real lines drawn. There is
- * no Picture Native. Game Speed is an overlay addon. Controllers... is on Input.
+ * no Picture Native. Game Speed is an overlay addon. Controllers... is on Input (and the menu bar's).
+ * Online play (the overlay's Online page, platform/netplay.c): lockstep, the frames its steps; the
+ * game does not wait for the overlay or the setup screen in a session, whose pads read 0 meanwhile.
  *   pad 1: arrows, Z / X / A / S = B / A / Y / X, Q / W = L / R, Right Shift = Select, Enter = Start
  *   pad 2: I J K L, F / G / R / T, E / Y, Left Shift, Tab
  *   controller N is player N's: d-pad or left stick; south / east / west / north = B / A / Y / X
@@ -30,6 +32,7 @@
 #include "padsetup.h"
 #include "settings.h"
 #include "overbar_client.h"
+#include "netplay.h"
 
 #define SCALE 3
 #define RATE 32040                      /* the sound's samples a second (the sound chip's, as snes9x has it) */
@@ -363,7 +366,7 @@ static void overlay_sync_settings(void)
 {
     show_fps = overbar_client_stats();
     pm_settings_set_int(set, "window.show_fps", show_fps);
-    pm_settings_set(set, "game.speed", original_speed ? "original" : "smooth");
+    if (!netplay_playing()) pm_settings_set(set, "game.speed", original_speed ? "original" : "smooth");   /* (in a session: the host's) */
     settings_write();
     ob_filemenu_sync(overbar_client_host());
 }
@@ -387,13 +390,64 @@ static int overlay_key_to_input(SDL_Scancode k)
     return -1;
 }
 
+/* typed text for a field of the Online page (Name, Address, Port): SDL's text input on while one is edited */
+static int text_on = -1;
+static void sync_text_input(void)
+{
+    int want = overbar_client_open() && ob_overlay_editing(overbar_client_host());
+    if (want == text_on) return;
+    if (want) SDL_StartTextInput();
+    else SDL_StopTextInput();
+    text_on = want;
+}
+
+/* a key while a field is edited: Backspace, Enter and Escape work it (its text comes as
+ * SDL_TEXTINPUT, Ctrl+V pastes); other keys go nowhere */
+static int editing_key_to_input(SDL_Scancode k)
+{
+    if (k == SDL_SCANCODE_BACKSPACE) return MDRT_MENU_LEFT;
+    if (k == SDL_SCANCODE_RETURN || k == SDL_SCANCODE_KP_ENTER) return MDRT_MENU_OK;
+    if (k == SDL_SCANCODE_ESCAPE) return MDRT_MENU_BACK;
+    return -1;
+}
+
 static void overlay_handle(int mdrt_input)
 {
     int r = overbar_client_input(mdrt_input);
     if (r == OB_ID_CONTROLLERS) setup_open(-1);
     overlay_sync_settings();
+    sync_text_input();
     if (overbar_client_quit()) quit();
 }
+
+/* ---- online play: the Online page's hooks (platform/netplay.c) ---- */
+
+static int online_start(const ob_online *o, char *msg, int msg_size)
+{
+    int r = netplay_start(o, multitap(), msg, msg_size);
+    sync_text_input();
+    return r;
+}
+
+static void online_leave(void) { netplay_leave(); }
+static int online_status(char *line, int line_size) { return netplay_status(line, line_size); }
+
+static void online_setup(void)
+{
+    ob_online_ops ops;
+    memset(&ops, 0, sizeof ops);
+    ops.max_pads = PADS;
+    ops.max_delay = 10;
+    ops.roles = 3;
+    ops.start = online_start;
+    ops.leave = online_leave;
+    ops.status = online_status;
+    ops.lan_address = ob_net_lan_address;
+    ob_online_set_ops(overbar_client_host(), &ops);
+}
+
+/* the menu bar's Input > Controllers: the port's own setup screen */
+static void shell_controllers(void) { setup_open(-1); }
 
 /* Auto hides the system pointer during play (the game draws none of its own) and shows it in a menu. */
 static void cursor_update(void)
@@ -439,6 +493,7 @@ static void overlay_mouse(int wx, int wy, int what)
     if (what == 0) return;
     if (r == OB_ID_CONTROLLERS) setup_open(-1);
     overlay_sync_settings();
+    sync_text_input();
     if (overbar_client_quit()) quit();
 }
 
@@ -509,6 +564,7 @@ static void fps_draw(const SDL_Rect *dst)
 
 static void quit(void)
 {
+    netplay_leave();                                      /* (goodbye to the others, so they end at once) */
     settings_write();
     SDL_Quit();
     exit(0);
@@ -521,6 +577,19 @@ static void events(void)
     cursor_update();
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) quit();
+        else if (e.type == SDL_TEXTINPUT) {
+            if (overbar_client_open() && ob_overlay_editing(overbar_client_host())) ob_overlay_text(overbar_client_host(), e.text.text);
+        }
+        else if (e.type == SDL_KEYDOWN && overbar_client_open() && ob_overlay_editing(overbar_client_host())) {
+            SDL_Scancode k = e.key.keysym.scancode;           /* (a field: repeats too, for Backspace) */
+            if (k == SDL_SCANCODE_V && (SDL_GetModState() & (KMOD_CTRL | KMOD_GUI))) {
+                char *clip = SDL_GetClipboardText();
+                if (clip) { ob_overlay_text(overbar_client_host(), clip); SDL_free(clip); }
+            } else {
+                int in = editing_key_to_input(k);
+                if (in >= 0) overlay_handle(in);
+            }
+        }
         else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
             if (setup) setup_key(e.key.keysym.scancode);
             else if (overbar_client_key(e.key.keysym.scancode)) {
@@ -532,6 +601,7 @@ static void events(void)
                 int in = overlay_key_to_input(e.key.keysym.scancode);
                 if (in >= 0) overlay_handle(in);
             }
+            sync_text_input();
         }
         else if (e.type == SDL_CONTROLLERBUTTONDOWN && (setup || overbar_client_open())) {
             int slot = slot_of(e.cbutton.which);
@@ -544,10 +614,12 @@ static void events(void)
                 else if (b == SDL_CONTROLLER_BUTTON_DPAD_LEFT) overlay_handle(MDRT_MENU_LEFT);
                 else if (b == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) overlay_handle(MDRT_MENU_RIGHT);
                 else if (b == SDL_CONTROLLER_BUTTON_A || b == SDL_CONTROLLER_BUTTON_START) overlay_handle(MDRT_MENU_OK);
+                sync_text_input();
             }
         }
         else if (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK && !setup) {
             overbar_client_pad_back();
+            sync_text_input();
         }
         else if (e.type == SDL_CONTROLLERAXISMOTION && e.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
             int slot = slot_of(e.caxis.which);          /* (the stick up or down moves in the menu, once a push) */
@@ -577,6 +649,7 @@ static void events(void)
                 ob_filemenu_event(&wm);
             }
 #endif
+            sync_text_input();
             if (overbar_client_quit()) quit();
         }
         else if (overbar_client_open() && e.type == SDL_MOUSEMOTION)
@@ -594,6 +667,21 @@ static void events(void)
                   || e.window.event == SDL_WINDOWEVENT_SHOWN))
             filemenu_show_for_window();
     }
+}
+
+/* online play's line (connecting, or why a session ended) along the picture's foot */
+static void banner_draw(const SDL_Rect *dst)
+{
+    const char *line = netplay_banner(SDL_GetTicks());
+    if (!line || setup) return;
+    for (int i = 0; i < SNRT_WIDTH * SNRT_HEIGHT; i++) setup_px[i] = 0;
+    for (int y = SNRT_HEIGHT - PM_MENU_CELL_H - 4; y < SNRT_HEIGHT; y++)
+        for (int x = 0; x < SNRT_WIDTH; x++) setup_px[y * SNRT_WIDTH + x] = 0xA0000000u;
+    char cut[SNRT_WIDTH / PM_MENU_CELL_W];
+    snprintf(cut, sizeof cut, "%s", line);
+    pm_menu_text(setup_px, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, 4, SNRT_HEIGHT - PM_MENU_CELL_H - 2, cut, 0xFFD84A);
+    SDL_UpdateTexture(setup_tex, NULL, setup_px, SNRT_WIDTH * 4);
+    SDL_RenderCopy(ren, setup_tex, NULL, dst);
 }
 
 /* the picture: the pixel shape of a 4:3 screen of 240 lines, the 224 real ones drawn (no border), and
@@ -627,6 +715,7 @@ static void draw(void)
                 SDL_UpdateTexture(look_tex, NULL, px, dw * 4);
                 SDL_RenderCopy(ren, look_tex, NULL, &dst);
                 if (show_fps) fps_draw(&dst);
+                banner_draw(&dst);
                 if (setup) setup_draw(&dst);
                 else if (overbar_client_open()) overlay_draw(&dst);
                 SDL_RenderPresent(ren);
@@ -637,22 +726,37 @@ static void draw(void)
     SDL_UpdateTexture(tex, NULL, picture, SNRT_WIDTH * 4);
     SDL_RenderCopy(ren, tex, NULL, &dst);
     if (show_fps) fps_draw(&dst);
+    banner_draw(&dst);
     if (setup) setup_draw(&dst);
     else if (overbar_client_open()) overlay_draw(&dst);
     SDL_RenderPresent(ren);
 }
 
-/* the pads: each player's keys and controller (none while the setup screen is open) */
+/* while a session's step waits for someone's buttons: the window stays alive (the overlay too) */
+static void net_wait(void)
+{
+    events();
+    setup_tick();
+    draw();
+    SDL_Delay(1);
+}
+
+/* the pads: each player's keys and controller (none while the setup screen or the overlay is
+ * open); in a session these are this machine's players' (its first ones), and all five come back
+ * from the session */
 static void read_pads(void)
 {
     const Uint8 *down = SDL_GetKeyboardState(NULL);
+    uint16_t local[PADS], all[NETPLAY_PADS];
     for (int p = 0; p < PADS; p++) {
         uint16_t b = 0;
         for (int i = 0; i < NB; i++) if (key[p][i] != SDL_SCANCODE_UNKNOWN && down[key[p][i]]) b |= buttons[i].bit;
         SDL_GameController *c = player_pad(p);
         if (c) b |= ctrl_buttons(c);
-        machine.io.pad[p] = (setup || overbar_client_open()) ? 0 : b;
+        local[p] = (setup || overbar_client_open()) ? 0 : b;
     }
+    const uint16_t *pad = netplay_pads(local, all, net_wait) ? all : local;
+    for (int p = 0; p < PADS; p++) machine.io.pad[p] = pad[p];
 }
 
 void console_sample(int16_t l, int16_t r)
@@ -673,13 +777,16 @@ void console_frame_done(uint32_t frame)
     }
     fps_frames += changed;
     fps_all++;
-    do {                                                  /* (the game waits while the overlay or the setup screen is open) */
+    int hold;
+    do {                                                  /* (the game waits while the overlay or the setup screen is open, but not in a session) */
         events();
         setup_tick();
         fps_tick();
+        netplay_frame(SDL_GetTicks());                    /* (a session's start or end: the console from power on, not returning) */
         draw();
-        if (setup || overbar_client_open()) SDL_Delay(15);
-    } while (setup || overbar_client_open());
+        hold = (setup || overbar_client_open()) && !netplay_on();
+        if (hold) SDL_Delay(15);
+    } while (hold);
     if (dev) {
         SDL_QueueAudio(dev, sound, (Uint32)n_sound * 4);
         Uint32 enough = QUEUE_FRAMES * RATE / 60 * 4;
@@ -759,6 +866,13 @@ int main(int argc, char *argv[])
     }
     overbar_client_init(profile);
     overbar_client_set_stats(show_fps);
+    online_setup();
+    {
+        ob_shell shell;
+        memset(&shell, 0, sizeof shell);
+        shell.controllers = shell_controllers;
+        ob_shell_set(&shell);
+    }
     wflags = SDL_WINDOW_RESIZABLE;
     rflags = SDL_RENDERER_ACCELERATED;
     if (profile == OB_PROFILE_HANDHELD) {
@@ -806,6 +920,7 @@ int main(int argc, char *argv[])
     dev = SDL_OpenAudioDevice(NULL, 0, &want, &got, 0);
     if (!dev) fprintf(stderr, "no sound (%s): the frames keep time by the clock\n", SDL_GetError());
     for (int i = 0; i < SDL_NumJoysticks(); i++) ctrl_added(i);
+    sync_text_input();                                    /* (off: SDL starts with it on on the desktop) */
     clock_open();
     machine.io.multitap = (uint8_t)multitap();
     console_run();

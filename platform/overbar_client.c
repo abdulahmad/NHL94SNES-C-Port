@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 #include "console.h"
+#include "netplay.h"
 
 static ob_host host;
 static int speed_addon;
@@ -15,6 +16,7 @@ static int speed_addon;
 static int toggle_speed(void *ctx)
 {
     (void)ctx;
+    if (netplay_on()) return 1;                           /* (a session plays at the host's speed, on every machine) */
     original_speed = !original_speed;
     return 1;
 }

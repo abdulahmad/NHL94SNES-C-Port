@@ -18,8 +18,16 @@ extern int original_speed;
 /* the console powered on, the game's time at zero */
 void clock_open(void);
 
+/* the console powered on again, the game's time at zero and every count of the clock's with it */
+void clock_reset(void);
+
 /* runs the game from its reset (platform/hal.c); never returns */
 void console_run(void);
+
+/* from a frame's end (console_frame_done): the console powered on again as at the program's start
+ * (work RAM cleared, the clock reset, the multitap set) and the game run from its reset; never
+ * returns (online play starts and ends this way, every machine at the same point) */
+void console_restart(int multitap);
 
 /* the program's: after each frame (the frames so far; its picture is machine.picture, the pads for
  * the next go in machine.io.pad), and each sound sample (stereo, 32,040 a second) */

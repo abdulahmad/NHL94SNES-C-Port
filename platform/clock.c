@@ -26,6 +26,7 @@
  * handlers and the waits keep the cartridge's time. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "game.h"
 #include "mem.h"
 #include "console.h"
@@ -263,6 +264,18 @@ static void frame_end(snrt *m, void *user)
     spc_catch_up();
     snrt_spc_sync_dsp(&spc);
     console_frame_done(frame);
+}
+
+/* power on again (online play's restart): the clock's time and its counts back to their start too */
+void clock_reset(void)
+{
+    now = beam_at = 0;
+    nmi_next = NMI_AT;
+    memset(lv, 0, sizeof lv);
+    depth = masked = in_irq = in_pass = 0;
+    frame = 0;
+    stream = stream_armed = 0;
+    clock_open();
 }
 
 void clock_open(void)
