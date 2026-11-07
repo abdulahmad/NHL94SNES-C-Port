@@ -607,23 +607,25 @@ static void draw(void)
     SDL_Rect dst = { x, y, w, h };
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
     SDL_RenderClear(ren);
-    if (overbar_client_host()->lores.mode == OB_MODE_MISTER) {
-        static SDL_Texture *mister_tex;
-        static int mister_w, mister_h;
+    if (ob_look_renders(&overbar_client_host()->lores)) {
+        /* the CRT looks and the MiSTer filters: Overbar draws them at the picture's size (the
+         * 95 PC shader's maths, in software), so the scanlines and masks land on whole pixels */
+        static SDL_Texture *look_tex;
+        static int look_w, look_h;
         uint32_t *px = NULL;
         int dw = 0, dh = 0;
-        if (ob_mister_prescale(&overbar_client_host()->lores, picture, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, &px, &dw, &dh)
+        if (ob_look_render(&overbar_client_host()->lores, picture, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, w, h, &px, &dw, &dh)
             && px && dw > 0 && dh > 0) {
-            if (!mister_tex || mister_w != dw || mister_h != dh) {
-                if (mister_tex) SDL_DestroyTexture(mister_tex);
-                mister_tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, dw, dh);
-                mister_w = dw;
-                mister_h = dh;
-                if (mister_tex) SDL_SetTextureScaleMode(mister_tex, SDL_ScaleModeLinear);
+            if (!look_tex || look_w != dw || look_h != dh) {
+                if (look_tex) SDL_DestroyTexture(look_tex);
+                look_tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, dw, dh);
+                look_w = dw;
+                look_h = dh;
+                if (look_tex) SDL_SetTextureScaleMode(look_tex, SDL_ScaleModeLinear);
             }
-            if (mister_tex) {
-                SDL_UpdateTexture(mister_tex, NULL, px, dw * 4);
-                SDL_RenderCopy(ren, mister_tex, NULL, &dst);
+            if (look_tex) {
+                SDL_UpdateTexture(look_tex, NULL, px, dw * 4);
+                SDL_RenderCopy(ren, look_tex, NULL, &dst);
                 if (show_fps) fps_draw(&dst);
                 if (setup) setup_draw(&dst);
                 else if (overbar_client_open()) overlay_draw(&dst);
