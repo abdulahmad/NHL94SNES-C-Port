@@ -6,25 +6,19 @@
  *
  * Up to five players: keys and a controller each, set in settings.ini (written beside the program
  * the first time, with every setting). The multitap is in port 2 when a player 3-5 has keys or a
- * controller at power on, as the cartridge needs it for more than two. F9 (and nothing else) opens
- * the settings menu (platform/menu.h); Escape (or F9) closes it, and the game waits while it is
- * open. Its items, each change saved to settings.ini at once:
- *   Controllers...  opens the controller setup screen (platform/padsetup.h: each button asked for in
- *                   turn, then the stick's dead zone; saved to settings.ini); closing it returns to the menu
- *   Show FPS        Off / On (window.show_fps, default Off): the game's new pictures a second, counted
- *                   over each second of real time and drawn in the picture's top right corner (a still
- *                   screen reads 0; in play at Original speed about 30, a pass of the game taking 2 vblanks)
- *   Picture         4:3 / Native (window.aspect, default 4:3): the picture's shape, a TV's, or its
- *                   pixels square at a whole scale
- *   Game Speed      Original / Smooth (game.speed, default Original): the cartridge's time, or the
- *                   game's passes 8 times as fast (platform/clock.c)
- * Menu: Up / Down choose, Enter (or Left / Right) changes; controller: d-pad or stick up / down,
- * south button (A) or Start changes, Back closes.
+ * controller at power on, as the cartridge needs it for more than two. ` and F11 (and a controller's
+ * Back) open the Overbar overlay; F12 toggles stats. Escape does not open it. The game waits while
+ * the overlay or the controller setup screen is open. Video is the shared Scale Mode tree; the
+ * picture has the pixel shape of a 4:3 screen of 240 lines (PAR 5:4), the 224 real lines drawn. There is
+ * no Picture Native. Game Speed is an overlay addon. Controllers... is on Input.
  *   pad 1: arrows, Z / X / A / S = B / A / Y / X, Q / W = L / R, Right Shift = Select, Enter = Start
  *   pad 2: I J K L, F / G / R / T, E / Y, Left Shift, Tab
  *   controller N is player N's: d-pad or left stick; south / east / west / north = B / A / Y / X
  * File: settings.ini, beside the program. */
 #include <SDL2/SDL.h>
+#ifdef _WIN32
+#include <SDL2/SDL_syswm.h>
+#endif
 #include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -35,6 +29,7 @@
 #include "menu.h"
 #include "padsetup.h"
 #include "settings.h"
+#include "overbar_client.h"
 
 #define SCALE 3
 #define RATE 32040                      /* the sound's samples a second (the sound chip's, as snes9x has it) */
@@ -44,8 +39,8 @@
 #define PADS 5
 #define SLOTS 8                         /* controllers, each in the slot it was given when plugged in */
 #define NB 12
-#define FPS_W 48                        /* the counter's own small picture */
-#define FPS_H 10
+#define FPS_W 160                       /* FPS, new pictures, refresh, CPU */
+#define FPS_H 28
 
 /* the pad's buttons: name in settings.ini, bit, default keys for pads 1 and 2, default controller
  * button (south B, east A, west Y, north X), and what each does with the puck and without (the
@@ -77,15 +72,11 @@ static int player_ctrl[PADS];           /* each player's controller slot + 1 (0:
 static int cbutton[NB];                 /* the controllers' button for each of the pad's (the directions' unused) */
 static int dead_zone;                   /* the left stick's, in % */
 
-/* the settings menu: open, the item chosen, each controller's stick held up or down (-1, 1; 0: not) */
-enum { ITEM_CONTROLLERS, ITEM_FPS, ITEM_PICTURE, ITEM_SPEED, ITEMS };
-static int menu, menu_at, show_fps, stick_dir[SLOTS];
-
-/* the picture's shape: a TV's 4:3, as the console's picture filled one (1), or its pixels square (0) */
-static int tv;
+/* the settings overlay: Overbar; each controller's stick held up or down (-1, 1; 0: not) */
+static int show_fps, stick_dir[SLOTS];
 
 /* the frame counter: the new pictures since fps_since (ticks), the last second's count shown */
-static int fps_frames, fps_shown;
+static int fps_frames, fps_shown, fps_all, fps_new;
 static uint32_t fps_since;
 
 /* the controller setup screen: open, the controller it sets (a slot; -1: still to choose), the pad's
@@ -171,13 +162,12 @@ static void settings_load(void)
             "# key's own sign (, . - =). Controller buttons are SDL's names: a b x y back start leftshoulder\n"
             "# rightshoulder leftstick rightstick guide, and lefttrigger righttrigger (pressed past halfway).\n"
             "# playerN.controller: the controller slot player N plays with (0: none; controllers take slots\n"
-            "# 1-8 as they are plugged in). F9 opens the settings menu in the game (Controllers sets a\n"
-            "# controller up). The multitap is in the ports when player 3, 4 or 5 has keys or a controller\n"
+            "# 1-8 as they are plugged in). ` or F11 opens the Overbar overlay (Controllers sets a\n"
+            "# controller up). F12 toggles stats. The multitap is in the ports when player 3, 4 or 5 has keys or a controller\n"
             "# plugged in at power on.\n"
             "# window.show_fps: 1 shows the game's new pictures a second in the picture's top right corner\n"
-            "# (0 off). window.aspect: 4:3 (the default) shows the picture as a TV did, native with its\n"
-            "# pixels square. game.speed: original (the default) gives the game the cartridge's time, smooth\n"
-            "# runs its passes 8 times as fast. All three are set in the game's menu, too.\n";
+            "# (0 off). The picture has the pixel shape of a 4:3 screen of 240 lines, only the 224 drawn (no Native). game.speed: original (the default) gives the game the cartridge's time, smooth\n"
+            "# runs its passes 8 times as fast. Overlay Video live-previews Scale Mode.\n";
         pm_settings_parse(set, head, sizeof head - 1);
     }
     pm_settings_default(set, "game.rom", "");
@@ -207,10 +197,7 @@ static void settings_load(void)
     dead_zone = clamp(pm_settings_get_int(set, "controller.dead_zone", 50), 5, 95);
     pm_settings_default(set, "window.show_fps", "0");
     pm_settings_default(set, "game.speed", "original");
-    pm_settings_default(set, "window.aspect", "4:3");
     show_fps = pm_settings_get_int(set, "window.show_fps", 0) != 0;
-    const char *aspect = pm_settings_get(set, "window.aspect");
-    tv = !aspect || strcmp(aspect, "native") != 0;        /* (anything but native: 4:3) */
     const char *speed = pm_settings_get(set, "game.speed");
     original_speed = !speed || strcmp(speed, "smooth") != 0; /* (anything but smooth: Original) */
     settings_write();                                     /* (a new file, or new settings: written now) */
@@ -368,56 +355,114 @@ static void setup_draw(const SDL_Rect *dst)
     SDL_RenderCopy(ren, setup_tex, NULL, dst);
 }
 
-/* ---- the settings menu ---- */
+/* ---- Overbar overlay ---- */
 
-/* the item chosen, or toggled: Controllers... opens the setup screen (over the menu, which comes
- * back when it closes); the others flip at once and are saved */
-static void menu_change(int item)
+static void quit(void);
+
+static void overlay_sync_settings(void)
 {
-    if (item == ITEM_CONTROLLERS) { setup_open(-1); return; }
-    if (item == ITEM_FPS) {
-        show_fps = !show_fps;
-        pm_settings_set_int(set, "window.show_fps", show_fps);
-        fps_frames = 0;
-        fps_since = SDL_GetTicks();
-    } else if (item == ITEM_PICTURE) {
-        tv = !tv;
-        pm_settings_set(set, "window.aspect", tv ? "4:3" : "native");
-    } else {
-        original_speed = !original_speed;
-        pm_settings_set(set, "game.speed", original_speed ? "original" : "smooth");
-    }
+    show_fps = overbar_client_stats();
+    pm_settings_set_int(set, "window.show_fps", show_fps);
+    pm_settings_set(set, "game.speed", original_speed ? "original" : "smooth");
     settings_write();
+    ob_filemenu_sync(overbar_client_host());
 }
 
-static void menu_move(int d) { menu_at = (menu_at + d + ITEMS) % ITEMS; }
-
-static void menu_key(SDL_Scancode k)
+static void filemenu_show_for_window(void)
 {
-    if (k == SDL_SCANCODE_ESCAPE || k == SDL_SCANCODE_F9) menu = 0;
-    else if (k == SDL_SCANCODE_UP) menu_move(-1);
-    else if (k == SDL_SCANCODE_DOWN) menu_move(1);
-    else if (k == SDL_SCANCODE_RETURN || k == SDL_SCANCODE_KP_ENTER) menu_change(menu_at);
-    else if ((k == SDL_SCANCODE_LEFT || k == SDL_SCANCODE_RIGHT) && menu_at != ITEM_CONTROLLERS) menu_change(menu_at);
+    Uint32 f = SDL_GetWindowFlags(win);
+    int full = !!(f & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP));
+    int handheld = overbar_client_host()->profile == OB_PROFILE_HANDHELD;
+    ob_filemenu_show(ob_filemenu_wanted(!full && !handheld, full, handheld));
 }
 
-static void menu_button(int button)
+static int overlay_key_to_input(SDL_Scancode k)
 {
-    if (button == SDL_CONTROLLER_BUTTON_DPAD_UP) menu_move(-1);
-    else if (button == SDL_CONTROLLER_BUTTON_DPAD_DOWN) menu_move(1);
-    else if (button == SDL_CONTROLLER_BUTTON_A || button == SDL_CONTROLLER_BUTTON_START) menu_change(menu_at);
-    else if (button == SDL_CONTROLLER_BUTTON_BACK) menu = 0;
+    if (k == SDL_SCANCODE_UP) return MDRT_MENU_UP;
+    if (k == SDL_SCANCODE_DOWN) return MDRT_MENU_DOWN;
+    if (k == SDL_SCANCODE_LEFT) return MDRT_MENU_LEFT;
+    if (k == SDL_SCANCODE_RIGHT) return MDRT_MENU_RIGHT;
+    if (k == SDL_SCANCODE_RETURN || k == SDL_SCANCODE_KP_ENTER) return MDRT_MENU_OK;
+    if (k == SDL_SCANCODE_ESCAPE) return MDRT_MENU_BACK;  /* backs out; does not open */
+    return -1;
 }
 
-/* the menu over the picture, at the picture's resolution */
-static void menu_draw(const SDL_Rect *dst)
+static void overlay_handle(int mdrt_input)
 {
-    const char *names[ITEMS] = { "Controllers...", "Show FPS", "Picture", "Game Speed" };
-    const char *values[ITEMS] = { "", show_fps ? "On" : "Off", tv ? "4:3" : "Native", original_speed ? "Original" : "Smooth" };
-    pm_menu_settings_view v = { .names = names, .values = values, .n = ITEMS, .at = menu_at };
-    pm_menu_settings_draw(setup_px, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, &v);
-    SDL_UpdateTexture(setup_tex, NULL, setup_px, SNRT_WIDTH * 4);
-    SDL_RenderCopy(ren, setup_tex, NULL, dst);
+    int r = overbar_client_input(mdrt_input);
+    if (r == OB_ID_CONTROLLERS) setup_open(-1);
+    overlay_sync_settings();
+    if (overbar_client_quit()) quit();
+}
+
+/* Auto hides the system pointer during play (the game draws none of its own) and shows it in a menu. */
+static void cursor_update(void)
+{
+    static int hidden = -1;
+    int mode = overbar_client_host()->pointer;
+    int hide = !(overbar_client_open() || setup || mode == 1);
+    if (hide != hidden) { SDL_ShowCursor(hide ? SDL_DISABLE : SDL_ENABLE); hidden = hide; }
+}
+
+/* The overlay's buffer: the picture at a whole fraction, so each font pixel is about 0.8 of a
+ * game pixel (the text a little smaller) and whole window pixels (even letters). */
+#define OVER_W 640
+#define OVER_H 480
+static uint32_t over_px[OVER_W * OVER_H];
+static SDL_Texture *over_tex;
+static int over_mw, over_mh, over_x, over_y, over_w, over_h;
+
+static void overlay_size(const SDL_Rect *dst, int *mw, int *mh, int *t)
+{
+    *t = (int)(dst->h * 0.8 / SNRT_HEIGHT + 0.5);
+    if (*t < 1) *t = 1;
+    *mw = dst->w / *t;
+    *mh = dst->h / *t;
+    while ((*mw > OVER_W || *mh > OVER_H) && *t < 64) { (*t)++; *mw = dst->w / *t; *mh = dst->h / *t; }
+}
+
+static void overlay_mouse(int wx, int wy, int what)
+{
+    int ww, wh, x, y, w, h, winw, winh, r;
+    if (!overbar_client_open() || what < 0) return;
+    if (!ob_filemenu_client_size(&ww, &wh)) SDL_GetRendererOutputSize(ren, &ww, &wh);
+    SDL_GetWindowSize(win, &winw, &winh);
+    if (winw > 0 && winh > 0 && (ww != winw || wh != winh)) {
+        wx = wx * ww / winw;
+        wy = wy * wh / winh;
+    }
+    (void)ww; (void)wh;
+    x = over_x; y = over_y; w = over_w; h = over_h;
+    if (w <= 0 || h <= 0 || wx < x || wy < y || wx >= x + w || wy >= y + h) return;
+    r = overbar_client_pointer((wx - x) * over_mw / w, (wy - y) * over_mh / h,
+                               over_mw, over_mh, what);
+    if (what == 0) return;
+    if (r == OB_ID_CONTROLLERS) setup_open(-1);
+    overlay_sync_settings();
+    if (overbar_client_quit()) quit();
+}
+
+static void overlay_draw(const SDL_Rect *dst)
+{
+    int i, mw, mh, t;
+    overlay_size(dst, &mw, &mh, &t);
+    for (i = 0; i < mw * mh; i++) over_px[i] = 0x00040404u;   /* clear: the picture shows through */
+    overbar_client_draw(over_px, mw, mh, mw);
+    if (over_tex && (over_mw != mw || over_mh != mh)) { SDL_DestroyTexture(over_tex); over_tex = NULL; }
+    if (!over_tex && (over_tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, mw, mh))) {
+        SDL_SetTextureBlendMode(over_tex, SDL_BLENDMODE_BLEND);
+        SDL_SetTextureScaleMode(over_tex, SDL_ScaleModeNearest);
+    }
+    over_mw = mw;
+    over_mh = mh;
+    if (!over_tex) return;
+    SDL_Rect to = { dst->x + (dst->w - mw * t) / 2, dst->y + (dst->h - mh * t) / 2, mw * t, mh * t };
+    SDL_UpdateTexture(over_tex, NULL, over_px, mw * 4);
+    SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(ren, 0, 0, 0, 96);
+    SDL_RenderFillRect(ren, dst);
+    SDL_RenderCopy(ren, over_tex, NULL, &to);
+    over_x = to.x; over_y = to.y; over_w = to.w; over_h = to.h;
 }
 
 /* ---- the frame counter ---- */
@@ -427,8 +472,10 @@ static void fps_tick(void)
 {
     uint32_t now = SDL_GetTicks(), ms = now - fps_since;
     if (ms < 1000) return;
-    fps_shown = (int)((fps_frames * 1000u + ms / 2) / ms);
+    fps_shown = (int)((fps_all * 1000u + ms / 2) / ms);
+    fps_new = (int)((fps_frames * 1000u + ms / 2) / ms);
     fps_frames = 0;
+    fps_all = 0;
     fps_since = now;
 }
 
@@ -436,15 +483,25 @@ static void fps_tick(void)
  * magenta key becoming see-through) */
 static void fps_draw(const SDL_Rect *dst)
 {
-    char s[16];
-    snprintf(s, sizeof s, "%d FPS", fps_shown);
-    for (int i = 0; i < FPS_W * FPS_H; i++) fps_px[i] = 0x00FF00FFu;
-    pm_menu_text(fps_px, FPS_W, FPS_H, FPS_W, FPS_W - 1 - (int)strlen(s) * PM_MENU_CELL_W, 0, s, 0xFFFFFF);
-    for (int i = 0; i < FPS_W * FPS_H; i++)
-        fps_px[i] = fps_px[i] == 0x00FF00FFu ? 0 : fps_px[i] | 0xFF000000u;
-    SDL_UpdateTexture(fps_tex, NULL, fps_px, FPS_W * 4);
-    SDL_Rect src = { 0, 0, FPS_W, FPS_H };
-    SDL_Rect to = { dst->x + (SNRT_WIDTH - FPS_W) * dst->w / SNRT_WIDTH, dst->y, FPS_W * dst->w / SNRT_WIDTH, FPS_H * dst->w / SNRT_WIDTH };
+    char l1[40], l2[40], l3[40];
+    ob_host *h = overbar_client_host();
+    SDL_Rect src, to;
+    (void)dst;
+    snprintf(l1, sizeof l1, "FPS %d  NEW %d", fps_shown, fps_new);
+    if (h && h->refresh == OB_REFRESH_70) snprintf(l2, sizeof l2, "70HZ VSYNC %s", h->vsync ? "ON" : "OFF");
+    else if (h && h->refresh == OB_REFRESH_60) snprintf(l2, sizeof l2, "60HZ VSYNC %s", h->vsync ? "ON" : "OFF");
+    else snprintf(l2, sizeof l2, "VRR VSYNC %s", h && h->vsync ? "ON" : "OFF");
+    snprintf(l3, sizeof l3, "CPU -- GPU --");
+    /* Overbar's stats box, as 95 PC draws it (small, flush with the window's top right) */
+    {
+        const char *const line[3] = { l1, l2, l3 };
+        int bw = 0, bh = 0, ww = 0, wh = 0;
+        ob_stats_draw(line, fps_px, FPS_W, FPS_W, FPS_H, &bw, &bh);
+        SDL_UpdateTexture(fps_tex, NULL, fps_px, FPS_W * 4);
+        if (!ob_filemenu_client_size(&ww, &wh)) SDL_GetRendererOutputSize(ren, &ww, &wh);
+        src = (SDL_Rect){ 0, 0, bw, bh };
+        ob_stats_place(ww, wh, bw, bh, &to.x, &to.y, &to.w, &to.h);
+    }
     SDL_RenderCopy(ren, fps_tex, &src, &to);
 }
 
@@ -457,28 +514,47 @@ static void quit(void)
     exit(0);
 }
 
-/* the window's events: closing, F9, controllers plugged in and out, the setup screen's presses */
+/* the window's events: closing, overlay keys, controllers plugged in and out, the setup screen's presses */
 static void events(void)
 {
     SDL_Event e;
+    cursor_update();
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) quit();
         else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
             if (setup) setup_key(e.key.keysym.scancode);
-            else if (menu) menu_key(e.key.keysym.scancode);
-            else if (e.key.keysym.scancode == SDL_SCANCODE_F9) { menu = 1; menu_at = 0; }
+            else if (overbar_client_key(e.key.keysym.scancode)) {
+                overlay_sync_settings();
+                fps_frames = 0;
+                fps_all = 0;
+                fps_since = SDL_GetTicks();
+            } else if (overbar_client_open()) {
+                int in = overlay_key_to_input(e.key.keysym.scancode);
+                if (in >= 0) overlay_handle(in);
+            }
         }
-        else if (e.type == SDL_CONTROLLERBUTTONDOWN && (setup || menu)) {
+        else if (e.type == SDL_CONTROLLERBUTTONDOWN && (setup || overbar_client_open())) {
             int slot = slot_of(e.cbutton.which);
             if (slot >= 0 && setup) setup_button(slot, e.cbutton.button);
-            else if (slot >= 0) menu_button(e.cbutton.button);
+            else if (slot >= 0) {
+                int b = e.cbutton.button;
+                if (b == SDL_CONTROLLER_BUTTON_BACK) overbar_client_pad_back();
+                else if (b == SDL_CONTROLLER_BUTTON_DPAD_UP) overlay_handle(MDRT_MENU_UP);
+                else if (b == SDL_CONTROLLER_BUTTON_DPAD_DOWN) overlay_handle(MDRT_MENU_DOWN);
+                else if (b == SDL_CONTROLLER_BUTTON_DPAD_LEFT) overlay_handle(MDRT_MENU_LEFT);
+                else if (b == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) overlay_handle(MDRT_MENU_RIGHT);
+                else if (b == SDL_CONTROLLER_BUTTON_A || b == SDL_CONTROLLER_BUTTON_START) overlay_handle(MDRT_MENU_OK);
+            }
+        }
+        else if (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK && !setup) {
+            overbar_client_pad_back();
         }
         else if (e.type == SDL_CONTROLLERAXISMOTION && e.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
             int slot = slot_of(e.caxis.which);          /* (the stick up or down moves in the menu, once a push) */
             if (slot >= 0) {
                 int v = e.caxis.value;
                 int d = v < -16384 ? -1 : v > 16384 ? 1 : v > -8192 && v < 8192 ? 0 : stick_dir[slot];
-                if (d && d != stick_dir[slot] && menu && !setup) menu_move(d);
+                if (d && d != stick_dir[slot] && overbar_client_open() && !setup) overlay_handle(d < 0 ? MDRT_MENU_UP : MDRT_MENU_DOWN);
                 stick_dir[slot] = d;
             }
         }
@@ -491,28 +567,78 @@ static void events(void)
         }
         else if (e.type == SDL_CONTROLLERDEVICEADDED) ctrl_added(e.cdevice.which);
         else if (e.type == SDL_CONTROLLERDEVICEREMOVED) ctrl_removed(e.cdevice.which);
+        else if (e.type == SDL_SYSWMEVENT && e.syswm.msg) {
+#ifdef _WIN32
+            SDL_SysWMmsg *m = (SDL_SysWMmsg *)e.syswm.msg;
+            if (m->subsystem == SDL_SYSWM_WINDOWS) {
+                ob_wm wm;
+                wm.msg = m->msg.win.msg;
+                wm.wparam = (uintptr_t)m->msg.win.wParam;
+                ob_filemenu_event(&wm);
+            }
+#endif
+            if (overbar_client_quit()) quit();
+        }
+        else if (overbar_client_open() && e.type == SDL_MOUSEMOTION)
+            overlay_mouse(e.motion.x, e.motion.y, 0);
+        else if (overbar_client_open() && e.type == SDL_MOUSEBUTTONDOWN)
+            overlay_mouse(e.button.x, e.button.y, e.button.button == SDL_BUTTON_LEFT ? 1
+                          : e.button.button == SDL_BUTTON_RIGHT ? 2 : -1);
+        else if (overbar_client_open() && e.type == SDL_MOUSEWHEEL) {
+            int mx, my;
+            SDL_GetMouseState(&mx, &my);
+            overlay_mouse(mx, my, e.wheel.y > 0 ? 3 : e.wheel.y < 0 ? 4 : -1);
+        }
+        else if (e.type == SDL_WINDOWEVENT &&
+                 (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED
+                  || e.window.event == SDL_WINDOWEVENT_SHOWN))
+            filemenu_show_for_window();
     }
 }
 
-/* the picture as large as fits, 4:3, or its pixels square at the largest whole scale that fits, and
- * the setup screen or the menu over it when open (stretched with it) */
+/* the picture: the pixel shape of a 4:3 screen of 240 lines, the 224 real ones drawn (no border), and
+ * the setup screen or the overlay over it when open */
 static void draw(void)
 {
-    int ww, wh;
-    SDL_GetRendererOutputSize(ren, &ww, &wh);
-    int aw = tv ? 4 : SNRT_WIDTH, ah = tv ? 3 : SNRT_HEIGHT;
-    int w = ww, h = ww * ah / aw;
-    if (h > wh) { h = wh; w = wh * aw / ah; }
-    int scale = ww / SNRT_WIDTH < wh / SNRT_HEIGHT ? ww / SNRT_WIDTH : wh / SNRT_HEIGHT;
-    if (!tv && scale >= 1) { w = SNRT_WIDTH * scale; h = SNRT_HEIGHT * scale; }   /* (a window smaller than 1x: as large as fits) */
-    SDL_Rect dst = { (ww - w) / 2, (wh - h) / 2, w, h };
-    SDL_UpdateTexture(tex, NULL, picture, SNRT_WIDTH * 4);
+    int ww, wh, x, y, w, h;
+    if (!ob_filemenu_client_size(&ww, &wh))
+        SDL_GetRendererOutputSize(ren, &ww, &wh);
+    overbar_client_view(ww, wh, &x, &y, &w, &h);
+    SDL_Rect dst = { x, y, w, h };
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
     SDL_RenderClear(ren);
+    if (ob_look_renders(&overbar_client_host()->lores)) {
+        /* the CRT looks and the MiSTer filters: Overbar draws them at the picture's size (the
+         * 95 PC shader's maths, in software), so the scanlines and masks land on whole pixels */
+        static SDL_Texture *look_tex;
+        static int look_w, look_h;
+        uint32_t *px = NULL;
+        int dw = 0, dh = 0;
+        if (ob_look_render(&overbar_client_host()->lores, picture, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, w, h, &px, &dw, &dh)
+            && px && dw > 0 && dh > 0) {
+            if (!look_tex || look_w != dw || look_h != dh) {
+                if (look_tex) SDL_DestroyTexture(look_tex);
+                look_tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, dw, dh);
+                look_w = dw;
+                look_h = dh;
+                if (look_tex) SDL_SetTextureScaleMode(look_tex, SDL_ScaleModeLinear);
+            }
+            if (look_tex) {
+                SDL_UpdateTexture(look_tex, NULL, px, dw * 4);
+                SDL_RenderCopy(ren, look_tex, NULL, &dst);
+                if (show_fps) fps_draw(&dst);
+                if (setup) setup_draw(&dst);
+                else if (overbar_client_open()) overlay_draw(&dst);
+                SDL_RenderPresent(ren);
+                return;
+            }
+        }
+    }
+    SDL_UpdateTexture(tex, NULL, picture, SNRT_WIDTH * 4);
     SDL_RenderCopy(ren, tex, NULL, &dst);
     if (show_fps) fps_draw(&dst);
     if (setup) setup_draw(&dst);
-    else if (menu) menu_draw(&dst);
+    else if (overbar_client_open()) overlay_draw(&dst);
     SDL_RenderPresent(ren);
 }
 
@@ -525,7 +651,7 @@ static void read_pads(void)
         for (int i = 0; i < NB; i++) if (key[p][i] != SDL_SCANCODE_UNKNOWN && down[key[p][i]]) b |= buttons[i].bit;
         SDL_GameController *c = player_pad(p);
         if (c) b |= ctrl_buttons(c);
-        machine.io.pad[p] = setup ? 0 : b;
+        machine.io.pad[p] = (setup || overbar_client_open()) ? 0 : b;
     }
 }
 
@@ -546,13 +672,14 @@ void console_frame_done(uint32_t frame)
         picture[i] = argb;
     }
     fps_frames += changed;
-    do {                                                  /* (the game waits while the menu or the setup screen is open) */
+    fps_all++;
+    do {                                                  /* (the game waits while the overlay or the setup screen is open) */
         events();
         setup_tick();
         fps_tick();
         draw();
-        if (setup || menu) SDL_Delay(15);
-    } while (setup || menu);
+        if (setup || overbar_client_open()) SDL_Delay(15);
+    } while (setup || overbar_client_open());
     if (dev) {
         SDL_QueueAudio(dev, sound, (Uint32)n_sound * 4);
         Uint32 enough = QUEUE_FRAMES * RATE / 60 * 4;
@@ -607,7 +734,12 @@ static const char *find_rom(char *found, size_t size)
 
 int main(int argc, char *argv[])
 {
+    ob_profile profile = ob_profile_from_env();
+    Uint32 wflags, rflags;
+    SDL_RendererInfo rinfo;
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    profile = ob_profile_detect(SDL_GetCurrentVideoDriver(), ob_handheld_env());
+    ob_present_apply_hints(profile);
     char *where = SDL_GetBasePath();
     if (where) { snprintf(base, sizeof base, "%s", where); SDL_free(where); }
     settings_load();
@@ -616,23 +748,59 @@ int main(int argc, char *argv[])
     const char *why = NULL;
     if (rom && *rom) why = not_nhl94(rom);
     else if (!(rom = find_rom(found, sizeof found))) rom = "none", why = "no " ROM_EXT " file beside the program is NHL '94";
-    if (why) {                                            /* (a box: a player who opened the program sees it) */
+    if (why) {                                            /* (a box: a player who opened the program sees it; KMSDRM has no box) */
         char msg[1600];
         snprintf(msg, sizeof msg, "No game ROM: %s: %s.\n\nDrag your NHL '94 ROM onto the program, or put it beside the program (any "
                  "name ending " ROM_EXT "), or give its path as game.rom in " SETTINGS " (beside the program).", rom, why);
         fprintf(stderr, "%s\n", msg);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NHL '94", msg, NULL);
+        if (profile != OB_PROFILE_HANDHELD)
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NHL '94", msg, NULL);
         return 1;
     }
-    win = SDL_CreateWindow("NHL '94", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (tv ? SNRT_HEIGHT * 4 / 3 : SNRT_WIDTH) * SCALE, SNRT_HEIGHT * SCALE, SDL_WINDOW_RESIZABLE);
-    ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED) : NULL;
-    if (!ren && win) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
+    overbar_client_init(profile);
+    overbar_client_set_stats(show_fps);
+    wflags = SDL_WINDOW_RESIZABLE;
+    rflags = SDL_RENDERER_ACCELERATED;
+    if (profile == OB_PROFILE_HANDHELD) {
+        wflags = SDL_WINDOW_FULLSCREEN_DESKTOP;
+        if (overbar_client_host()->vsync) rflags |= SDL_RENDERER_PRESENTVSYNC;
+    }
+    win = SDL_CreateWindow("NHL '94", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 320 * SCALE, 224 * SCALE, wflags);
+    ren = win ? SDL_CreateRenderer(win, -1, rflags) : NULL;
+    if (!ren && win) {
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d");
+        ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+    }
+    if (!ren && win) {
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+        ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
+    }
+    if (ren && SDL_GetRendererInfo(ren, &rinfo) == 0 && rinfo.name) {
+        int gles = strstr(rinfo.name, "opengles") || strstr(rinfo.name, "gles");
+        ob_host_set_present(overbar_client_host(), gles, 0);
+    }
     tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SNRT_WIDTH, SNRT_HEIGHT) : NULL;
     setup_tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SNRT_WIDTH, SNRT_HEIGHT) : NULL;
     fps_tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, FPS_W, FPS_H) : NULL;
     if (!tex || !setup_tex || !fps_tex) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     SDL_SetTextureBlendMode(setup_tex, SDL_BLENDMODE_BLEND);
     SDL_SetTextureBlendMode(fps_tex, SDL_BLENDMODE_BLEND);
+    if (fps_tex) SDL_SetTextureScaleMode(fps_tex, SDL_ScaleModeNearest);
+#ifdef _WIN32
+    {
+        SDL_SysWMinfo info;
+        void *hwnd = NULL;
+        SDL_VERSION(&info.version);
+        if (SDL_GetWindowWMInfo(win, &info) && info.subsystem == SDL_SYSWM_WINDOWS)
+            hwnd = info.info.win.window;
+        ob_filemenu_init(hwnd);
+        SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
+    }
+#else
+    ob_filemenu_init(NULL);
+#endif
+    ob_filemenu_sync(overbar_client_host());
+    filemenu_show_for_window();
     fps_since = SDL_GetTicks();
     SDL_AudioSpec want = { .freq = RATE, .format = AUDIO_S16SYS, .channels = 2, .samples = 512 }, got;
     dev = SDL_OpenAudioDevice(NULL, 0, &want, &got, 0);

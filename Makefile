@@ -23,7 +23,12 @@ ifeq ($(OS),Windows_NT)
 EXE     := .exe
 WINDRES ?= $(patsubst %gcc,%windres,$(CC))
 ICONO   := build/obj/icon.o   # (the exe's icon, res/icon.ico)
+# Explorer launch needs only SDL2.dll beside the exe (no libgcc_s / libwinpthread
+# from PATH, which are often the 32-bit ones from a 95PC tree → 0xc000007b).
+WINLIB  ?= -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic
+SDL_DLL := $(shell sdl2-config --prefix 2>/dev/null)/bin/SDL2.dll
 endif
+WINLIB  ?=
 ROM     ?= $(firstword $(wildcard *.smc *.sfc))
 # the first Python 3 that runs (on Windows python3 may be the Store's stand-in, which only says so)
 PYTHON  ?= $(firstword $(foreach p,python3 python,$(if $(shell $(p) -c "import sys; print(sys.version_info[0])" 2>/dev/null | grep -x 3),$(p))) python3)
@@ -33,7 +38,12 @@ RUNTIME := $(wildcard runtime/src/*.c)
 GAMEO   := $(GAME:%.c=build/obj/%.o)
 RTO     := $(RUNTIME:%.c=build/obj/%.o)
 CONSOLEO := build/obj/platform/hal.o build/obj/platform/clock.o build/obj/fnsyms_gen.o build/obj/uncounted_gen.o
-WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o
+# Overbar, the host menu and scaler: the git submodule platform/overbar (git submodule update --init)
+OVERBAR_DIR := platform/overbar
+-include $(OVERBAR_DIR)/overbar.mk
+OVERBARO := $(OVERBAR_LIB_NAMES:%=build/obj/overbar/%.o) build/obj/overbar/pulseman_menu.o
+WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o \
+	build/obj/platform/overbar_client.o $(OVERBARO)
 
 all: build/snes94$(EXE) build/golden$(EXE)
 
@@ -42,7 +52,15 @@ build/obj/game/%.o: game/%.c $(GAMEH)
 	$(CC) $(CFLAGS) $(INSTR) $(GAMEDEF) $(GAMEINC) -c $< -o $@
 build/obj/platform/%.o: platform/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(if $(findstring main,$<),$(SDLCF)) -c $< -o $@
+	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(OVERBAR_INC) $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF)) -c $< -o $@
+build/obj/overbar/%.o: $(OVERBAR_DIR)/src/%.c $(OVERBAR_HDRS) | overbar
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(OVERBAR_DEFS) $(OVERBAR_INC) $(SDLCF) -c $< -o $@
+build/obj/overbar/pulseman_menu.o: $(OVERBAR_PULSEMAN_SRC) $(OVERBAR_HDRS) | overbar
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(OVERBAR_INC) -c $< -o $@
+overbar:
+	@test -f $(OVERBAR_DIR)/overbar.mk || { echo "no Overbar at $(OVERBAR_DIR): git submodule update --init"; exit 1; }
 build/obj/runtime/%.o: runtime/%.c $(RTH)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Iruntime/include -Ibuild -c $< -o $@
@@ -74,7 +92,8 @@ build/obj/icon.o: res/icon.rc res/icon.ico
 	@mkdir -p $(dir $@)
 	$(WINDRES) -I res $< -O coff -o $@
 build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
-	$(CC) -o $@ $^ $(SDLLIB) -lm
+	$(CC) -o $@ $^ $(SDLLIB) $(WINLIB) -lm
+	@if [ -n "$(SDL_DLL)" ] && [ -f "$(SDL_DLL)" ]; then cp -f "$(SDL_DLL)" build/SDL2.dll; fi
 build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
 	$(CC) -o $@ $^ -lm
 # one file to give a player: SDL2 and the compiler's runtime in it, nothing but the system's DLLs needed
@@ -86,4 +105,4 @@ build/dist/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
 clean:
 	rm -rf build
 
-.PHONY: all clean dist
+.PHONY: all clean dist overbar

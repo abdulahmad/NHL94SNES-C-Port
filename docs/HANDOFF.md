@@ -7,7 +7,7 @@ Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md)
 
 ## Now
 
-Asstab slot indexes named from cleaned 94S (`anull`, `adefo`, `abreakaway` $10, `adumpin` $14) landed on `main` ([#8](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/8), merge `27dcc03`). Values stay this ROM's numbers. S0–S3 remain on `main`. Names 844/0/6/5. Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked.
+Overbar overlay/bar on [#9](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/9) (`cursor/overbar-snes-6801`): opaque overlay pixels + Win32 `CreateMenu`. Host-only; do not merge. Asstab slot indexes named from cleaned 94S (`anull`, `adefo`, `abreakaway` $10, `adumpin` $14) landed on `main` ([#8](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/8), merge `27dcc03`). Values stay this ROM's numbers. S0–S3 remain on `main`. Names 844/0/6/5. Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked.
 
 ## Done
 

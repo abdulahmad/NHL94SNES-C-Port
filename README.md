@@ -26,12 +26,15 @@ checked with has the SHA-1 `10dcd21be9c5542e82b0b94473bf5ff569b36cf5` (without a
 one is fine).
 
 ```
+git submodule update --init     # Overbar, the host menu (platform/overbar); or clone with --recurse-submodules
 make
 ./build/snes94 nhl94.smc
 ```
 
 (Windows: run it from the UCRT64 shell, or `make dist` for `build/dist/snes94.exe`, one file
 with SDL2 in it. Drag a ROM onto it, or put it beside it: any `.smc` that is the game.)
+
+**PortMaster / RG35XX:** zip layout and launch script are in [`portmaster/`](portmaster/). Handheld is 60 Hz, overlay only, fullscreen SDL_Renderer / KMSDRM (no desktop OpenGL, no message box). Copy your dump to `roms/nhl94.smc`. `./portmaster/pack.sh` builds `nhl94s.zip`. Private zip; the ROM is never included.
 
 ## Controls
 
@@ -46,19 +49,16 @@ with SDL2 in it. Drag a ROM onto it, or put it beside it: any `.smc` that is the
 | Select | Right Shift | Left Shift | Back | |
 | Start | Enter | Tab | Start | pause |
 
-## The settings menu
+## The overlay
 
-F9 opens it, Escape (or F9) closes it, and the game waits while it is open. Up / Down choose,
-Enter (or Left / Right) changes; on a controller, the d-pad or stick, the south button or Start,
-and Back to close. Each change is saved to `settings.ini` at once.
+`` ` `` or F11 (or a controller's Back) opens Overbar; F12 toggles stats. Escape does not open it.
+The game waits while it is open. Up / Down choose, Enter (or Left / Right) changes.
 
+- **Video**: Scale Mode (Sharp / CRT / MiSTer / RetroArch / Scale2x / …). The picture is always
+  4:3 as if 240 lines existed; the source stays 256×224 (PAR 5:4). There is no Native 1:1.
 - **Controllers...**: the controller setup screen, each button asked for in turn, then the stick's
   dead zone.
-- **Show FPS** (off): the game's new pictures a second, in the picture's top right corner (about
-  30 in play at Original speed, 48 at Smooth).
-- **Picture** (4:3): the picture's shape. 4:3 is a TV's, as the console's picture filled one;
-  Native shows its pixels square (256 by 224), at the largest whole scale that fits the window.
-- **Game Speed** (Original): see below.
+- **Game Speed** (Original): see below. Stats (F12) is the old Show FPS.
 
 ## Players
 
