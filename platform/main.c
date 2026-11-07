@@ -362,6 +362,15 @@ static void overlay_sync_settings(void)
     pm_settings_set_int(set, "window.show_fps", show_fps);
     pm_settings_set(set, "game.speed", original_speed ? "original" : "smooth");
     settings_write();
+    ob_filemenu_sync(overbar_client_host());
+}
+
+static void filemenu_show_for_window(void)
+{
+    Uint32 f = SDL_GetWindowFlags(win);
+    int full = !!(f & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP));
+    int handheld = overbar_client_host()->profile == OB_PROFILE_HANDHELD;
+    ob_filemenu_show(ob_filemenu_wanted(!full && !handheld, full, handheld));
 }
 
 static int overlay_key_to_input(SDL_Scancode k)
@@ -385,8 +394,11 @@ static void overlay_handle(int mdrt_input)
 
 static void overlay_draw(const SDL_Rect *dst)
 {
+    int i;
     memcpy(setup_px, picture, sizeof picture);
     overbar_client_draw(setup_px, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH);
+    for (i = 0; i < SNRT_WIDTH * SNRT_HEIGHT; i++)
+        if (!(setup_px[i] >> 24)) setup_px[i] |= 0xFF000000u;
     SDL_UpdateTexture(setup_tex, NULL, setup_px, SNRT_WIDTH * 4);
     SDL_RenderCopy(ren, setup_tex, NULL, dst);
 }
@@ -479,6 +491,14 @@ static void events(void)
         }
         else if (e.type == SDL_CONTROLLERDEVICEADDED) ctrl_added(e.cdevice.which);
         else if (e.type == SDL_CONTROLLERDEVICEREMOVED) ctrl_removed(e.cdevice.which);
+        else if (e.type == SDL_SYSWMEVENT) {
+            ob_filemenu_event(e.syswm.msg);
+            if (overbar_client_quit()) quit();
+        }
+        else if (e.type == SDL_WINDOWEVENT &&
+                 (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED
+                  || e.window.event == SDL_WINDOWEVENT_SHOWN))
+            filemenu_show_for_window();
     }
 }
 
@@ -487,7 +507,8 @@ static void events(void)
 static void draw(void)
 {
     int ww, wh, x, y, w, h;
-    SDL_GetRendererOutputSize(ren, &ww, &wh);
+    if (!ob_filemenu_client_size(&ww, &wh))
+        SDL_GetRendererOutputSize(ren, &ww, &wh);
     overbar_client_view(ww, wh, &x, &y, &w, &h);
     SDL_Rect dst = { x, y, w, h };
     SDL_UpdateTexture(tex, NULL, picture, SNRT_WIDTH * 4);
@@ -642,6 +663,9 @@ int main(int argc, char *argv[])
     if (!tex || !setup_tex || !fps_tex) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     SDL_SetTextureBlendMode(setup_tex, SDL_BLENDMODE_BLEND);
     SDL_SetTextureBlendMode(fps_tex, SDL_BLENDMODE_BLEND);
+    ob_filemenu_init(win);
+    ob_filemenu_sync(overbar_client_host());
+    filemenu_show_for_window();
     fps_since = SDL_GetTicks();
     SDL_AudioSpec want = { .freq = RATE, .format = AUDIO_S16SYS, .channels = 2, .samples = 512 }, got;
     dev = SDL_OpenAudioDevice(NULL, 0, &want, &got, 0);
