@@ -59,6 +59,11 @@ int overbar_client_input(int mdrt_input)
     return ob_overlay_input(&host, mdrt_input);
 }
 
+int overbar_client_pointer(int x, int y, int w, int h, int what)
+{
+    return ob_overlay_pointer(&host, x, y, w, h, what);
+}
+
 void overbar_client_draw(uint32_t *px, int w, int h, int pitch)
 {
     ob_overlay_draw(&host, px, w, h, pitch);

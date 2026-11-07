@@ -17,6 +17,7 @@ void overbar_client_set_stats(int on);
 int overbar_client_key(int scancode);           /* 1 if overlay/stats consumed it */
 int overbar_client_pad_back(void);
 int overbar_client_input(int mdrt_input);
+int overbar_client_pointer(int x, int y, int w, int h, int what);
 void overbar_client_draw(uint32_t *px, int w, int h, int pitch);
 void overbar_client_view(int win_w, int win_h, int *x, int *y, int *w, int *h);
 

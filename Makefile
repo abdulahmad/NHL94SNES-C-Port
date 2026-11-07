@@ -54,7 +54,7 @@ build/obj/platform/%.o: platform/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h) pl
 	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) -Iplatform/overbar/include $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF)) -c $< -o $@
 build/obj/overbar/%.o: platform/overbar/src/%.c platform/overbar/include/overbar/overbar.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Iplatform/overbar/include $(SDLCF) -c $< -o $@
+	$(CC) $(CFLAGS) -DOB_SDL_BASE -Iplatform/overbar/include $(SDLCF) -c $< -o $@
 build/obj/overbar/pulseman_menu.o: platform/overbar/third_party/pulseman/menu.c platform/overbar/include/mdrt/menu.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Iplatform/overbar/include -c $< -o $@
