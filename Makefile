@@ -101,7 +101,11 @@ build/obj/%_gen.o: build/%_gen.c
 build/obj/icon.o: res/icon.rc res/icon.ico
 	@mkdir -p $(dir $@)
 	$(WINDRES) -I res $< -O coff -o $@
-build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
+# the MiSTer filter files Overbar ships (platform/overbar/mister), copied beside the program, where
+# Overbar looks for its mister folder; copied again when Overbar's copy changes
+build/mister/README.md: $(OVERBAR_DIR)/mister/README.md $(OVERBAR_DIR)/overbar.mk | overbar
+	$(call overbar_copy_mister,build)
+build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO) | build/mister/README.md
 	$(CC) -o $@ $^ $(SDLLIB) $(WINLIB) -lm $(NETLIB)
 	@if [ -n "$(SDL_DLL)" ] && [ -f "$(SDL_DLL)" ]; then cp -f "$(SDL_DLL)" build/SDL2.dll; fi
 build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
