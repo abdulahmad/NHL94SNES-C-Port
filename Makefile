@@ -56,7 +56,7 @@ build/obj/game/%.o: game/%.c $(GAMEH)
 	$(CC) $(CFLAGS) $(INSTR) $(GAMEDEF) $(GAMEINC) -c $< -o $@
 build/obj/platform/%.o: platform/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(OVERBAR_INC) $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF)) $(if $(findstring netplay,$<),-Ibuild) -c $< -o $@
+	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(OVERBAR_INC) $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF) $(OVERBAR_DEFS)) $(if $(findstring netplay,$<),-Ibuild) -c $< -o $@
 build/obj/platform/netplay.o: build/build_id.h
 # rewritten only when the build's name changes (so netplay.o is rebuilt then, and only then)
 build/build_id.h: FORCE
