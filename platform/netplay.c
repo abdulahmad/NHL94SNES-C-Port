@@ -1,5 +1,6 @@
-/* Online play on Overbar's lockstep core (netplay.h). */
+/* Online play on Overbar's netplay core with rollback (netplay.h). */
 #include "netplay.h"
+#include "snapstate.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -12,6 +13,7 @@
 #define CHECK_EVERY 60          /* steps between the hash checks */
 #define BANNER_MS 6000          /* how long the line saying why a session ended stays */
 #define SETTINGS_VERSION 1
+#define ROLLBACK 12             /* frames one rollback plays again, at most */
 
 static ob_net *net;
 static int playing;             /* the session's console has been powered on: its steps are the frames */
@@ -69,7 +71,8 @@ int netplay_start(const ob_online *o, int local_multitap, char *msg, int msg_siz
      * the cost model), the cartridge, the pads and these settings' layout */
     snprintf(identity, sizeof identity, "NHL94SNES-C-Port %s rom:%08x pads:%d set:%d", BUILD_ID, (unsigned)rom_crc(),
              NETPLAY_PADS, SETTINGS_VERSION);
-    ob_net_game gm = { identity, NETPLAY_PADS, settings, sizeof settings };
+    static const ob_net_states states = { NULL, snap_save, snap_load };
+    ob_net_game gm = { identity, NETPLAY_PADS, settings, sizeof settings, &states, ROLLBACK };
     net = ob_net_new(o, &gm, msg, msg_size);
     if (!net) return -1;
     local_tap = local_multitap;
@@ -134,20 +137,34 @@ void netplay_frame(uint32_t now_ms)
     }
 }
 
+void netplay_simulate(int delay_ms, int jitter_ms, int loss_pct) { if (net) ob_net_simulate(net, delay_ms, jitter_ms, loss_pct, 0); }
+
+int netplay_replaying(void) { return net && playing && ob_net_replaying(net); }
+
+/* where a state comes back to (snapstate.h): this frame, just before the core is asked */
+static void *jb[5];
+
 int netplay_pads(const uint16_t *local, uint16_t pad[NETPLAY_PADS], void (*wait)(void))
 {
     uint16_t all[OB_NET_MAX_PADS];
+    const uint16_t *volatile lp = local;
+    uint16_t *volatile pp = pad;
+    void (*volatile wp)(void) = wait;
     if (!net || !playing) return 0;
+    __builtin_setjmp(jb);                   /* (a rollback comes back here, the frames as they were then) */
+    snap_mark(jb, snap_sp());
     for (;;) {
-        int r = ob_net_step(net, local, all);
+        int r = ob_net_frame(net, clock_waiting(), lp, all);
+        if (r == OB_NET_RESTART) snap_jump();
         if (r == 1) break;
         if (r < 0) ended(ob_net_why(net));
-        else if (wait) wait();              /* (someone's buttons are late: the window stays alive) */
+        else if (wp) wp();                  /* (someone's buttons are late: the window stays alive) */
         if (!net) { restart = 0; console_restart(local_tap); }
         ob_net_poll(net);
     }
-    memcpy(pad, all, sizeof *pad * NETPLAY_PADS);
+    snap_mark(NULL, NULL);
+    memcpy(pp, all, sizeof *pp * NETPLAY_PADS);
     uint32_t steps = ob_net_step_count(net);
-    if (steps % CHECK_EVERY == 0) ob_net_check(net, steps - 1, sim_hash());
+    if (steps % CHECK_EVERY == 0) ob_net_check(net, steps - 1, sim_hash());   /* (again in a replay: it waits for every button) */
     return 1;
 }

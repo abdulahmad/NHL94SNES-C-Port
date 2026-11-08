@@ -5,7 +5,9 @@
  * the settings the session runs with; then it plays on a little (so the others reach N too), says
  * goodbye and exits.
  *   netsmoke ROM (--host PORT | --join ADDR:PORT) [--steps N] [--pre FRAMES] [--seed S] [--here H]
- *            [--all A] [--delay D] [--smooth] */
+ *            [--all A] [--delay D] [--smooth] [--lag MS] [--loss PCT]
+ * (--lag, --loss: this machine's sends delayed by MS, jittered by MS / 2, PCT per cent lost; with
+ * rollback the frames run on, the step's hash printed is its last, once every machine is past it) */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +24,9 @@ static uint32_t steps = 600, pre = 90, seed = 1, after = 120;
 static int started, printed;
 static uint32_t frames, rng, t0;
 static uint16_t held[NETPLAY_PADS];
+static int lag, loss;
+static char last[200];             /* the line for step N, as last played (a replay's replaces a guess's) */
+static uint32_t replays;
 
 static uint32_t ms(void)
 {
@@ -54,12 +59,14 @@ void console_frame_done(uint32_t frame)
     if (!started && frames >= pre) {
         char msg[128] = "";
         if (netplay_start(&o, 0, msg, sizeof msg) != 0) { fprintf(stderr, "netsmoke: %s\n", msg); exit(1); }
+        if (lag || loss) netplay_simulate(lag, lag / 2, loss);
         started = 1;
     }
     if (started && !netplay_on()) {             /* (the other said goodbye after the last step: done) */
         char line[128];
         netplay_status(line, sizeof line);
         fprintf(stderr, "netsmoke: the session ended: %s\n", line);
+        if (printed) { printf("%s\n", last); fflush(stdout); }
         exit(printed ? 0 : 1);
     }
     for (int p = 0; p < NETPLAY_PADS; p++) {      /* (the buttons change now and then, as a player's do) */
@@ -70,18 +77,23 @@ void console_frame_done(uint32_t frame)
     if (netplay_pads(held, pad, nap)) {
         memcpy(machine.io.pad, pad, sizeof pad);
         uint32_t s = netplay_steps();
+        replays += netplay_replaying();
         if (s == steps) {
             uint64_t h = fnv(WRAM_BYTES, 0x20000, 0xCBF29CE484222325ull);
             h = fnv(dsp.ram, sizeof dsp.ram, h);
             h = fnv(machine.picture, sizeof machine.picture, h);
             char line[128];
             netplay_status(line, sizeof line);
-            printf("step %u hash %016llx speed %s multitap %d (%s)\n", (unsigned)s, (unsigned long long)h,
-                   original_speed ? "original" : "smooth", machine.io.multitap, line);
-            fflush(stdout);
+            snprintf(last, sizeof last, "step %u hash %016llx speed %s multitap %d (%s)", (unsigned)s, (unsigned long long)h,
+                     original_speed ? "original" : "smooth", machine.io.multitap, line);
             printed = 1;
         }
-        if (s >= steps + after) { netplay_leave(); exit(0); }
+        if (s >= steps + after) {
+            printf("%s\n", last);
+            fprintf(stderr, "netsmoke: %u frames played again\n", (unsigned)replays);
+            netplay_leave();
+            exit(0);
+        }
     } else memcpy(machine.io.pad, held, sizeof held);
 }
 
@@ -103,6 +115,8 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--all") && i + 1 < argc) o.all = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--delay") && i + 1 < argc) o.delay = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--smooth")) original_speed = 0;
+        else if (!strcmp(argv[i], "--lag") && i + 1 < argc) lag = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--loss") && i + 1 < argc) loss = atoi(argv[++i]);
         else rom = argv[i];
     }
     if (!rom) { fprintf(stderr, "usage: netsmoke ROM (--host PORT | --join ADDR:PORT) [options]\n"); return 2; }

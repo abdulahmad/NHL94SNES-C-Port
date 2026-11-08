@@ -47,7 +47,7 @@ OVERBAR_DIR := platform/overbar
 -include $(OVERBAR_DIR)/overbar.mk
 OVERBARO := $(OVERBAR_LIB_NAMES:%=build/obj/overbar/%.o) build/obj/overbar/pulseman_menu.o
 WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o \
-	build/obj/platform/overbar_client.o build/obj/platform/netplay.o $(OVERBARO)
+	build/obj/platform/overbar_client.o build/obj/platform/netplay.o build/obj/platform/snapstate.o $(OVERBARO)
 
 all: build/snes94$(EXE) build/golden$(EXE)
 
@@ -108,7 +108,7 @@ build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
 	$(CC) -o $@ $^ -lm
 # online play headless, two of it on one machine (test/netsmoke.sh)
 netsmoke: build/netsmoke$(EXE)
-build/netsmoke$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/netsmoke.o build/obj/platform/netplay.o build/obj/overbar/net.o
+build/netsmoke$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/netsmoke.o build/obj/platform/netplay.o build/obj/platform/snapstate.o build/obj/overbar/net.o
 	$(CC) -o $@ $^ -lm $(NETLIB)
 # one file to give a player: SDL2 and the compiler's runtime in it, nothing but the system's DLLs needed
 dist: build/dist/snes94$(EXE)

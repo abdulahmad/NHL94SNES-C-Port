@@ -60,6 +60,7 @@ static uint32_t frame;                       /* frames ended */
 snrt_dsp dsp;
 static snrt_spc spc;
 static int stream, stream_armed;             /* command $10: the bytes copied (stream: copying) */
+static int waiting;                          /* inside clock_wait's move to the next interrupt (a resumable point) */
 
 static int before(const cost *c, uint32_t prev, uint32_t next, uint32_t ctx)
 {
@@ -243,7 +244,9 @@ void clock_wait(void)
     if (t < 0) { fprintf(stderr, "frame %u: a wait for an interrupt, but none is on\n", frame); exit(3); }
     lv[depth].waited = 1;
     if (!depth) in_pass = 0;
+    waiting = 1;
     set_now(t);
+    waiting = 0;
     take(irq);
 }
 
@@ -285,4 +288,30 @@ void clock_open(void)
     dsp.sample = sample;
     snrt_dsp_power(&dsp);
     snrt_spc_power(&spc, &dsp);
+}
+
+/* ---- states (online play's rollback: platform/snapstate.c) ---- */
+
+int clock_waiting(void) { return waiting; }
+
+#define PART(x) { &(x), sizeof (x) }
+static const struct { void *p; size_t n; } parts[] = {
+    PART(now), PART(beam_at), PART(nmi_next), PART(lv), PART(depth), PART(masked), PART(in_irq), PART(in_pass),
+    PART(frame), PART(spc), PART(dsp), PART(stream), PART(stream_armed), PART(waiting)
+};
+
+size_t clock_save(uint8_t *out)
+{
+    size_t at = 0;
+    for (size_t i = 0; i < sizeof parts / sizeof *parts; i++) {
+        if (out) memcpy(out + at, parts[i].p, parts[i].n);
+        at += parts[i].n;
+    }
+    return at;
+}
+
+void clock_load(const uint8_t *in)
+{
+    size_t at = 0;
+    for (size_t i = 0; i < sizeof parts / sizeof *parts; i++) { memcpy(parts[i].p, in + at, parts[i].n); at += parts[i].n; }
 }

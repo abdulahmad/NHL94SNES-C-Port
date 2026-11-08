@@ -64,8 +64,11 @@ The game waits while it is open (not in an online session). Up / Down choose, En
 ## Online play
 
 The overlay's Online page (or the menu bar's Online Play) hosts or joins a game over the network,
-two to four machines and up to five players, on Overbar's lockstep netplay (`platform/netplay.c`):
-every machine runs the game with every pad's buttons, each frame. Its Role is host, join (type the host's
+two to four machines and up to five players, on Overbar's netplay with rollback (`platform/netplay.c`,
+`platform/snapstate.c`): every machine runs the game with every pad's buttons, each frame. A frame never
+waits for the network: the others' buttons are guessed (held), and when a guess was wrong the game goes back
+to its state from before that frame and plays the frames since again at once, with no sound and no picture.
+Delay (frames between pressing and the game seeing it) makes wrong guesses rarer. Its Role is host, join (type the host's
 address) or both connect (each types the other's). Name, Address and Port take typed text
 (Backspace, Enter, Escape; Ctrl+V pastes). Every machine must run the same build on the same
 cartridge. Once everyone is in, the game starts again from power on on every machine, at the host's
@@ -73,7 +76,8 @@ Game Speed, with the multitap in when the host's game has more than two players.
 game never waits: the overlay and the controller setup screen draw over it, and that machine's pads
 read 0 while they are open. A difference between the machines ends the session ("desync at step N"),
 as does Leave or a machine not heard from for 10 seconds; then the local game starts again.
-`make netsmoke` and `test/netsmoke.sh ROM` play a session headless between two games on 127.0.0.1.
+`make netsmoke` and `test/netsmoke.sh ROM` play a session headless between two games on 127.0.0.1
+(`build/netsmoke ... --lag 60 --loss 5` adds a bad network, for rollbacks).
 
 ## Players
 

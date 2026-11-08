@@ -1,10 +1,14 @@
-/* Online play: Overbar's lockstep core (overbar/net.h) under the game. No SDL here: platform/main.c
+/* Online play: Overbar's netplay core (overbar/net.h) under the game, with rollback (snapstate.h). No SDL here: platform/main.c
  * runs it in the window, and a headless test can run it the same way.
  *
- * One lockstep step is one frame: at each frame's end every machine gives its own players' pads
+ * One step is one frame: at each frame's end every machine gives its own players' pads
  * and gets all five, which the next frame plays with. The session starts on every machine at the
  * same point, the console powered on again (console_restart) once everyone is in, with the host's
- * Game Speed and multitap. Every 60 steps the work RAM and the sound CPU's RAM are compared. */
+ * Game Speed and multitap. Every 60 steps the work RAM and the sound CPU's RAM are compared.
+ * The others' pads are guessed (held) so a frame never waits for them; a wrong guess loads the
+ * state from before it (snapstate.h) and the frames since are played again at once, quietly
+ * (netplay_replaying). A state is taken at frames that end in the game's wait for an interrupt;
+ * where the game has none (a slow frame), the session guesses only as far as its last state. */
 #ifndef NETPLAY_H
 #define NETPLAY_H
 #include <stdint.h>
@@ -36,5 +40,10 @@ void netplay_frame(uint32_t now_ms);
  * ended this does not return (the local game from power on) */
 int netplay_pads(const uint16_t *local, uint16_t pad[NETPLAY_PADS], void (*wait)(void));
 uint32_t netplay_steps(void);   /* the session's steps run so far (0: none) */
+/* the frame just run was played again after a rollback (a guess of someone's buttons was wrong):
+ * no sound out, no picture, no waiting for the clock */
+int netplay_replaying(void);
+/* (tests) a bad network on this machine's sends: delay, jitter, loss */
+void netplay_simulate(int delay_ms, int jitter_ms, int loss_pct);
 
 #endif

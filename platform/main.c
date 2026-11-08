@@ -768,6 +768,11 @@ void console_sample(int16_t l, int16_t r)
 void console_frame_done(uint32_t frame)
 {
     (void)frame;
+    if (netplay_replaying()) {                            /* (a frame played again after a rollback: no picture, no sound, no waiting) */
+        n_sound = 0;
+        read_pads();
+        return;
+    }
     int changed = 0;                                      /* (a picture that differs from the one before counts for the frame counter) */
     for (int i = 0; i < SNRT_WIDTH * SNRT_HEIGHT; i++) {   /* (RGB565 to ARGB) */
         unsigned c = machine.picture[i], r = c >> 11, g = c >> 5 & 63, b = c & 31;
