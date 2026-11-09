@@ -22,7 +22,7 @@ GAMEDIR="/$directory/ports/nhl94s"
 CONFDIR="$GAMEDIR/conf"
 BIN="nhl94s.${DEVICE_ARCH}"
 
-mkdir -p "$CONFDIR" "$GAMEDIR/roms"
+mkdir -p "$CONFDIR"
 cd "$GAMEDIR" || exit 1
 
 > "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1
@@ -33,8 +33,11 @@ export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 export OVERBAR_HANDHELD=1
 export PORTMASTER=1
 
-if [ ! -f "$GAMEDIR/roms/nhl94.smc" ]; then
-  pm_message "Copy your NHL '94 SNES dump to roms/nhl94.smc (header optional)."
+# The game finds its ROM by itself: any file next to the program with a common extension (any name), checked to be the right game.
+FOUND=""
+for f in *.smc *.sfc *.swc *.fig; do [ -f "$f" ] && FOUND="$f" && break; done
+if [ -z "$FOUND" ]; then
+  pm_message "Copy your NHL '94 SNES dump into the port folder (any file name)."
   pm_finish
   exit 1
 fi
@@ -48,5 +51,5 @@ fi
 # gptokeyb: quit combo only. L/R and face buttons stay native SDL GameController.
 $GPTOKEYB "$BIN" -c "$GAMEDIR/nhl94s.gptk" &
 pm_platform_helper "$GAMEDIR/$BIN"
-./"$BIN" "$GAMEDIR/roms/nhl94.smc"
+./"$BIN"
 pm_finish

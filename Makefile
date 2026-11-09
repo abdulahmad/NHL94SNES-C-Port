@@ -16,8 +16,8 @@ GAMEH   := $(wildcard game/*.h)
 RTH     := $(wildcard runtime/include/snrt/*.h)
 INSTR   := -finstrument-functions -finstrument-functions-exclude-file-list=$(subst $(space),$(comma),$(GAMEH))
 GAMEDEF := -DHeapFree=HeapFree_game   # (the routine's name is Windows' too, which SDL brings in)
-SDLCF   := $(shell sdl2-config --cflags 2>/dev/null)
-SDLLIB  := $(filter-out -mwindows,$(shell sdl2-config --libs 2>/dev/null))
+SDLCF   := $(or $(shell pkg-config --cflags sdl2 2>/dev/null),$(shell sdl2-config --cflags 2>/dev/null))
+SDLLIB  := $(filter-out -mwindows,$(or $(shell pkg-config --libs sdl2 2>/dev/null),$(shell sdl2-config --libs 2>/dev/null)))
 SDLSTATIC := $(filter-out -mwindows,$(shell sdl2-config --static-libs 2>/dev/null))
 ifeq ($(OS),Windows_NT)
 EXE     := .exe
@@ -106,7 +106,7 @@ build/obj/icon.o: res/icon.rc res/icon.ico
 build/mister/README.md: $(OVERBAR_DIR)/mister/README.md $(OVERBAR_DIR)/overbar.mk | overbar
 	$(call overbar_copy_mister,build)
 build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO) | build/mister/README.md
-	$(CC) -o $@ $^ $(SDLLIB) $(WINLIB) -lm $(NETLIB)
+	$(CC) -o $@ $^ $(LDFLAGS) $(SDLLIB) $(WINLIB) -lm $(NETLIB)
 	@if [ -n "$(SDL_DLL)" ] && [ -f "$(SDL_DLL)" ]; then cp -f "$(SDL_DLL)" build/SDL2.dll; fi
 build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
 	$(CC) -o $@ $^ -lm
