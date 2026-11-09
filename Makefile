@@ -21,7 +21,7 @@ SDLLIB  := $(filter-out -mwindows,$(shell sdl2-config --libs 2>/dev/null))
 SDLSTATIC := $(filter-out -mwindows,$(shell sdl2-config --static-libs 2>/dev/null))
 ifeq ($(OS),Windows_NT)
 EXE     := .exe
-WINDRES ?= $(patsubst %gcc,%windres,$(CC))
+WINDRES ?= $(if $(findstring gcc,$(CC)),$(patsubst %gcc,%windres,$(CC)),windres)
 ICONO   := build/obj/icon.o   # (the exe's icon, res/icon.ico)
 # Explorer launch needs only SDL2.dll beside the exe (no libgcc_s / libwinpthread
 # from PATH, which are often the 32-bit ones from a 95PC tree → 0xc000007b).
@@ -54,7 +54,7 @@ all: build/snes94$(EXE) build/golden$(EXE)
 build/obj/game/%.o: game/%.c $(GAMEH)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INSTR) $(GAMEDEF) $(GAMEINC) -c $< -o $@
-build/obj/platform/%.o: platform/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
+build/obj/platform/%.o: platform/%.c $(wildcard $(OVERBAR_DIR)/include/overbar/*.h) $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(OVERBAR_INC) $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF) $(OVERBAR_DEFS)) $(if $(findstring netplay,$<),-Ibuild) -c $< -o $@
 build/obj/platform/netplay.o: build/build_id.h
