@@ -26,12 +26,15 @@ checked with has the SHA-1 `10dcd21be9c5542e82b0b94473bf5ff569b36cf5` (without a
 one is fine).
 
 ```
+git submodule update --init     # Overbar, the host menu (platform/overbar); or clone with --recurse-submodules
 make
 ./build/snes94 nhl94.smc
 ```
 
 (Windows: run it from the UCRT64 shell, or `make dist` for `build/dist/snes94.exe`, one file
 with SDL2 in it. Drag a ROM onto it, or put it beside it: any `.smc` that is the game.)
+
+**PortMaster / RG35XX:** zip layout and launch script are in [`portmaster/`](portmaster/). Handheld is 60 Hz, overlay only, fullscreen SDL_Renderer / KMSDRM (no desktop OpenGL, no message box). Copy your dump to `roms/nhl94.smc`. `./portmaster/pack.sh` builds `nhl94s.zip`. Private zip; the ROM is never included.
 
 ## Controls
 
@@ -46,19 +49,35 @@ with SDL2 in it. Drag a ROM onto it, or put it beside it: any `.smc` that is the
 | Select | Right Shift | Left Shift | Back | |
 | Start | Enter | Tab | Start | pause |
 
-## The settings menu
+## The overlay
 
-F9 opens it, Escape (or F9) closes it, and the game waits while it is open. Up / Down choose,
-Enter (or Left / Right) changes; on a controller, the d-pad or stick, the south button or Start,
-and Back to close. Each change is saved to `settings.ini` at once.
+`` ` `` or F11 (or a controller's Back) opens Overbar; F12 toggles stats. Escape does not open it.
+The game waits while it is open (not in an online session). Up / Down choose, Enter (or Left / Right) changes.
 
+- **Video**: Scale Mode (Sharp / CRT / MiSTer / RetroArch / Scale2x / …). The picture is always
+  4:3 as if 240 lines existed; the source stays 256×224 (PAR 5:4). There is no Native 1:1.
 - **Controllers...**: the controller setup screen, each button asked for in turn, then the stick's
   dead zone.
-- **Show FPS** (off): the game's new pictures a second, in the picture's top right corner (about
-  30 in play at Original speed, 48 at Smooth).
-- **Picture** (4:3): the picture's shape. 4:3 is a TV's, as the console's picture filled one;
-  Native shows its pixels square (256 by 224), at the largest whole scale that fits the window.
-- **Game Speed** (Original): see below.
+- **Game Speed** (Original): see below. Stats (F12) is the old Show FPS.
+- **Online Play**: see below.
+
+## Online play
+
+The overlay's Online page (or the menu bar's Online Play) hosts or joins a game over the network,
+two to four machines and up to five players, on Overbar's netplay with rollback (`platform/netplay.c`,
+`platform/snapstate.c`): every machine runs the game with every pad's buttons, each frame. A frame never
+waits for the network: the others' buttons are guessed (held), and when a guess was wrong the game goes back
+to its state from before that frame and plays the frames since again at once, with no sound and no picture.
+Delay (frames between pressing and the game seeing it) makes wrong guesses rarer. Its Role is host, join (type the host's
+address) or both connect (each types the other's). Name, Address and Port take typed text
+(Backspace, Enter, Escape; Ctrl+V pastes). Every machine must run the same build on the same
+cartridge. Once everyone is in, the game starts again from power on on every machine, at the host's
+Game Speed, with the multitap in when the host's game has more than two players. In a session the
+game never waits: the overlay and the controller setup screen draw over it, and that machine's pads
+read 0 while they are open. A difference between the machines ends the session ("desync at step N"),
+as does Leave or a machine not heard from for 10 seconds; then the local game starts again.
+`make netsmoke` and `test/netsmoke.sh ROM` play a session headless between two games on 127.0.0.1
+(`build/netsmoke ... --lag 60 --loss 5` adds a bad network, for rollbacks).
 
 ## Players
 
