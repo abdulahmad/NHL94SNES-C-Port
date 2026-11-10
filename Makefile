@@ -16,23 +16,14 @@ GAMEH   := $(wildcard game/*.h)
 RTH     := $(wildcard runtime/include/snrt/*.h)
 INSTR   := -finstrument-functions -finstrument-functions-exclude-file-list=$(subst $(space),$(comma),$(GAMEH))
 GAMEDEF := -DHeapFree=HeapFree_game   # (the routine's name is Windows' too, which SDL brings in)
-SDLCF   := $(or $(shell pkg-config --cflags sdl2 2>/dev/null),$(shell sdl2-config --cflags 2>/dev/null))
-SDLLIB  := $(filter-out -mwindows,$(or $(shell pkg-config --libs sdl2 2>/dev/null),$(shell sdl2-config --libs 2>/dev/null)))
+SDLCF   := $(shell sdl2-config --cflags 2>/dev/null)
+SDLLIB  := $(filter-out -mwindows,$(shell sdl2-config --libs 2>/dev/null))
 SDLSTATIC := $(filter-out -mwindows,$(shell sdl2-config --static-libs 2>/dev/null))
 ifeq ($(OS),Windows_NT)
 EXE     := .exe
-WINDRES ?= $(if $(findstring gcc,$(CC)),$(patsubst %gcc,%windres,$(CC)),windres)
+WINDRES ?= $(patsubst %gcc,%windres,$(CC))
 ICONO   := build/obj/icon.o   # (the exe's icon, res/icon.ico)
-# Explorer launch needs only SDL2.dll beside the exe (no libgcc_s / libwinpthread
-# from PATH, which are often the 32-bit ones from a 95PC tree → 0xc000007b).
-WINLIB  ?= -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic
-SDL_DLL := $(shell sdl2-config --prefix 2>/dev/null)/bin/SDL2.dll
-NETLIB  := -lws2_32   # (Winsock: online play, Overbar's src/net.c)
 endif
-WINLIB  ?=
-NETLIB  ?=
-# the build, in online play's identity (the machines of a session must run the same one)
-BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 ROM     ?= $(firstword $(wildcard *.smc *.sfc))
 # the first Python 3 that runs (on Windows python3 may be the Store's stand-in, which only says so)
 PYTHON  ?= $(firstword $(foreach p,python3 python,$(if $(shell $(p) -c "import sys; print(sys.version_info[0])" 2>/dev/null | grep -x 3),$(p))) python3)
@@ -42,42 +33,23 @@ RUNTIME := $(wildcard runtime/src/*.c)
 GAMEO   := $(GAME:%.c=build/obj/%.o)
 RTO     := $(RUNTIME:%.c=build/obj/%.o)
 CONSOLEO := build/obj/platform/hal.o build/obj/platform/clock.o build/obj/fnsyms_gen.o build/obj/uncounted_gen.o
-# Overbar, the host menu and scaler: the git submodule platform/overbar (git submodule update --init)
-OVERBAR_DIR := platform/overbar
--include $(OVERBAR_DIR)/overbar.mk
-OVERBARO := $(OVERBAR_LIB_NAMES:%=build/obj/overbar/%.o) build/obj/overbar/pulseman_menu.o
-WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o \
-	build/obj/platform/overbar_client.o build/obj/platform/netplay.o build/obj/platform/snapstate.o $(OVERBARO)
+WINDOWO := build/obj/platform/main.o build/obj/platform/padsetup.o build/obj/platform/menu.o build/obj/platform/settings.o
 
 all: build/snes94$(EXE) build/golden$(EXE)
 
 build/obj/game/%.o: game/%.c $(GAMEH)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INSTR) $(GAMEDEF) $(GAMEINC) -c $< -o $@
-build/obj/platform/%.o: platform/%.c $(wildcard $(OVERBAR_DIR)/include/overbar/*.h) $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
+build/obj/platform/%.o: platform/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h) platform/costs.inc
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(OVERBAR_INC) $(if $(findstring main,$<)$(findstring overbar_client,$<),$(SDLCF) $(OVERBAR_DEFS)) $(if $(findstring netplay,$<),-Ibuild) -c $< -o $@
-build/obj/platform/netplay.o: build/build_id.h
-# rewritten only when the build's name changes (so netplay.o is rebuilt then, and only then)
-build/build_id.h: FORCE
-	@mkdir -p $(dir $@)
-	@echo '#define BUILD_ID "$(BUILD_ID)"' > $@.tmp; if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
-FORCE:
-build/obj/overbar/%.o: $(OVERBAR_DIR)/src/%.c $(OVERBAR_HDRS) | overbar
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(OVERBAR_DEFS) $(OVERBAR_INC) $(SDLCF) -c $< -o $@
-build/obj/overbar/pulseman_menu.o: $(OVERBAR_PULSEMAN_SRC) $(OVERBAR_HDRS) | overbar
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(OVERBAR_INC) -c $< -o $@
-overbar:
-	@test -f $(OVERBAR_DIR)/overbar.mk || { echo "no Overbar at $(OVERBAR_DIR): git submodule update --init"; exit 1; }
+	$(CC) $(CFLAGS) $(GAMEDEF) $(GAMEINC) $(if $(findstring main,$<),$(SDLCF)) -c $< -o $@
 build/obj/runtime/%.o: runtime/%.c $(RTH)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Iruntime/include -Ibuild -c $< -o $@
 build/obj/runtime/src/spc.o: build/spc_program.inc
 build/obj/test/%.o: test/%.c $(GAMEH) $(RTH) $(wildcard platform/*.h)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(GAMEINC) $(OVERBAR_INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(GAMEINC) -c $< -o $@
 
 # the sound CPU's programs as C, from the player's ROM
 build/spc_program.inc: tools/gen_spc.py game/symbols_gen.h $(ROM)
@@ -101,26 +73,17 @@ build/obj/%_gen.o: build/%_gen.c
 build/obj/icon.o: res/icon.rc res/icon.ico
 	@mkdir -p $(dir $@)
 	$(WINDRES) -I res $< -O coff -o $@
-# the MiSTer filter files Overbar ships (platform/overbar/mister), copied beside the program, where
-# Overbar looks for its mister folder; copied again when Overbar's copy changes
-build/mister/README.md: $(OVERBAR_DIR)/mister/README.md $(OVERBAR_DIR)/overbar.mk | overbar
-	$(call overbar_copy_mister,build)
-build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO) | build/mister/README.md
-	$(CC) -o $@ $^ $(LDFLAGS) $(SDLLIB) $(WINLIB) -lm $(NETLIB)
-	@if [ -n "$(SDL_DLL)" ] && [ -f "$(SDL_DLL)" ]; then cp -f "$(SDL_DLL)" build/SDL2.dll; fi
+build/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
+	$(CC) -o $@ $^ $(SDLLIB) -lm
 build/golden$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/golden.o
 	$(CC) -o $@ $^ -lm
-# online play headless, two of it on one machine (test/netsmoke.sh)
-netsmoke: build/netsmoke$(EXE)
-build/netsmoke$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) build/obj/test/netsmoke.o build/obj/platform/netplay.o build/obj/platform/snapstate.o build/obj/overbar/net.o
-	$(CC) -o $@ $^ -lm $(NETLIB)
 # one file to give a player: SDL2 and the compiler's runtime in it, nothing but the system's DLLs needed
 dist: build/dist/snes94$(EXE)
 build/dist/snes94$(EXE): $(GAMEO) $(CONSOLEO) $(RTO) $(WINDOWO) $(ICONO)
 	@mkdir -p $(dir $@)
-	$(CC) -static -s -o $@ $^ $(SDLSTATIC) -lm $(NETLIB)
+	$(CC) -static -s -o $@ $^ $(SDLSTATIC) -lm
 
 clean:
 	rm -rf build
 
-.PHONY: all clean dist netsmoke overbar FORCE
+.PHONY: all clean dist

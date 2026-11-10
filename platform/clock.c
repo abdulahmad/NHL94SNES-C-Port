@@ -26,7 +26,6 @@
  * handlers and the waits keep the cartridge's time. */
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "game.h"
 #include "mem.h"
 #include "console.h"
@@ -60,7 +59,6 @@ static uint32_t frame;                       /* frames ended */
 snrt_dsp dsp;
 static snrt_spc spc;
 static int stream, stream_armed;             /* command $10: the bytes copied (stream: copying) */
-static int waiting;                          /* inside clock_wait's move to the next interrupt (a resumable point) */
 
 static int before(const cost *c, uint32_t prev, uint32_t next, uint32_t ctx)
 {
@@ -244,9 +242,7 @@ void clock_wait(void)
     if (t < 0) { fprintf(stderr, "frame %u: a wait for an interrupt, but none is on\n", frame); exit(3); }
     lv[depth].waited = 1;
     if (!depth) in_pass = 0;
-    waiting = 1;
     set_now(t);
-    waiting = 0;
     take(irq);
 }
 
@@ -269,18 +265,6 @@ static void frame_end(snrt *m, void *user)
     console_frame_done(frame);
 }
 
-/* power on again (online play's restart): the clock's time and its counts back to their start too */
-void clock_reset(void)
-{
-    now = beam_at = 0;
-    nmi_next = NMI_AT;
-    memset(lv, 0, sizeof lv);
-    depth = masked = in_irq = in_pass = 0;
-    frame = 0;
-    stream = stream_armed = 0;
-    clock_open();
-}
-
 void clock_open(void)
 {
     machine.frame_done = frame_end;
@@ -288,30 +272,4 @@ void clock_open(void)
     dsp.sample = sample;
     snrt_dsp_power(&dsp);
     snrt_spc_power(&spc, &dsp);
-}
-
-/* ---- states (online play's rollback: platform/snapstate.c) ---- */
-
-int clock_waiting(void) { return waiting; }
-
-#define PART(x) { &(x), sizeof (x) }
-static const struct { void *p; size_t n; } parts[] = {
-    PART(now), PART(beam_at), PART(nmi_next), PART(lv), PART(depth), PART(masked), PART(in_irq), PART(in_pass),
-    PART(frame), PART(spc), PART(dsp), PART(stream), PART(stream_armed), PART(waiting)
-};
-
-size_t clock_save(uint8_t *out)
-{
-    size_t at = 0;
-    for (size_t i = 0; i < sizeof parts / sizeof *parts; i++) {
-        if (out) memcpy(out + at, parts[i].p, parts[i].n);
-        at += parts[i].n;
-    }
-    return at;
-}
-
-void clock_load(const uint8_t *in)
-{
-    size_t at = 0;
-    for (size_t i = 0; i < sizeof parts / sizeof *parts; i++) { memcpy(parts[i].p, in + at, parts[i].n); at += parts[i].n; }
 }
