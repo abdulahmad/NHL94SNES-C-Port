@@ -6,25 +6,19 @@
  *
  * Up to five players: keys and a controller each, set in settings.ini (written beside the program
  * the first time, with every setting). The multitap is in port 2 when a player 3-5 has keys or a
- * controller at power on, as the cartridge needs it for more than two. F9 (and nothing else) opens
- * the settings menu (platform/menu.h); Escape (or F9) closes it, and the game waits while it is
- * open. Its items, each change saved to settings.ini at once:
- *   Controllers...  opens the controller setup screen (platform/padsetup.h: each button asked for in
- *                   turn, then the stick's dead zone; saved to settings.ini); closing it returns to the menu
- *   Show FPS        Off / On (window.show_fps, default Off): the game's new pictures a second, counted
- *                   over each second of real time and drawn in the picture's top right corner (a still
- *                   screen reads 0; in play at Original speed about 30, a pass of the game taking 2 vblanks)
- *   Picture         4:3 / Native (window.aspect, default 4:3): the picture's shape, a TV's, or its
- *                   pixels square at a whole scale
- *   Game Speed      Original / Smooth (game.speed, default Original): the cartridge's time, or the
- *                   game's passes 8 times as fast (platform/clock.c)
- * Menu: Up / Down choose, Enter (or Left / Right) changes; controller: d-pad or stick up / down,
- * south button (A) or Start changes, Back closes.
+ * controller at power on, as the cartridge needs it for more than two. ` and F11 (and a controller's
+ * Back) open the Overbar overlay; F12 toggles stats. Escape does not open it. The game waits while
+ * the overlay or the controller setup screen is open. Video is the shared Scale Mode tree; the
+ * picture has the pixel shape of a 4:3 screen of 240 lines (PAR 5:4), the 224 real lines drawn. There is
+ * no Picture Native. Game Speed is an overlay addon. Controllers... is on Input (and the menu bar's).
+ * Online play (the overlay's Online page, platform/netplay.c): lockstep, the frames its steps; the
+ * game does not wait for the overlay or the setup screen in a session, whose pads read 0 meanwhile.
  *   pad 1: arrows, Z / X / A / S = B / A / Y / X, Q / W = L / R, Right Shift = Select, Enter = Start
  *   pad 2: I J K L, F / G / R / T, E / Y, Left Shift, Tab
  *   controller N is player N's: d-pad or left stick; south / east / west / north = B / A / Y / X
  * File: settings.ini, beside the program. */
 #include <SDL2/SDL.h>
+#include "overbar/plat.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -35,6 +29,8 @@
 #include "menu.h"
 #include "padsetup.h"
 #include "settings.h"
+#include "overbar_client.h"
+#include "netplay.h"
 
 #define SCALE 3
 #define RATE 32040                      /* the sound's samples a second (the sound chip's, as snes9x has it) */
@@ -44,8 +40,6 @@
 #define PADS 5
 #define SLOTS 8                         /* controllers, each in the slot it was given when plugged in */
 #define NB 12
-#define FPS_W 48                        /* the counter's own small picture */
-#define FPS_H 10
 
 /* the pad's buttons: name in settings.ini, bit, default keys for pads 1 and 2, default controller
  * button (south B, east A, west Y, north X), and what each does with the puck and without (the
@@ -60,11 +54,9 @@ static const struct { const char *name; uint16_t bit; const char *key1, *key2, *
 };
 enum { START = 11 };
 
-static SDL_Window *win;
-static SDL_Renderer *ren;
-static SDL_Texture *tex, *setup_tex, *fps_tex;
+static SDL_Texture *setup_tex;
 static SDL_AudioDeviceID dev;
-static uint32_t picture[SNRT_WIDTH * SNRT_HEIGHT], setup_px[SNRT_WIDTH * SNRT_HEIGHT], fps_px[FPS_W * FPS_H];
+static uint32_t picture[SNRT_WIDTH * SNRT_HEIGHT], setup_px[SNRT_WIDTH * SNRT_HEIGHT];
 static int16_t sound[2 * 2048];         /* the frame's sound */
 static int n_sound;
 static uint64_t next_tick;
@@ -72,28 +64,19 @@ static char base[1024];                 /* the folder the program is in (empty: 
 
 static pm_settings *set;
 static SDL_Scancode key[PADS][NB];
-static SDL_GameController *ctrl[SLOTS];
 static int player_ctrl[PADS];           /* each player's controller slot + 1 (0: none) */
 static int cbutton[NB];                 /* the controllers' button for each of the pad's (the directions' unused) */
 static int dead_zone;                   /* the left stick's, in % */
 
-/* the settings menu: open, the item chosen, each controller's stick held up or down (-1, 1; 0: not) */
-enum { ITEM_CONTROLLERS, ITEM_FPS, ITEM_PICTURE, ITEM_SPEED, ITEMS };
-static int menu, menu_at, show_fps, stick_dir[SLOTS];
+/* the settings overlay: Overbar; each controller's stick held up or down (-1, 1; 0: not) */
+static int show_fps;
 
-/* the picture's shape: a TV's 4:3, as the console's picture filled one (1), or its pixels square (0) */
-static int tv;
-
-/* the frame counter: the new pictures since fps_since (ticks), the last second's count shown */
-static int fps_frames, fps_shown;
-static uint32_t fps_since;
 
 /* the controller setup screen: open, the controller it sets (a slot; -1: still to choose), the pad's
  * button asked for (-1: the dead zone) and since when, what it has set so far; each slot's
  * triggers past halfway */
 static int setup, setup_slot, setup_at, setup_dead, setup_map[NB];
 static uint32_t setup_since;
-static uint8_t trigger_down[SLOTS][2];
 
 static int clamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
@@ -171,13 +154,12 @@ static void settings_load(void)
             "# key's own sign (, . - =). Controller buttons are SDL's names: a b x y back start leftshoulder\n"
             "# rightshoulder leftstick rightstick guide, and lefttrigger righttrigger (pressed past halfway).\n"
             "# playerN.controller: the controller slot player N plays with (0: none; controllers take slots\n"
-            "# 1-8 as they are plugged in). F9 opens the settings menu in the game (Controllers sets a\n"
-            "# controller up). The multitap is in the ports when player 3, 4 or 5 has keys or a controller\n"
+            "# 1-8 as they are plugged in). ` or F11 opens the Overbar overlay (Controllers sets a\n"
+            "# controller up). F12 toggles stats. The multitap is in the ports when player 3, 4 or 5 has keys or a controller\n"
             "# plugged in at power on.\n"
             "# window.show_fps: 1 shows the game's new pictures a second in the picture's top right corner\n"
-            "# (0 off). window.aspect: 4:3 (the default) shows the picture as a TV did, native with its\n"
-            "# pixels square. game.speed: original (the default) gives the game the cartridge's time, smooth\n"
-            "# runs its passes 8 times as fast. All three are set in the game's menu, too.\n";
+            "# (0 off). The picture has the pixel shape of a 4:3 screen of 240 lines, only the 224 drawn (no Native). game.speed: original (the default) gives the game the cartridge's time, smooth\n"
+            "# runs its passes 8 times as fast. Overlay Video live-previews Scale Mode.\n";
         pm_settings_parse(set, head, sizeof head - 1);
     }
     pm_settings_default(set, "game.rom", "");
@@ -207,10 +189,7 @@ static void settings_load(void)
     dead_zone = clamp(pm_settings_get_int(set, "controller.dead_zone", 50), 5, 95);
     pm_settings_default(set, "window.show_fps", "0");
     pm_settings_default(set, "game.speed", "original");
-    pm_settings_default(set, "window.aspect", "4:3");
     show_fps = pm_settings_get_int(set, "window.show_fps", 0) != 0;
-    const char *aspect = pm_settings_get(set, "window.aspect");
-    tv = !aspect || strcmp(aspect, "native") != 0;        /* (anything but native: 4:3) */
     const char *speed = pm_settings_get(set, "game.speed");
     original_speed = !speed || strcmp(speed, "smooth") != 0; /* (anything but smooth: Original) */
     settings_write();                                     /* (a new file, or new settings: written now) */
@@ -218,34 +197,7 @@ static void settings_load(void)
 
 /* ---- controllers ---- */
 
-/* a controller plugged in (device index): into the first free slot, unless it is open already */
-static void ctrl_added(int index)
-{
-    if (!SDL_IsGameController(index)) return;
-    SDL_JoystickID id = SDL_JoystickGetDeviceInstanceID(index);
-    for (int i = 0; i < SLOTS; i++)
-        if (ctrl[i] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(ctrl[i])) == id) return;
-    for (int i = 0; i < SLOTS; i++)
-        if (!ctrl[i]) { ctrl[i] = SDL_GameControllerOpen(index); break; }
-}
-
-/* a controller pulled out (instance id): its slot empty, the others where they were */
-static void ctrl_removed(SDL_JoystickID id)
-{
-    for (int i = 0; i < SLOTS; i++)
-        if (ctrl[i] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(ctrl[i])) == id) {
-            SDL_GameControllerClose(ctrl[i]);
-            ctrl[i] = NULL;
-        }
-}
-
-static int slot_of(SDL_JoystickID id)
-{
-    for (int i = 0; i < SLOTS; i++) if (ctrl[i] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(ctrl[i])) == id) return i;
-    return -1;
-}
-
-static SDL_GameController *player_pad(int p) { return player_ctrl[p] ? ctrl[player_ctrl[p] - 1] : NULL; }
+static SDL_GameController *player_pad(int p) { return player_ctrl[p] ? ob_plat_controller(player_ctrl[p] - 1) : NULL; }
 
 /* a controller's buttons held, as the pad's */
 static uint16_t ctrl_buttons(SDL_GameController *c)
@@ -334,11 +286,23 @@ static void setup_key(SDL_Scancode k)
 /* a button not pressed in 5 seconds: kept as it is; the controller pulled out: closed unsaved */
 static void setup_tick(void)
 {
-    if (setup && setup_slot >= 0 && !ctrl[setup_slot]) { setup_close(0); return; }
+    if (setup && setup_slot >= 0 && !ob_plat_controller(setup_slot)) { setup_close(0); return; }
     if (setup && setup_at >= 0 && setup_slot >= 0 && SDL_GetTicks() - setup_since >= 5000) {
         if (++setup_at == NB) setup_at = -1;
         setup_since = SDL_GetTicks();
     }
+}
+
+/* setup_px over the picture */
+static void setup_show(const SDL_Rect *dst)
+{
+    if (!setup_tex) {
+        setup_tex = SDL_CreateTexture(ob_plat_renderer(), SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SNRT_WIDTH, SNRT_HEIGHT);
+        if (setup_tex) SDL_SetTextureBlendMode(setup_tex, SDL_BLENDMODE_BLEND);
+    }
+    if (!setup_tex) return;
+    SDL_UpdateTexture(setup_tex, NULL, setup_px, SNRT_WIDTH * 4);
+    SDL_RenderCopy(ob_plat_renderer(), setup_tex, NULL, dst);
 }
 
 /* the screen over the picture, at the picture's resolution */
@@ -354,9 +318,9 @@ static void setup_draw(const SDL_Rect *dst)
         value_p[i] = cinput_name(setup_map[i + 4]);
         role_p[i] = buttons[i + 4].role ? buttons[i + 4].role : "";
     }
-    SDL_GameController *c = setup_slot >= 0 ? ctrl[setup_slot] : NULL;
+    SDL_GameController *c = setup_slot >= 0 ? ob_plat_controller(setup_slot) : NULL;
     int none = 1;
-    for (int i = 0; i < SLOTS; i++) if (ctrl[i]) none = 0;
+    for (int i = 0; i < SLOTS; i++) if (ob_plat_controller(i)) none = 0;
     const char *cname = c ? SDL_GameControllerName(c) : NULL;
     pm_padsetup_view v = { .controller = setup_slot < 0 ? "" : cname ? cname : "a controller", .names = name_p, .values = value_p, .roles = role_p, .n = n,
                            .at = setup_slot < 0 ? -2 : setup_at < 0 ? -1 : setup_at - 4,
@@ -364,169 +328,99 @@ static void setup_draw(const SDL_Rect *dst)
                            .stick_x = c ? SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_LEFTX) : 0,
                            .stick_y = c ? SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_LEFTY) : 0, .none = none };
     pm_padsetup_draw(setup_px, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, &v);
-    SDL_UpdateTexture(setup_tex, NULL, setup_px, SNRT_WIDTH * 4);
-    SDL_RenderCopy(ren, setup_tex, NULL, dst);
+    setup_show(dst);
 }
 
-/* ---- the settings menu ---- */
+/* ---- Overbar overlay ---- */
 
-/* the item chosen, or toggled: Controllers... opens the setup screen (over the menu, which comes
- * back when it closes); the others flip at once and are saved */
-static void menu_change(int item)
+static void quit(void);
+
+static void overlay_sync_settings(void)
 {
-    if (item == ITEM_CONTROLLERS) { setup_open(-1); return; }
-    if (item == ITEM_FPS) {
-        show_fps = !show_fps;
-        pm_settings_set_int(set, "window.show_fps", show_fps);
-        fps_frames = 0;
-        fps_since = SDL_GetTicks();
-    } else if (item == ITEM_PICTURE) {
-        tv = !tv;
-        pm_settings_set(set, "window.aspect", tv ? "4:3" : "native");
-    } else {
-        original_speed = !original_speed;
-        pm_settings_set(set, "game.speed", original_speed ? "original" : "smooth");
-    }
+    show_fps = overbar_client_stats();
+    pm_settings_set_int(set, "window.show_fps", show_fps);
+    if (!netplay_playing()) pm_settings_set(set, "game.speed", original_speed ? "original" : "smooth");   /* (in a session: the host's) */
     settings_write();
 }
 
-static void menu_move(int d) { menu_at = (menu_at + d + ITEMS) % ITEMS; }
+/* typed text for a field of the Online page (Name, Address, Port): SDL's text input on while one is edited */
+/* ---- online play: the Online page's hooks (platform/netplay.c) ---- */
 
-static void menu_key(SDL_Scancode k)
+static int online_start(const ob_online *o, char *msg, int msg_size)
 {
-    if (k == SDL_SCANCODE_ESCAPE || k == SDL_SCANCODE_F9) menu = 0;
-    else if (k == SDL_SCANCODE_UP) menu_move(-1);
-    else if (k == SDL_SCANCODE_DOWN) menu_move(1);
-    else if (k == SDL_SCANCODE_RETURN || k == SDL_SCANCODE_KP_ENTER) menu_change(menu_at);
-    else if ((k == SDL_SCANCODE_LEFT || k == SDL_SCANCODE_RIGHT) && menu_at != ITEM_CONTROLLERS) menu_change(menu_at);
+    int r = netplay_start(o, multitap(), msg, msg_size);
+    return r;
 }
 
-static void menu_button(int button)
+static void online_leave(void) { netplay_leave(); }
+static int online_status(char *line, int line_size) { return netplay_status(line, line_size); }
+
+static void online_setup(void)
 {
-    if (button == SDL_CONTROLLER_BUTTON_DPAD_UP) menu_move(-1);
-    else if (button == SDL_CONTROLLER_BUTTON_DPAD_DOWN) menu_move(1);
-    else if (button == SDL_CONTROLLER_BUTTON_A || button == SDL_CONTROLLER_BUTTON_START) menu_change(menu_at);
-    else if (button == SDL_CONTROLLER_BUTTON_BACK) menu = 0;
+    ob_online_ops ops;
+    memset(&ops, 0, sizeof ops);
+    ops.max_pads = PADS;
+    ops.max_delay = 10;
+    ops.roles = 3;
+    ops.start = online_start;
+    ops.leave = online_leave;
+    ops.status = online_status;
+    ops.lan_address = ob_net_lan_address;
+    ob_online_set_ops(overbar_client_host(), &ops);
 }
 
-/* the menu over the picture, at the picture's resolution */
-static void menu_draw(const SDL_Rect *dst)
-{
-    const char *names[ITEMS] = { "Controllers...", "Show FPS", "Picture", "Game Speed" };
-    const char *values[ITEMS] = { "", show_fps ? "On" : "Off", tv ? "4:3" : "Native", original_speed ? "Original" : "Smooth" };
-    pm_menu_settings_view v = { .names = names, .values = values, .n = ITEMS, .at = menu_at };
-    pm_menu_settings_draw(setup_px, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, &v);
-    SDL_UpdateTexture(setup_tex, NULL, setup_px, SNRT_WIDTH * 4);
-    SDL_RenderCopy(ren, setup_tex, NULL, dst);
-}
+/* the menu bar's Input > Controllers: the port's own setup screen */
+static void shell_controllers(void) { setup_open(-1); }
 
-/* ---- the frame counter ---- */
-
-/* each second of real time: the count of new pictures becomes the number shown */
-static void fps_tick(void)
-{
-    uint32_t now = SDL_GetTicks(), ms = now - fps_since;
-    if (ms < 1000) return;
-    fps_shown = (int)((fps_frames * 1000u + ms / 2) / ms);
-    fps_frames = 0;
-    fps_since = now;
-}
-
-/* the number in the picture's top right corner, over the game (a small picture of its own, the
- * magenta key becoming see-through) */
-static void fps_draw(const SDL_Rect *dst)
-{
-    char s[16];
-    snprintf(s, sizeof s, "%d FPS", fps_shown);
-    for (int i = 0; i < FPS_W * FPS_H; i++) fps_px[i] = 0x00FF00FFu;
-    pm_menu_text(fps_px, FPS_W, FPS_H, FPS_W, FPS_W - 1 - (int)strlen(s) * PM_MENU_CELL_W, 0, s, 0xFFFFFF);
-    for (int i = 0; i < FPS_W * FPS_H; i++)
-        fps_px[i] = fps_px[i] == 0x00FF00FFu ? 0 : fps_px[i] | 0xFF000000u;
-    SDL_UpdateTexture(fps_tex, NULL, fps_px, FPS_W * 4);
-    SDL_Rect src = { 0, 0, FPS_W, FPS_H };
-    SDL_Rect to = { dst->x + (SNRT_WIDTH - FPS_W) * dst->w / SNRT_WIDTH, dst->y, FPS_W * dst->w / SNRT_WIDTH, FPS_H * dst->w / SNRT_WIDTH };
-    SDL_RenderCopy(ren, fps_tex, &src, &to);
-}
 
 /* ---- each frame ---- */
 
+/* the player closed the game: the layer closes the window and leaves after this */
 static void quit(void)
 {
+    netplay_leave();                                      /* (goodbye to the others, so they end at once) */
     settings_write();
-    SDL_Quit();
-    exit(0);
 }
 
-/* the window's events: closing, F9, controllers plugged in and out, the setup screen's presses */
-static void events(void)
+/* online play's line (connecting, or why a session ended) along the picture's foot */
+static void banner_draw(const SDL_Rect *dst)
 {
-    SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_QUIT) quit();
-        else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
-            if (setup) setup_key(e.key.keysym.scancode);
-            else if (menu) menu_key(e.key.keysym.scancode);
-            else if (e.key.keysym.scancode == SDL_SCANCODE_F9) { menu = 1; menu_at = 0; }
-        }
-        else if (e.type == SDL_CONTROLLERBUTTONDOWN && (setup || menu)) {
-            int slot = slot_of(e.cbutton.which);
-            if (slot >= 0 && setup) setup_button(slot, e.cbutton.button);
-            else if (slot >= 0) menu_button(e.cbutton.button);
-        }
-        else if (e.type == SDL_CONTROLLERAXISMOTION && e.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
-            int slot = slot_of(e.caxis.which);          /* (the stick up or down moves in the menu, once a push) */
-            if (slot >= 0) {
-                int v = e.caxis.value;
-                int d = v < -16384 ? -1 : v > 16384 ? 1 : v > -8192 && v < 8192 ? 0 : stick_dir[slot];
-                if (d && d != stick_dir[slot] && menu && !setup) menu_move(d);
-                stick_dir[slot] = d;
-            }
-        }
-        else if (e.type == SDL_CONTROLLERAXISMOTION && (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
-            int slot = slot_of(e.caxis.which), k = e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
-            if (slot >= 0 && e.caxis.value > 16384 && !trigger_down[slot][k]) {   /* (pulled past halfway: once, until let go) */
-                trigger_down[slot][k] = 1;
-                if (setup) setup_button(slot, k ? TRIGGER_R : TRIGGER_L);
-            } else if (slot >= 0 && e.caxis.value < 8192) trigger_down[slot][k] = 0;
-        }
-        else if (e.type == SDL_CONTROLLERDEVICEADDED) ctrl_added(e.cdevice.which);
-        else if (e.type == SDL_CONTROLLERDEVICEREMOVED) ctrl_removed(e.cdevice.which);
-    }
+    const char *line = netplay_banner(SDL_GetTicks());
+    if (!line || setup) return;
+    for (int i = 0; i < SNRT_WIDTH * SNRT_HEIGHT; i++) setup_px[i] = 0;
+    for (int y = SNRT_HEIGHT - PM_MENU_CELL_H - 4; y < SNRT_HEIGHT; y++)
+        for (int x = 0; x < SNRT_WIDTH; x++) setup_px[y * SNRT_WIDTH + x] = 0xA0000000u;
+    char cut[SNRT_WIDTH / PM_MENU_CELL_W];
+    snprintf(cut, sizeof cut, "%s", line);
+    pm_menu_text(setup_px, SNRT_WIDTH, SNRT_HEIGHT, SNRT_WIDTH, 4, SNRT_HEIGHT - PM_MENU_CELL_H - 2, cut, 0xFFD84A);
+    setup_show(dst);
 }
 
-/* the picture as large as fits, 4:3, or its pixels square at the largest whole scale that fits, and
- * the setup screen or the menu over it when open (stretched with it) */
-static void draw(void)
+/* while a session's step waits for someone's buttons: the window stays alive (the overlay too) */
+static void net_wait(void)
 {
-    int ww, wh;
-    SDL_GetRendererOutputSize(ren, &ww, &wh);
-    int aw = tv ? 4 : SNRT_WIDTH, ah = tv ? 3 : SNRT_HEIGHT;
-    int w = ww, h = ww * ah / aw;
-    if (h > wh) { h = wh; w = wh * aw / ah; }
-    int scale = ww / SNRT_WIDTH < wh / SNRT_HEIGHT ? ww / SNRT_WIDTH : wh / SNRT_HEIGHT;
-    if (!tv && scale >= 1) { w = SNRT_WIDTH * scale; h = SNRT_HEIGHT * scale; }   /* (a window smaller than 1x: as large as fits) */
-    SDL_Rect dst = { (ww - w) / 2, (wh - h) / 2, w, h };
-    SDL_UpdateTexture(tex, NULL, picture, SNRT_WIDTH * 4);
-    SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
-    SDL_RenderClear(ren);
-    SDL_RenderCopy(ren, tex, NULL, &dst);
-    if (show_fps) fps_draw(&dst);
-    if (setup) setup_draw(&dst);
-    else if (menu) menu_draw(&dst);
-    SDL_RenderPresent(ren);
+    ob_plat_pump();
+    setup_tick();
+    ob_plat_present();
+    SDL_Delay(1);
 }
 
-/* the pads: each player's keys and controller (none while the setup screen is open) */
+/* the pads: each player's keys and controller (none while the setup screen or the overlay is
+ * open); in a session these are this machine's players' (its first ones), and all five come back
+ * from the session */
 static void read_pads(void)
 {
     const Uint8 *down = SDL_GetKeyboardState(NULL);
+    uint16_t local[PADS], all[NETPLAY_PADS];
     for (int p = 0; p < PADS; p++) {
         uint16_t b = 0;
         for (int i = 0; i < NB; i++) if (key[p][i] != SDL_SCANCODE_UNKNOWN && down[key[p][i]]) b |= buttons[i].bit;
         SDL_GameController *c = player_pad(p);
         if (c) b |= ctrl_buttons(c);
-        machine.io.pad[p] = setup ? 0 : b;
+        local[p] = (setup || overbar_client_open()) ? 0 : b;
     }
+    const uint16_t *pad = netplay_pads(local, all, net_wait) ? all : local;
+    for (int p = 0; p < PADS; p++) machine.io.pad[p] = pad[p];
 }
 
 void console_sample(int16_t l, int16_t r)
@@ -538,6 +432,11 @@ void console_sample(int16_t l, int16_t r)
 void console_frame_done(uint32_t frame)
 {
     (void)frame;
+    if (netplay_replaying()) {                            /* (a frame played again after a rollback: no picture, no sound, no waiting) */
+        n_sound = 0;
+        read_pads();
+        return;
+    }
     int changed = 0;                                      /* (a picture that differs from the one before counts for the frame counter) */
     for (int i = 0; i < SNRT_WIDTH * SNRT_HEIGHT; i++) {   /* (RGB565 to ARGB) */
         unsigned c = machine.picture[i], r = c >> 11, g = c >> 5 & 63, b = c & 31;
@@ -545,14 +444,16 @@ void console_frame_done(uint32_t frame)
         changed |= picture[i] != argb;
         picture[i] = argb;
     }
-    fps_frames += changed;
-    do {                                                  /* (the game waits while the menu or the setup screen is open) */
-        events();
+    ob_plat_frame_done(changed);
+    int hold;
+    do {                                                  /* (the game waits while the overlay or the setup screen is open, but not in a session) */
+        ob_plat_pump();
         setup_tick();
-        fps_tick();
-        draw();
-        if (setup || menu) SDL_Delay(15);
-    } while (setup || menu);
+        netplay_frame(SDL_GetTicks());                    /* (a session's start or end: the console from power on, not returning) */
+        ob_plat_present();
+        hold = (setup || overbar_client_open()) && !netplay_on();
+        if (hold) SDL_Delay(15);
+    } while (hold);
     if (dev) {
         SDL_QueueAudio(dev, sound, (Uint32)n_sound * 4);
         Uint32 enough = QUEUE_FRAMES * RATE / 60 * 4;
@@ -605,9 +506,23 @@ static const char *find_rom(char *found, size_t size)
     return NULL;
 }
 
+/* ---- the platform layer's hooks (Overbar plat.h) ---- */
+
+static const uint32_t *hook_picture(void) { return picture; }
+static int hook_action(int id) { if (id == OB_ID_CONTROLLERS) setup_open(-1); return 1; }
+static int hook_captures(void) { return setup; }
+static void hook_raw_key(int scancode) { setup_key((SDL_Scancode)scancode); }
+static void hook_raw_button(int slot, int button) { setup_button(slot, button == -1 ? TRIGGER_L : button == -2 ? TRIGGER_R : button); }
+static void hook_draw_over(const SDL_Rect *dst)
+{
+    banner_draw(dst);
+    if (setup) setup_draw(dst);
+}
+
 int main(int argc, char *argv[])
 {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    ob_profile profile = ob_profile_from_env();
+    if (!ob_plat_init(&profile)) return 1;
     char *where = SDL_GetBasePath();
     if (where) { snprintf(base, sizeof base, "%s", where); SDL_free(where); }
     settings_load();
@@ -616,28 +531,36 @@ int main(int argc, char *argv[])
     const char *why = NULL;
     if (rom && *rom) why = not_nhl94(rom);
     else if (!(rom = find_rom(found, sizeof found))) rom = "none", why = "no " ROM_EXT " file beside the program is NHL '94";
-    if (why) {                                            /* (a box: a player who opened the program sees it) */
+    if (why) {                                            /* (a box: a player who opened the program sees it; KMSDRM has no box) */
         char msg[1600];
         snprintf(msg, sizeof msg, "No game ROM: %s: %s.\n\nDrag your NHL '94 ROM onto the program, or put it beside the program (any "
                  "name ending " ROM_EXT "), or give its path as game.rom in " SETTINGS " (beside the program).", rom, why);
         fprintf(stderr, "%s\n", msg);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NHL '94", msg, NULL);
+        if (profile != OB_PROFILE_HANDHELD)
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NHL '94", msg, NULL);
         return 1;
     }
-    win = SDL_CreateWindow("NHL '94", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (tv ? SNRT_HEIGHT * 4 / 3 : SNRT_WIDTH) * SCALE, SNRT_HEIGHT * SCALE, SDL_WINDOW_RESIZABLE);
-    ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED) : NULL;
-    if (!ren && win) ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
-    tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SNRT_WIDTH, SNRT_HEIGHT) : NULL;
-    setup_tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SNRT_WIDTH, SNRT_HEIGHT) : NULL;
-    fps_tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, FPS_W, FPS_H) : NULL;
-    if (!tex || !setup_tex || !fps_tex) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
-    SDL_SetTextureBlendMode(setup_tex, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureBlendMode(fps_tex, SDL_BLENDMODE_BLEND);
-    fps_since = SDL_GetTicks();
+    overbar_client_init(profile);
+    overbar_client_set_stats(show_fps);
+    online_setup();
+    {
+        ob_shell shell;
+        memset(&shell, 0, sizeof shell);
+        shell.controllers = shell_controllers;
+        ob_shell_set(&shell);
+    }
+    {
+        static const ob_plat_hooks hooks = {
+            .title = "NHL '94", .win_w = 320 * SCALE, .win_h = 224 * SCALE, .cls = OB_CLASS_LORES,
+            .src_w = SNRT_WIDTH, .src_h = SNRT_HEIGHT, .picture = hook_picture,
+            .changed = overlay_sync_settings, .action = hook_action, .captures = hook_captures,
+            .raw_key = hook_raw_key, .raw_button = hook_raw_button, .draw_over = hook_draw_over, .quit = quit,
+        };
+        if (!ob_plat_open(&hooks, overbar_client_host())) return 1;
+    }
     SDL_AudioSpec want = { .freq = RATE, .format = AUDIO_S16SYS, .channels = 2, .samples = 512 }, got;
     dev = SDL_OpenAudioDevice(NULL, 0, &want, &got, 0);
     if (!dev) fprintf(stderr, "no sound (%s): the frames keep time by the clock\n", SDL_GetError());
-    for (int i = 0; i < SDL_NumJoysticks(); i++) ctrl_added(i);
     clock_open();
     machine.io.multitap = (uint8_t)multitap();
     console_run();

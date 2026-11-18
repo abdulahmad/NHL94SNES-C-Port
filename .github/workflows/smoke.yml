@@ -29,6 +29,8 @@ jobs:
         run: echo "VAULT_TOKEN not set, ROM checks skipped"
       - uses: actions/checkout@v4
         if: env.VAULT_TOKEN != ''
+        with:
+          submodules: true
       - uses: actions/checkout@v4
         if: env.VAULT_TOKEN != ''
         with:
