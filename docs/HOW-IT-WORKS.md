@@ -11,7 +11,7 @@ arithmetic, same RAM. That is why it plays exactly as the cartridge (`test/check
 
 | Where | What |
 |---|---|
-| `game/play/` | The game on the ice: the game loop, the title, the pause menus and the stats screens (`hockey.c`); the players' assignments, skating and the puck (`checks.c`, `assign.c`); the computer's decisions (`logic.c`); collisions, checks and energy (`collide.c`); the controls (`input.c`); penalties, the scoreboard and team stats (`penalty.c`); periods; the shootout |
+| `game/play/` | The game on the ice: the game loop, the title, the pause menus and the stats screens (`hockey.c`); the players' assignments, skating and the puck (`checks.c`, `assign.c`); the computer's decisions (`logic.c`); collisions, checks and energy (`collide.c`); the controls (`input.c`); penalties (`penalty.c`); the scoreboard, intermission, ticker and team stats (`scoreboard.c`); periods; the shootout |
 | `game/screen/` | The picture: printing, the rink and sort objects (`video.c`), the score, the clock, the crowd's sound and the sort coordinates (`display.c`), the replay buffer and the objects' motion (`replay.c`), player cards (`cards.c`), the scouting report (`scout.c`), the hot / cold table (`crowd.c`) |
 | `game/menus/` | The game setup screen (`optsetup.c`), setting up a game and the rink (`setup.c`), the roster and line screens (`stats.c`) |
 | `game/sound/` | The sound CPU's uploads and the sound effects (`sound.c`) |
