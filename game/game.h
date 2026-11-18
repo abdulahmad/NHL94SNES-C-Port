@@ -22,6 +22,7 @@
 #include "logic.h"
 #include "optsetup.h"
 #include "penalty.h"
+#include "scoreboard.h"
 #include "period.h"
 #include "replay.h"
 #include "scout.h"
