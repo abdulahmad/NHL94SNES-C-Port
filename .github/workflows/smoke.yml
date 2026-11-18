@@ -1,0 +1,44 @@
+# Smoke test (project files smoke-test/plan.md): the C port still builds and plays its scripted games
+# with the same frame hashes (test/check.sh). Needs the retail ROM from the private vault (VAULT_TOKEN secret);
+# without it only the no-retail-files check runs.
+name: smoke
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 9 * * *'
+  repository_dispatch:
+    types: [disasm-changed]
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: no retail files in the repo
+        run: |
+          bad=$(git ls-files -s | awk '$1!="120000"{print $4}' | grep -iE '\.(sfc|smc|bin|iso|exe|gen|md)$' | while read -r f; do s=$(stat -c %s "$f" 2>/dev/null || echo 0); [ "$s" -gt 200000 ] && echo "$f"; done)
+          [ -z "$bad" ] || { echo "$bad"; exit 1; }
+  rom:
+    runs-on: ubuntu-latest
+    env:
+      VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+    steps:
+      - name: skip without vault access
+        if: env.VAULT_TOKEN == ''
+        run: echo "VAULT_TOKEN not set, ROM checks skipped"
+      - uses: actions/checkout@v4
+        if: env.VAULT_TOKEN != ''
+      - uses: actions/checkout@v4
+        if: env.VAULT_TOKEN != ''
+        with:
+          repository: abdulahmad/EA-NHL-Disassembly-Project
+          token: ${{ secrets.VAULT_TOKEN }}
+          path: vault
+          sparse-checkout: NHL94-SNES
+          sparse-checkout-cone-mode: false
+      - name: build and run the scripted games
+        if: env.VAULT_TOKEN != ''
+        run: |
+          cp "vault/NHL94-SNES/NHL '94 (USA).sfc" nhl94.sfc
+          make -j4 ROM=nhl94.sfc && test/check.sh nhl94.sfc
