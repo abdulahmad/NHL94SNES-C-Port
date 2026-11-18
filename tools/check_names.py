@@ -96,6 +96,9 @@ def genesis_asm(asm):
         files += [os.path.join(base, n) for n in sorted(names) if n.endswith('.asm')]
     for path in files:
         rel = os.path.relpath(path, os.path.join(asm, 'src')).split(os.sep)
+        # engine/ and front/ are folders of modules (the 2026-11 layout), not modules themselves
+        if len(rel) == 2 and rel[0] in ('engine', 'front'):
+            rel = rel[1:]
         module = rel[0] if len(rel) > 1 else re.sub(r'94$', '', rel[0][:-4])
         module = {'nhl': 'main'}.get(module, module)
         parent = None
