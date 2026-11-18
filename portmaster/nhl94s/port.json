@@ -1,0 +1,27 @@
+{
+  "version": 4,
+  "name": "nhl94s.zip",
+  "items": [
+    "NHL 94 SNES.sh",
+    "nhl94s"
+  ],
+  "items_opt": [],
+  "attr": {
+    "title": "NHL 94 SNES",
+    "porter": ["abdulahmad"],
+    "desc": "EA Sports NHL '94 for Super Nintendo, rebuilt in C, hosted by Overbar. Overlay on Select. Original cartridge speed by default. Bring your own US dump.",
+    "desc_md": null,
+    "inst": "Copy your NHL '94 SNES ROM into nhl94s/roms/nhl94.smc (internal header NHL '94 at $7FC0, map $30). A 512-byte copier header is fine.",
+    "inst_md": null,
+    "genres": ["sports"],
+    "image": null,
+    "rtr": false,
+    "exp": false,
+    "runtime": [],
+    "store": [],
+    "availability": "full",
+    "reqs": [],
+    "arch": ["aarch64"],
+    "min_glibc": ""
+  }
+}

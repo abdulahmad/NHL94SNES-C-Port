@@ -30,6 +30,21 @@ void hal_stack_reset(void (*resume)(void))
     longjmp(top, 1);
 }
 
+/* power on again: as the program starts (the work RAM zero, as it is before the game runs) */
+static uint8_t restart_tap;
+static void power_on(void)
+{
+    clock_reset();
+    memset(&g, 0, sizeof g);
+    machine.io.multitap = restart_tap;
+    Start();
+}
+void console_restart(int multitap)
+{
+    restart_tap = (uint8_t)(multitap != 0);
+    hal_stack_reset(power_on);
+}
+
 static int sorted_fn, sorted_addr;
 static FnSym by_addr[4096];
 
@@ -104,8 +119,22 @@ static void call_by_address(uint32_t addr)
 static uint8_t read_a(void *user, uint32_t addr) { (void)user; return m8(addr); }
 static void write_a(void *user, uint32_t addr, uint8_t v) { (void)user; if (is_wram(addr)) w8(wram_off(addr), v); }
 
+char *console_stack_top;
+
+size_t hal_save(uint8_t *out)
+{
+    if (out) { memcpy(out, &resume_fn, sizeof resume_fn); out[sizeof resume_fn] = restart_tap; }
+    return sizeof resume_fn + 1;
+}
+void hal_load(const uint8_t *in)
+{
+    memcpy(&resume_fn, in, sizeof resume_fn);
+    restart_tap = in[sizeof resume_fn];
+}
+
 void console_run(void)
 {
+    console_stack_top = (char *)__builtin_frame_address(0);
     machine.read_a = read_a;
     machine.write_a = write_a;
     call_long_other = call_by_address;
