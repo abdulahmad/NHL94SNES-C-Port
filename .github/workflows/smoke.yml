@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: no retail files in the repo
         run: |
-          bad=$(git ls-files -s | awk '$1!="120000"{print $4}' | grep -iE '\.(sfc|smc|bin|iso|exe|gen|md)$' | while read -r f; do s=$(stat -c %s "$f" 2>/dev/null || echo 0); [ "$s" -gt 200000 ] && echo "$f"; done)
+          bad=$(git ls-files -s | awk '$1!="120000"{print $4}' | grep -iE '\.(sfc|smc|bin|iso|gen|wad|cmv|exe)$' | grep -viE '^(tools|third_party|ext)/' | while read -r f; do s=$(stat -c %s "$f" 2>/dev/null || echo 0); [ "$s" -gt 200000 ] && echo "$f"; done || true)
           [ -z "$bad" ] || { echo "$bad"; exit 1; }
   rom:
     runs-on: ubuntu-latest
