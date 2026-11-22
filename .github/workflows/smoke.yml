@@ -44,3 +44,11 @@ jobs:
         run: |
           cp "vault/NHL94-SNES/NHL '94 (USA).sfc" nhl94.sfc
           make -j4 ROM=nhl94.sfc && test/check.sh nhl94.sfc
+  netsec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: netplay security rules (Overbar docs/NETPLAY_SECURITY.md)
+        run: sh platform/overbar/tests/netsec.sh .
