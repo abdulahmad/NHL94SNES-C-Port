@@ -7,7 +7,7 @@
  * Up to five players: keys and a controller each, set in settings.ini (written beside the program
  * the first time, with every setting). The multitap is in port 2 when a player 3-5 has keys or a
  * controller at power on, as the cartridge needs it for more than two. ` and F11 (and a controller's
- * Back) open the Overbar overlay; F12 toggles stats. Escape does not open it. The game waits while
+ * Back) open the Overbar overlay; F12 toggles stats. Escape opens it too (and is Back inside). The game waits while
  * the overlay or the controller setup screen is open. Video is the shared Scale Mode tree; the
  * picture has the pixel shape of a 4:3 screen of 240 lines (PAR 5:4), the 224 real lines drawn. There is
  * no Picture Native. Game Speed is an overlay addon. Controllers... is on Input (and the menu bar's).
@@ -154,7 +154,7 @@ static void settings_load(void)
             "# key's own sign (, . - =). Controller buttons are SDL's names: a b x y back start leftshoulder\n"
             "# rightshoulder leftstick rightstick guide, and lefttrigger righttrigger (pressed past halfway).\n"
             "# playerN.controller: the controller slot player N plays with (0: none; controllers take slots\n"
-            "# 1-8 as they are plugged in). ` or F11 opens the Overbar overlay (Controllers sets a\n"
+            "# 1-8 as they are plugged in). ` , F11 or Esc opens the Overbar overlay (Controllers sets a\n"
             "# controller up). F12 toggles stats. The multitap is in the ports when player 3, 4 or 5 has keys or a controller\n"
             "# plugged in at power on.\n"
             "# window.show_fps: 1 shows the game's new pictures a second in the picture's top right corner\n"
@@ -554,7 +554,7 @@ int main(int argc, char *argv[])
             .title = "NHL '94", .win_w = 320 * SCALE, .win_h = 224 * SCALE, .cls = OB_CLASS_LORES,
             .src_w = SNRT_WIDTH, .src_h = SNRT_HEIGHT, .picture = hook_picture,
             .changed = overlay_sync_settings, .action = hook_action, .captures = hook_captures,
-            .raw_key = hook_raw_key, .raw_button = hook_raw_button, .draw_over = hook_draw_over, .quit = quit,
+            .raw_key = hook_raw_key, .raw_button = hook_raw_button, .draw_over = hook_draw_over, .quit = quit, .esc_opens = 1,
         };
         if (!ob_plat_open(&hooks, overbar_client_host())) return 1;
     }
