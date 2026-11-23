@@ -157,6 +157,7 @@ static void start_period(void)
     if (!g.shootoutmode) Gameloop();
 }
 
+/* UpdateCwdExcite. emptied in 94 */
 void UpdateCwdExcite(void) {}
 
 /* a byte or word written at a 24-bit address (only WRAM takes it) */
@@ -426,6 +427,7 @@ void start_hdma(uint8_t left, uint8_t right, uint16_t wtab, uint16_t ctab)
 /* Pause for pad a / from controller 1 */
 void startpause_pad(uint16_t a) { g.sfpj = a; startpause(); }
 
+/* startpause1. pause from pad 1 */
 void startpause1(void) { g.sfpj = 0; startpause(); }
 
 /* Pause mode: the text map saved, the sound stopped, the scoreboard screen with the pause menu until it is
@@ -648,6 +650,7 @@ void summary_page(uint32_t none, uint16_t empty, uint16_t y)
     DMAToVRAM(&p0, (uint16_t)(u >> 2), y, 0);
 }
 
+/* PauseGameStats. called from PauseMenuHandlers */
 uint16_t PauseGameStats(uint16_t d1) { return pause_screen(d1, StatsReport); }
 
 /* Shootout setup from the pause menu: A / B open the shooter order (ShootoutShooters), then the rink is
@@ -662,6 +665,7 @@ uint16_t PauseShootoutSetup(uint16_t d1)
     return PauseSubmenuDone();
 }
 
+/* PauseTeamRoster. called from PauseMenuHandlers */
 uint16_t PauseTeamRoster(uint16_t d1) { return pause_screen(d1, TeamRosterScreen); }
 
 /* Edit lines from the pause menu: A / B open the line editor (LineEditor), then the rink is reloaded */
@@ -675,18 +679,25 @@ uint16_t PauseEditLines(uint16_t d1)
     return PauseSubmenuDone();
 }
 
+/* PausePlayerStats. called from PauseMenuHandlers */
 uint16_t PausePlayerStats(uint16_t d1) { return pause_screen(d1, PlayerStatsScreen); }
 
+/* PauseScoringSummary. called from PauseMenuHandlers */
 uint16_t PauseScoringSummary(uint16_t d1) { return pause_screen(d1, ScoringSummaryScreen); }
 
+/* PausePenaltySummary. called from PauseMenuHandlers */
 uint16_t PausePenaltySummary(uint16_t d1) { return pause_screen(d1, PenaltySummaryScreen); }
 
+/* PausePlayerCards. called from PauseMenuHandlers */
 uint16_t PausePlayerCards(uint16_t d1) { return pause_screen(d1, PlayerCards); }
 
+/* PauseOtherScores. called from PauseMenuHandlers */
 uint16_t PauseOtherScores(uint16_t d1) { return pause_screen(d1, ShowScores); }
 
+/* PausePeriodStats. called from PauseMenuHandlers */
 uint16_t PausePeriodStats(uint16_t d1) { return pause_screen(d1, PeriodStatsScreen); }
 
+/* PauseCrowdLevel. called from PauseMenuHandlers */
 uint16_t PauseCrowdLevel(uint16_t d1) { return pause_screen(d1, CrowdMeterScreen); }
 
 /* Defense control: A / B / left / right turn it on or off for the pause controller's team */
@@ -699,6 +710,7 @@ uint16_t PauseDefControl(uint16_t d1)
     return PauseDefStore();
 }
 
+/* PauseDefStore. called from PauseDefControl, TimeoutMenu */
 uint16_t PauseDefStore(void) { return PauseMenuPoll(); }
 
 /* The longer pause menu when this side still has a timeout (clock stopped, not the intermission), else the
@@ -897,8 +909,10 @@ void PmenuAppend(uint32_t a4, uint16_t y)
     }
 }
 
+/* PmenuGoalieValue. called from SetupPauseScreen */
 void PmenuGoalieValue(uint16_t d0) { pmenu_value(d0, 12, RAM_OFF_goaliemode1, 18, 0); }
 
+/* PmenuDefValue. called from SetupPauseScreen */
 void PmenuDefValue(uint16_t d0) { pmenu_value(d0, 24, RAM_OFF_defcontrol, 39, 43); }
 
 /* Append "None" to the pause item text */
@@ -972,8 +986,11 @@ void ShowMP5Warning(void)
 /* The MultiPlayer 5 warning lines: print the line's position, then string a1 centred */
 uint32_t PrintMP5Line1(uint32_t a1) { print(SYM_PrintMP5Line1Pos); return PrintCentered(a1); }
 
+/* PrintMP5Line2. called from ShowMP5Warning */
 uint32_t PrintMP5Line2(uint32_t a1) { print(SYM_PrintMP5Line2Pos); return PrintCentered(a1); }
 
+/* PrintMP5Line3. called from ShowMP5Warning */
 uint32_t PrintMP5Line3(uint32_t a1) { print(SYM_PrintMP5Line3Pos); return PrintCentered(a1); }
 
+/* PrintMP5Line4. called from ShowMP5Warning */
 uint32_t PrintMP5Line4(uint32_t a1) { print(SYM_PrintMP5Line4Pos); return PrintCentered(a1); }

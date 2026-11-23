@@ -614,6 +614,7 @@ uint32_t SwapLineSlots(uint16_t d0, uint32_t a3)
     return b;
 }
 
+/* ReadLineSlot. returns A = the byte at [a3] */
 uint16_t ReadLineSlot(uint32_t a3) { return m8(a3); }
 
 /* Write the low byte of v to the line slot at a3 / read it */
@@ -737,6 +738,7 @@ uint16_t GetDefenseCount(uint16_t a2) { return team_counts(a2) & 0xF; }
 /* The RAM lines of team a2 (a3, bank 0): homelines for team 0, else awaylines */
 uint32_t GetTeamLines(uint16_t a2) { return a2 ? awaylines : homelines; }
 
+/* ScoringSummaryScreen. called from PauseScoringSummary */
 void ScoringSummaryScreen(void) { summary_screen(SYM_ScoringLabel, 0x5E, SYM_ScoringSummaryHead, SYM_NoScoring, 0); }
 
 /* The scoring summary page in the stats page buffer: a line set per goal of the score summary */
@@ -1445,6 +1447,7 @@ void LoadPictureMap(void)
     } while (--x);
 }
 
+/* MenuScreenHDMA. start the window and COLDATA HDMA */
 void MenuScreenHDMA(void) { start_hdma(0x40, 0xBF, (uint16_t)SYM_MenuScreenHDMA_2, (uint16_t)SYM_MenuScreenHDMA_4); }
 
 /* a2: the team of the controller that owns the pause menu (2 the away team, else 0) */

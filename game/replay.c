@@ -384,6 +384,7 @@ uint32_t adda4(uint32_t a4)
     return adda43(a4);
 }
 
+/* adda43. called from adda4 */
 uint32_t adda43(uint32_t a4) { return next_record(a4); }
 
 /* a nibble of the record as a signed byte (8-15 negative) */

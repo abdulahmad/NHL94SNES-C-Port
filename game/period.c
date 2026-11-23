@@ -285,6 +285,7 @@ void DrawPeriodStats(void)
     SpriteFrameEnd();
 }
 
+/* Reset_Fast_ret. emptied in 94 */
 void Reset_Fast_ret(void) {}
 
 /* Goalie control (manual or automatic): A / B / left / right switch it for the pause controller's team */

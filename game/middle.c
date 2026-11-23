@@ -73,6 +73,7 @@ void WaitNoButtons(void)
     while (wait_r16(RAM_OFF_JoyPad) & 0xFFF0) wait_tick();
 }
 
+/* JoyDirIndex_Hi. JoyDirIndex of the high byte of A */
 uint16_t JoyDirIndex_Hi(uint16_t a) { return JoyDirIndex((uint16_t)(a >> 8 | a << 8)); }
 
 /* 2 * JoyDirTable[the d-pad bits of a] (JoyDirIndex_Hi: of a's high byte) */
@@ -369,6 +370,7 @@ uint16_t DivX8S(uint16_t x, uint16_t a)
     return (uint16_t)-DivX8U((uint16_t)-x, a);
 }
 
+/* Cos. entry point, no direct callers found */
 uint16_t Cos(uint16_t a) { return Sin((uint16_t)(a + 0x0100)); }
 
 /* sin / cos of a (1024 steps a circle, $0100 = 1), from the quarter-wave SineTable */
@@ -934,6 +936,7 @@ uint16_t randomd0A(uint16_t limit)
     return (uint16_t)(Mul16U(r, limit) >> 16);
 }
 
+/* randoma8. random number below A */
 uint16_t randoma8(uint16_t limit) { return randoma8_go(limit); }
 
 /* A random number from 0 to limit-1, for a limit below 256 (randoma8_go: randomd0A's way in) */
@@ -1075,6 +1078,7 @@ void marktextlo(uint16_t a) { if (a < g.textdirtylo) g.textdirtylo = a; }
 /* Raise the high end of the changed text map area to a */
 void marktexthi(uint16_t a) { if (a >= g.textdirtyhi) g.textdirtyhi = a; }
 
+/* forcefade. fade out: install BrightnessHook as the frame hook */
 void forcefade(void) { g.fadein = 0xFFFF; SetFrameHook(SYM_BrightnessHook); }
 
 /* d0 mod 100 */

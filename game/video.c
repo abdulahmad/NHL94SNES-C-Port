@@ -412,6 +412,7 @@ void SetIRQ(uint32_t hook, uint16_t y)
     IRQHook_Off();   /* (falls through into it) */
 }
 
+/* IRQHook_Off. IRQ hook that does nothing; IRQOff points IRQHook here */
 void IRQHook_Off(void) {}
 
 /* Set the frame hook back to the empty routine */
@@ -438,6 +439,7 @@ void WaitFrame(void)
     while (wait_r16(RAM_OFF_FrameCount) == f) wait_tick();
 }
 
+/* WaitFrames_Inc. wait X frames, Y rounds (adds 1 to Y first) */
 void WaitFrames_Inc(uint16_t x, uint16_t y) { WaitFrames(x, (uint16_t)(y + 1)); }
 
 /* Wait x frames, y counting the rounds of 65536 (WaitFrames_Inc adds 1 to y first) */
@@ -1229,6 +1231,7 @@ uint16_t FreeFrameTiles_t2(void)
     }
 }
 
+/* FreeCacheEntryA. entry number to entry offset */
 void FreeCacheEntryA(uint16_t a, uint16_t y) { FreeCacheEntry((uint16_t)((a >> 8 & 0xFF) << 1), y); }
 
 /* Free entry x of frame number y (its sprframetime slot cleared); _A: the entry in a's high byte */
@@ -1598,6 +1601,7 @@ void PulseColour(uint16_t x, uint16_t y)
     mset16((uint32_t)y << 16 | x, col);
 }
 
+/* ClearTextMapBottom. called from ClearMessageArea, PlayerSelect, RedrawPlayerSelect, setop... */
 void ClearTextMapBottom(void) { MemFill(0x7E0000 + RAM_OFF_textmap + 0x300, 0x0500, (uint16_t)(g.blankchar + g.charofs)); }
 
 /* The band IRQ pair (lines a and x) that shifts the BG1 scroll */
@@ -1627,17 +1631,22 @@ void IRQ_BandEnd(void)
     io_w16(0x4209, g.irqline1);
 }
 
+/* SendTextMap. called from AskExitGame, DrawHorTeams, DrawPlayerCard, LineEditorExit... */
 void SendTextMap(void) { send_map(RAM_OFF_textmap, 0x0800, 0x0000); }
 
+/* SendTextMapRows. called from DrawMatchupPictures, SelectLinePlayer, ShooterSelectList */
 void SendTextMapRows(void) { send_map(RAM_OFF_textmap + 0x40, 0x0300, 0x0020); }
 
+/* SendTextMap2. called from DrawPlayerCard, LoadPlayerCardScreen, LoadScoutingScreen... */
 void SendTextMap2(void) { send_map(RAM_OFF_textmap2, 0x0800, 0x0400); }
 
+/* SendTextMap2Rows. called from DrawMatchupPictures, SelectLinePlayer, ShooterSelectList */
 void SendTextMap2Rows(void) { send_map(RAM_OFF_textmap2 + 0x40, 0x0300, 0x0420); }
 
 /* Fill the text map with the blank tile (textmap2 with charofs2; from row 12 down) */
 void ClearTextMap(void) { MemFill(0x7E0000 + RAM_OFF_textmap, 0x0800, (uint16_t)(g.blankchar + g.charofs)); }
 
+/* ClearTextMap2. called from LoadPlayerCardScreen */
 void ClearTextMap2(void) { MemFill(0x7E0000 + RAM_OFF_textmap2, 0x0800, (uint16_t)(g.blankchar + g.charofs2)); }
 
 /* Copy x colours from [p0] into the colour buffer from colour y */
