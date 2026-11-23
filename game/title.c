@@ -321,8 +321,10 @@ static void title_zoom_out(int right, uint16_t endh)
     g.TitleM7VOfs = 0x140;
 }
 
+/* TitleZoomOutRight. no input; called from TitleScreen */
 void TitleZoomOutRight(void) { title_zoom_out(1, 0x01E8); }
 
+/* TitleZoomOutLeft. no input; called from TitleScreen */
 void TitleZoomOutLeft(void) { title_zoom_out(0, 0x0120); }
 
 /* A busy loop of x passes, none once a pad press has ended the title (titleskip) */
@@ -525,6 +527,7 @@ void BuildTitlePath(void)
     }
 }
 
+/* TitleScreen_ret. emptied in 94 */
 void TitleScreen_ret(void) {}
 
 /* Title: count BG1HScroll down, moving the window edges each step, then close them */

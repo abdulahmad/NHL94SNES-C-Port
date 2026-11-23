@@ -332,6 +332,7 @@ static void ticker_start(void)
     NewTicker2();
 }
 
+/* Intermission_ticker. starts the score ticker */
 void Intermission_ticker(void) { ticker_start(); }
 
 /* In the intermission (demoflag): the next ticker score every $150 frames, until the ticker is back at its
@@ -352,6 +353,7 @@ uint16_t Intermission_tick(void)
 /* The intermission ticker's nothing to report: A = 0 */
 uint16_t IntermissionTick_done(void) { return 0; }
 
+/* NewTicker2_next. steps the ticker to the next game */
 void NewTicker2_next(void) { ticker_start(); }
 
 /* The next ticker score once the clock is at 8:00 or less */

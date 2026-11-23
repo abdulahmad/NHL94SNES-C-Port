@@ -318,6 +318,7 @@ void LoadScoutingScreen(void)
     LoadPictureMap();
 }
 
+/* ScoutingHDMA. Scouting screen windows and colour tint; takes nothing, returns nothing */
 void ScoutingHDMA(void) { start_hdma(0x0C, 0xB3, (uint16_t)SYM_ScoutingHDMA_2, (uint16_t)SYM_ScoutingHDMA_4); }
 
 /* The roster slot (from 0) of team a2's player for matchup k (centre, wings, defence, goalie). */
@@ -436,31 +437,43 @@ void ScoutTypeWord(uint32_t a1, uint16_t d0, uint16_t d1)
 /* Script codes %0-%5 / %6-%b: the home / visitors' three hottest and three coldest players */
 void ScoutHomeHot1(uint16_t d0) { ScoutHomePlayer(g.hotplayer1[0], d0); }
 
+/* ScoutHomeHot2. Script code %1 entry */
 void ScoutHomeHot2(uint16_t d0) { ScoutHomePlayer(g.hotplayer2[0], d0); }
 
+/* ScoutHomeHot3. Script code %2 entry */
 void ScoutHomeHot3(uint16_t d0) { ScoutHomePlayer(g.hotplayer3[0], d0); }
 
+/* ScoutHomeCold1. Script code %3 entry */
 void ScoutHomeCold1(uint16_t d0) { ScoutHomePlayer(g.coldplayer1[0], d0); }
 
+/* ScoutHomeCold2. Script code %4 entry */
 void ScoutHomeCold2(uint16_t d0) { ScoutHomePlayer(g.coldplayer2[0], d0); }
 
+/* ScoutHomeCold3. Script code %5 entry */
 void ScoutHomeCold3(uint16_t d0) { ScoutHomePlayer(g.coldplayer3[0], d0); }
 
+/* ScoutVisHot1. Script code %6 entry */
 void ScoutVisHot1(uint16_t d0) { ScoutVisPlayer(g.hotplayer1[1], d0); }
 
+/* ScoutVisHot2. Script code %7 entry */
 void ScoutVisHot2(uint16_t d0) { ScoutVisPlayer(g.hotplayer2[1], d0); }
 
+/* ScoutVisHot3. Script code %8 entry */
 void ScoutVisHot3(uint16_t d0) { ScoutVisPlayer(g.hotplayer3[1], d0); }
 
+/* ScoutVisCold1. Script code %9 entry */
 void ScoutVisCold1(uint16_t d0) { ScoutVisPlayer(g.coldplayer1[1], d0); }
 
+/* ScoutVisCold2. Script code %a entry */
 void ScoutVisCold2(uint16_t d0) { ScoutVisPlayer(g.coldplayer2[1], d0); }
 
+/* ScoutVisCold3. Script code %b entry */
 void ScoutVisCold3(uint16_t d0) { ScoutVisPlayer(g.coldplayer3[1], d0); }
 
 /* Name player a of the home team / the visitors from column d0 */
 void ScoutHomePlayer(uint16_t a, uint16_t d0) { ScoutPlayerName(a, 0, d0); }
 
+/* ScoutVisPlayer. A = player number, visitors side */
 void ScoutVisPlayer(uint16_t a, uint16_t d0) { ScoutPlayerName(a, 2, d0); }
 
 /* Type the name of player d0 of team a2 (0 home, 2 visitors) from column x */
@@ -472,10 +485,13 @@ void ScoutPlayerName(uint16_t d0, uint16_t a2, uint16_t x)
     ScoutTypeText(RAM_OFF_mesarea, x);
 }
 
+/* GetTeamNickname_vis. Script code %m entry */
 void GetTeamNickname_vis(uint16_t d0) { GetTeamNickname(g.tmdata[1], d0); }
 
+/* GetTeamNickname_home. Script code %n entry */
 void GetTeamNickname_home(uint16_t d0) { GetTeamNickname(g.tmdata[0], d0); }
 
+/* GetTeamNickname. shared by the nickname codes: a1 = team data */
 void GetTeamNickname(uint16_t a1, uint16_t d0) { ScoutAppend(AdvanceStringPtr(scout_team_strings(a1), 2), d0); }
 
 /* Script codes %r (the home arena), %H / %V (the full names), %h / %v (the cities), %n / %m (the
@@ -502,12 +518,16 @@ void ScoutHotTeam(uint16_t d0)
     ScoutTypeText(RAM_OFF_mesarea, d0);
 }
 
+/* ScoutVisName. Script code %V entry */
 void ScoutVisName(uint16_t d0) { ScoutAppend(GetTeamLongName(g.VisTeam[0]), d0); }
 
+/* ScoutHomeName. Script code %H entry */
 void ScoutHomeName(uint16_t d0) { ScoutAppend(GetTeamLongName(g.HomeTeam), d0); }
 
+/* GetTeamCity_vis. Script code %v entry */
 void GetTeamCity_vis(uint16_t d0) { GetTeamCity(g.tmdata[1], d0); }
 
+/* GetTeamCity_home. Script code %h entry */
 void GetTeamCity_home(uint16_t d0) { GetTeamCity(g.tmdata[0], d0); }
 
 /* The city / the nickname (the first / the third string) of team data a1, from column d0 */

@@ -1858,6 +1858,7 @@ void SetTeamColors(void)
     MemCopy(SYM_PlayerMarkerPalette, pb + 10 * 0x20, 0x20);
 }
 
+/* nullrtl. empty long routine */
 void nullrtl(void) {}
 
 /* Draw team d1's block at printx / printy: its name as letter sprites (8 pixels left on a player

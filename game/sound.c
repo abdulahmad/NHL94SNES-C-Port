@@ -111,6 +111,7 @@ static void spc_cmd5(uint8_t cmd, uint8_t cmd2, uint32_t p0)
     io_w8(0x2140, 0);
 }
 
+/* SPCReset. called from SPCGameUpload, SPCIntroUpload, SPCMenuUpload, SPCTitleUpload */
 void SPCReset(void) { spc_cmd(0x01); }
 
 /* Command $02: the sample count (the result, a byte) and the free sound RAM pointer (*x, a
@@ -145,10 +146,13 @@ void SPCSendSample(uint32_t p0, uint16_t n, uint16_t y)
     io_w8(APUIO0, 0);
 }
 
+/* SPCUnload. called from SPCTitleToMenu, UpdateStreamSfx */
 void SPCUnload(void) { spc_cmd(0x04); }
 
+/* SPCKeyOff. entry point, no direct callers found */
 void SPCKeyOff(uint8_t x) { spc_wait(); io_w8(0x2141, x); spc_send(0x05); io_w8(0x2140, 0); }
 
+/* SPCKeyOn. entry point, no direct callers found */
 void SPCKeyOn(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x06); io_w8(0x2140, 0); }
 
 /* Command $07: voice x's volume, sample and ADSR, 5 bytes from [p0] in two sends ($07, $81) */
@@ -163,8 +167,10 @@ void SPCSetVoice(uint8_t x, uint32_t p0)
     io_w8(0x2140, 0);
 }
 
+/* SPCSetMaster. entry point, no direct callers found */
 void SPCSetMaster(uint32_t p0) { spc_cmd5(0x08, 0x82, p0); }
 
+/* SPCSetEcho. entry point, no direct callers found */
 void SPCSetEcho(uint32_t p0) { spc_cmd5(0x09, 0x83, p0); }
 
 /* Command $0A: the 8 echo filter coefficients from [p0], in three sends ($0A, $84, $85) */
@@ -180,10 +186,13 @@ void SPCSetFIR(uint32_t p0)
     io_w8(0x2140, 0);
 }
 
+/* SPCSetPitch. entry point, no direct callers found */
 void SPCSetPitch(uint8_t x, uint16_t y) { io_w16(0x2142, y); spc_wait(); io_w8(0x2141, x); spc_send(0x0B); io_w8(0x2140, 0); }
 
+/* SPCSetGain. entry point, no direct callers found */
 void SPCSetGain(uint8_t x, uint8_t y) { spc_wait(); io_w8(0x2142, y); io_w8(0x2141, x); spc_send(0x0C); io_w8(0x2140, 0); }
 
+/* SPCKeyOffAll. called from SeqCmd08Init */
 void SPCKeyOffAll(void) { spc_cmd(0x0D); }
 
 /* Command $0E: the volume of voice x, a the left (APUIO2) and y the right (APUIO3) */
@@ -460,6 +469,7 @@ void SeqCmd08Init_send(void)
     io_w8(0x2140, 0);
 }
 
+/* SeqCmd0C. called from FindFreeVoice, ReleaseVoice, StopVoice */
 void SeqCmd0C(uint8_t y) { seq_cmd0c(y); }
 
 /* Sequencer: command $07 (the voice's volume and the instrument's sample and ADSR, bytes $14-$16),
@@ -490,6 +500,7 @@ uint8_t SeqCmd07(void)
     return g.CurVoice;
 }
 
+/* SeqCmd0C0B. called from UpdateSfxVoices */
 void SeqCmd0C0B(uint8_t y) { seq_cmd0c(y); SeqCmd0B(y); }   /* (its own copy of $0C, then into SeqCmd0B) */
 
 /* Sequencer: command $0B, the pitch SendPitch of voice y (APUIO2 and APUIO3) */
