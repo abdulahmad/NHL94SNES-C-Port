@@ -11,18 +11,18 @@
 
 #pragma pack(push, 1)
 struct G {
-    uint16_t r0[2];
-    uint16_t r1[2];
-    uint16_t r2[2];
+    uint16_t r0[2]; /* math result (divides: the quotient) */
+    uint16_t r1[2]; /* math operand (divides: the divisor, 4 bytes) */
+    uint16_t r2[2]; /* math result (multiplies) and dividend (divides), 4 bytes */
     uint32_t p0; /* long pointer; p0+2 is the bank */
     uint32_t p1; /* long pointer; p1+2 is the bank */
-    uint16_t r3[2];
-    uint16_t r4[2];
-    uint16_t r5[2];
-    uint16_t r6[2];
-    uint16_t r7[2];
-    uint8_t r8[4];
-    uint16_t r9[2];
+    uint16_t r3[2]; /* work word (the pad waits keep their button mask here) */
+    uint16_t r4[2]; /* work word / long scratch register */
+    uint16_t r5[2]; /* work word / long scratch register */
+    uint16_t r6[2]; /* work word / long scratch register */
+    uint16_t r7[2]; /* work word / long scratch register */
+    uint8_t r8[4]; /* work word / long scratch register */
+    uint16_t r9[2]; /* work word / long scratch register */
     uint16_t ClipTopUnused; /* ResetPPURegs is the only access: sta.b $30 = $FFF0 (with $2C = $FFF0, $2E = $0100, $32 = $00E0: ... */
     uint16_t ClipBottomUnused; /* ResetPPURegs sta.b $32 = $00E0 (224, screen height); never read anywhere */
     uint32_t SoundTable; /* Long pointer to the sound/instrument offset table; $36 = SoundTable+2 (bank, stored as a word so ... */
@@ -71,13 +71,13 @@ struct G {
     uint32_t a3; /* long pointer; a3+2 is the bank */
     uint32_t a4; /* long pointer; a4+2 is the bank */
     uint16_t a5[4]; /* long pointer (the next of the 4-byte a registers); a5+2 is the bank */
-    uint16_t d0[2];
+    uint16_t d0[2]; /* work register (4 bytes: d0 and d0+2) */
     uint16_t d1[2]; /* d1+2 is the high word */
-    uint16_t d2[2];
-    uint16_t d3[2];
-    uint16_t d4[2];
-    uint16_t d5[2];
-    uint16_t d6[2];
+    uint16_t d2[2]; /* work register (4 bytes) */
+    uint16_t d3[2]; /* work register (4 bytes) */
+    uint16_t d4[2]; /* work register (4 bytes) */
+    uint16_t d5[2]; /* work register (4 bytes) */
+    uint16_t d6[2]; /* work register (4 bytes) */
     uint16_t d7; /* frames elapsed, added into speeds */
     uint16_t introHookFlags; /* Jobs pending for the intro frame hook (.framehook), set with tsb and cleared there with trb: ... */
     uint16_t tmp0; /* scratch word; tmp0+1 is the next byte */
@@ -387,9 +387,9 @@ struct G {
     uint16_t attribute[16]; /* frame attribute bits (attrxflip, attryflip) */
     uint16_t oldframe[16]; /* frame last drawn (setsortcords) */
     int16_t OldXpos[16]; /* Xpos before this frame's move */
-    uint16_t OldXfrac[16];
-    int16_t OldYpos[16];
-    uint16_t OldYfrac[16];
+    uint16_t OldXfrac[16]; /* Xfrac before this frame's move (updateplayers) */
+    int16_t OldYpos[16]; /* per object: the Y position of the previous frame */
+    uint16_t OldYfrac[16]; /* Yfrac before this frame's move (updateplayers) */
     int16_t Xvel[14]; /* x speed (puckvx is Xvel+puckobj) */
     int16_t puckvx[2]; /* puck x speed */
     int16_t Yvel[14]; /* y speed */
@@ -400,11 +400,11 @@ struct G {
     uint16_t assnum[16]; /* index of the current assignment (0-7) */
     uint8_t asslist[128]; /* assignments, 8 bytes per object */
     int16_t temp1[16]; /* assignment scratch, per object */
-    int16_t temp2[16];
-    int16_t temp3[16];
-    int16_t temp4[16];
-    int16_t temp5[16];
-    int16_t temp2b[16];
+    int16_t temp2[16]; /* per object: scratch word of the assignment routines */
+    int16_t temp3[16]; /* per object: scratch word of the assignment routines */
+    int16_t temp4[16]; /* per object: scratch word of the assignment routines */
+    int16_t temp5[16]; /* per object: scratch word of the assignment routines */
+    int16_t temp2b[16]; /* per object: scratch word of the assignment routines */
     int16_t radiusx[16]; /* collision width (defaultsprites_0) */
     int16_t radiusy[16]; /* collision height */
     uint16_t Wallcos[16]; /* per object: cos of the angle of the last wall collision */
@@ -421,17 +421,17 @@ struct G {
     int16_t newpnum[16]; /* requested next roster player (negative = none) */
     uint16_t pflags[16]; /* pflags (bits 0-7) and pflags2 (bit n at bit n+10); some flags have their own arrays below */
     uint16_t pnum[16]; /* player's team location number (low byte) */
-    uint16_t weight[16];
-    uint16_t legstr[16];
-    uint16_t legspd[16];
-    uint16_t aioff[16];
-    uint16_t aidef[16];
-    uint16_t shotspd[16];
-    uint16_t shotacc[16];
+    uint16_t weight[16]; /* per object: the player's weight rating (setplayer; checkcx) */
+    uint16_t legstr[16]; /* per object: the player's leg strength rating */
+    uint16_t legspd[16]; /* per object: the player's speed rating (the PlayerAccDir routines) */
+    uint16_t aioff[16]; /* per object: the player's offensive rating */
+    uint16_t aidef[16]; /* per object: the player's defensive rating */
+    uint16_t shotspd[16]; /* per object: the player's shot power rating (setplayer; doshot) */
+    uint16_t shotacc[16]; /* per object: the player's shot accuracy rating */
     uint16_t passacc[16]; /* passacc (goalies: glove save right) */
-    uint8_t rostnum[32];
+    uint8_t rostnum[32]; /* per object: the player's roster number */
     uint16_t spodds[16]; /* shot / pass odds */
-    uint16_t stickhand[16];
+    uint16_t stickhand[16]; /* per object: the player's stick hand */
     uint16_t endurance[16]; /* endurance (goalies: stick save right) */
     uint16_t aggress[16]; /* aggression: penalty odds (goalies: glove save left) */
     uint16_t fighting[16]; /* fighting rating (stored; 94S has no fights; 93 $74) */
