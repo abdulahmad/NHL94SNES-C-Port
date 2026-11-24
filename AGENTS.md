@@ -16,7 +16,7 @@ This repository is the **SNES C port** (INDIO's). There is no 1nput counterpart,
 the cartridge are the open gap: the oracle tools of its source, ninety-four-snes, are not public
 (docs/HANDOFF.md). Upstream is INDIO's; offer changes there as PRs.
 
-Plan: `alignment-plan/c_ports_plan.md` in the project files. Where the work stands: [docs/HANDOFF.md](docs/HANDOFF.md).
+Plan: [c_ports_plan.md](https://github.com/abdulahmad/nhl-disasm-report/blob/main/docs/project/c_ports_plan.md) (nhl-disasm-report, history copy). Where the work stands: [docs/HANDOFF.md](docs/HANDOFF.md).
 Alignment rules: [docs/RULES.md](docs/RULES.md). What "vanilla" allows: [docs/VANILLA.md](docs/VANILLA.md).
 
 ## Gates (programs that can fail; "it looks right" never passes a change)
