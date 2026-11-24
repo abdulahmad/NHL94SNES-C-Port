@@ -115,7 +115,7 @@ static void dma_entry(uint16_t x, uint16_t src, uint8_t bank, uint16_t len)
     w8(RAM_OFF_DMAQueue + x, 1);
     w16(RAM_OFF_DMAQueue + x + 1, src);
     w8(RAM_OFF_DMAQueue + x + 3, bank);
-    w16(RAM_OFF_DMAQueue + x + 4, len);
+    w16(RAM_OFF_DMAQueue + x + dmalen, len);
 }
 
 /* (split run x of length len at need: the rest a free run after it, which points back at x, and
@@ -215,11 +215,11 @@ static int nmi_dma(uint16_t x, uint16_t dmap, uint16_t cost, int vmain)
     uint16_t b = r16(RAM_OFF_DMABudget);
     if (b < cost) return 0;
     b = (uint16_t)(b - cost);
-    if (b < r16(e + 4)) return 0;
-    w16(RAM_OFF_DMABudget, (uint16_t)(b - r16(e + 4)));
+    if (b < r16(e + dmalen)) return 0;
+    w16(RAM_OFF_DMABudget, (uint16_t)(b - r16(e + dmalen)));
     io_w16(0x4303, r16(e + 2));
-    io_w16(0x4305, r16(e + 4));
-    io_w16(0x2116, r16(e + 6));
+    io_w16(0x4305, r16(e + dmalen));
+    io_w16(0x2116, r16(e + dmavram));
     if (vmain) io_w8(0x2115, 0);
     io_w8(0x420B, 0x01);
     if (vmain) io_w8(0x2115, 0x80);
@@ -292,12 +292,12 @@ void NMI_HookReturn(void)
             io_w8(0x4301, 0x18);
             io_w8(0x4302, r8(e + 1));
             uint16_t b = r16(RAM_OFF_DMABudget);
-            ok = b >= 0x0066 && (uint16_t)(b - 0x0066) >= r16(e + 4);
+            ok = b >= 0x0066 && (uint16_t)(b - 0x0066) >= r16(e + dmalen);
             if (ok) {
-                w16(RAM_OFF_DMABudget, (uint16_t)(b - 0x0066 - r16(e + 4)));
+                w16(RAM_OFF_DMABudget, (uint16_t)(b - 0x0066 - r16(e + dmalen)));
                 io_w16(0x4303, r16(e + 2));
-                io_w16(0x4305, r16(e + 4));
-                io_w16(0x2116, r16(e + 6));
+                io_w16(0x4305, r16(e + dmalen));
+                io_w16(0x2116, r16(e + dmavram));
                 io_w8(0x420B, 0x01);
             }
         } else if (t == 0xFE || t == 0xFF) {
@@ -552,8 +552,8 @@ uint16_t FillVRAM(uint16_t a, uint16_t x, uint16_t y, uint16_t r3)
     for (;;) {
         uint16_t k = n >= 0x1001 ? 0x1000 : n;
         uint32_t e = RAM_OFF_DMAQueue + t;
-        w16(e + 4, k);
-        w16(e + 6, y);
+        w16(e + dmalen, k);
+        w16(e + dmavram, y);
         y = (uint16_t)((k >> 1) + y);
         w16(e + 1, 0x0016);
         w8(e + 3, 0);
@@ -593,10 +593,10 @@ uint16_t FillVRAMSplit(uint16_t a, uint16_t x, uint16_t y)
     for (;;) {
         uint16_t k = n >= 0x1001 ? 0x1000 : n;
         uint32_t e = RAM_OFF_DMAQueue + t;
-        w16(e + 4, k); w16(e + 6, y); w16(e + 1, 0x0016); w8(e + 3, 0); w8(e, 0xFD);
+        w16(e + dmalen, k); w16(e + dmavram, y); w16(e + 1, 0x0016); w8(e + 3, 0); w8(e, 0xFD);
         t = (t + 8) & 0x03FF;
         e = RAM_OFF_DMAQueue + t;
-        w16(e + 4, k); w16(e + 6, y);
+        w16(e + dmalen, k); w16(e + dmavram, y);
         y = (uint16_t)(k + y);
         w16(e + 1, 0x0017); w8(e + 3, 0); w8(e, 0xFC);
         t = (t + 8) & 0x03FF;
@@ -631,9 +631,9 @@ uint16_t QueueVRAMDMA(uint32_t *p0, uint16_t x, uint16_t y)
     for (;;) {
         uint16_t n = a >= 0x1000 ? 0x1000 : a;
         uint32_t e = RAM_OFF_DMAQueue + t;
-        w16(e + 4, n);
+        w16(e + dmalen, n);
         uint16_t words = n >> 1;
-        w16(e + 6, y);
+        w16(e + dmavram, y);
         y = (uint16_t)(y + words);
         w16(e + 1, lo);
         uint32_t s = (uint32_t)lo + words;
@@ -666,8 +666,8 @@ uint16_t DMAToVRAMHigh(uint32_t *p0, uint16_t x, uint16_t y)
     for (;;) {
         uint16_t n = a >= 0x1001 ? 0x1000 : a;
         uint32_t e = RAM_OFF_DMAQueue + t;
-        w16(e + 4, n);
-        w16(e + 6, y);
+        w16(e + dmalen, n);
+        w16(e + dmavram, y);
         y = (uint16_t)(n + y);
         w16(e + 1, (uint16_t)*p0);
         *p0 = (*p0 & 0xFF0000) | (uint16_t)(*p0 + 0x1000);
@@ -842,8 +842,8 @@ void Mode7MapToVRAM(uint32_t p0, uint16_t x, uint16_t y)
         uint32_t e = RAM_OFF_DMAQueue + t;
         w16(e + 1, src);
         src = (uint16_t)(src + w);
-        w16(e + 4, w);
-        w16(e + 6, v);
+        w16(e + dmalen, w);
+        w16(e + dmavram, v);
         v = (uint16_t)(v + 0x80);
         w8(e + 3, (uint8_t)(p0 >> 16));
         w8(e, 0xFB);
@@ -1101,7 +1101,7 @@ uint16_t LoadFrameTiles(uint32_t p0, uint16_t x)
         uint16_t t = g.DMAlistend;
         dma_entry(t, src, bank, g.sprox);
         uint16_t vram = cache_add(p0, k, (uint16_t)(k + g.SpriteBlockTiles));
-        w16(RAM_OFF_DMAQueue + t + 6, vram);
+        w16(RAM_OFF_DMAQueue + t + dmavram, vram);
         g.DMAlistend = (t + 8) & 0x03FF;
         return cache_result();
     }
@@ -1161,14 +1161,14 @@ uint16_t LoadFrameTiles(uint32_t p0, uint16_t x)
         dma_entry(t, src, bank, g.sprox);
         src = (uint16_t)(g.sprox + src);
         uint16_t vram = cache_add(p0, run | 0x8000, (uint16_t)(((run & 0xFFF8) << 1) + (run & 7)) << 1);
-        w16(RAM_OFF_DMAQueue + t + 6, vram);
+        w16(RAM_OFF_DMAQueue + t + dmavram, vram);
         t = (t + 8) & 0x03FF;
         if (!g.sproy) {
             g.DMAlistend = t;
             return cache_result();
         }
         dma_entry(t, src, bank, g.sproy);
-        w16(RAM_OFF_DMAQueue + t + 6, (uint16_t)((((g.sprox >> 1) & 0xFF00) | 0x0100) + vram));
+        w16(RAM_OFF_DMAQueue + t + dmavram, (uint16_t)((((g.sprox >> 1) & 0xFF00) | 0x0100) + vram));
         g.DMAlistend = (t + 8) & 0x03FF;
         return cache_result();
     }
@@ -1176,14 +1176,14 @@ uint16_t LoadFrameTiles(uint32_t p0, uint16_t x)
     dma_entry(t, src, bank, g.sprox);
     src = (uint16_t)(g.sprox + src);
     uint16_t vram = cache_add(p0, run | 0x8000, (uint16_t)(((run & 0xFFF8) << 1) + (run & 7)) << 1);
-    w16(RAM_OFF_DMAQueue + t + 6, vram);
+    w16(RAM_OFF_DMAQueue + t + dmavram, vram);
     t = (t + 8) & 0x03FF;
     dma_entry(t, src, bank, g.sproy);
     if (!g.sproy) {
         g.DMAlistend = t;
         return cache_result();
     }
-    w16(RAM_OFF_DMAQueue + t + 6, vram | 0x0100);
+    w16(RAM_OFF_DMAQueue + t + dmavram, vram | 0x0100);
     g.DMAlistend = (t + 8) & 0x03FF;
     return cache_result();
 }
