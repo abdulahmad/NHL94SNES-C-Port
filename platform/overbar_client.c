@@ -24,6 +24,7 @@ static int toggle_speed(void *ctx)
 void overbar_client_init(ob_profile profile)
 {
     ob_host_init(&host, OB_PORT_SNES, profile);
+    ob_host_load_ini_beside(&host, "overbar.ini");   /* the Overbar settings stay set between runs */
     host.addon_ctx = NULL;
     speed_addon = OB_ID_ADDON;
     ob_host_add_addon(&host, speed_addon, "Game Speed", toggle_speed);
