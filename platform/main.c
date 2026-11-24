@@ -555,6 +555,7 @@ int main(int argc, char *argv[])
             .src_w = SNRT_WIDTH, .src_h = SNRT_HEIGHT, .picture = hook_picture,
             .changed = overlay_sync_settings, .action = hook_action, .captures = hook_captures,
             .raw_key = hook_raw_key, .raw_button = hook_raw_button, .draw_over = hook_draw_over, .quit = quit, .esc_opens = 1,
+            .game_name = "NHL 94", .game_platform = "For Super Nintendo",
         };
         if (!ob_plat_open(&hooks, overbar_client_host())) return 1;
     }
