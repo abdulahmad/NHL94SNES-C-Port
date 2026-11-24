@@ -51,7 +51,7 @@ with SDL2 in it. Drag a ROM onto it, or put it beside it: any `.smc` that is the
 
 ## The overlay
 
-`` ` `` or F11 (or a controller's Back) opens Overbar; F12 toggles stats. Escape does not open it.
+Esc or `` ` `` (or a controller's Back) opens and closes Overbar; Backspace is Back inside; F12 toggles stats.
 The game waits while it is open (not in an online session). Up / Down choose, Enter (or Left / Right) changes.
 
 - **Video**: Scale Mode (Sharp / CRT / MiSTer / RetroArch / Scale2x / …). The picture is always

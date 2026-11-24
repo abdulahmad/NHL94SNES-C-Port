@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT
  * Copyright (c) 2026 abdulahmad and contributors
  *
- * SNES C-port Overbar client: dest-rect L5, overlay ` / F11, stats F12,
+ * SNES C-port Overbar client: dest-rect L5, overlay Esc / `, stats F12,
  * Game Speed addon, no Picture Native.
  */
 #include "overbar_client.h"
