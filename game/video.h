@@ -2,6 +2,9 @@
 #pragma once
 #include <stdint.h>
 
+/* DMAList (RAM_OFF_DMAQueue) entry, 8 bytes: type, source, bank, then (93S names, as NHL94SNES) */
+enum { dmalen = 4, dmavram = 6 };   /* length, VRAM address (word-write entries $FE/$FF keep two data words there) */
+
 void NullHook(void);
 void NMI(void);
 void VBlank(void);
