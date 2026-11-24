@@ -2898,7 +2898,7 @@ void assbreakaway(int o, int a3)
             uint16_t e0 = (uint16_t)(0 - g.Xpos[o]);
             uint16_t e1 = (uint16_t)((g.pfgoal[o] ? 0x108 : 0xFEF8) - g.Ypos[o]);
             e0 = vtoa(e0, e1);
-            SetSPAFromA(o, (uint16_t)(Findhittype(o, &e0) ? SYM_SPAonetimerb : SYM_SPAonetimerf));
+            SetSPAFromA(o, (uint16_t)(Findhittype(o, &e0) ? SYM_SPAonetimeb : SYM_SPAonetimef));
             updateanim(o);
             g.SPAcnt[o] = 2;
             doshot(o, a3);
@@ -2963,12 +2963,12 @@ void asspassrec(int o, uint16_t a2, int a3)
         goto over;
     }
 swing:
-    if (g.SPA[o] != (uint16_t)SYM_SPAonetimerf && g.SPA[o] != (uint16_t)SYM_SPAonetimerb) {
+    if (g.SPA[o] != (uint16_t)SYM_SPAonetimef && g.SPA[o] != (uint16_t)SYM_SPAonetimeb) {
         g.tmOneTimerSwings[NEG(2 * o, 0xC) ? 0 : 1]++;
         uint16_t d0 = (uint16_t)(0 - g.passtargetx);
         uint16_t d1 = (uint16_t)((g.pfgoal[o] ? 0x108 : 0xFEF8) - g.passtargety);
         d0 = vtoa(d0, d1);
-        SetSPAFromA(o, (uint16_t)(Findhittype(o, &d0) ? SYM_SPAonetimerb : SYM_SPAonetimerf));
+        SetSPAFromA(o, (uint16_t)(Findhittype(o, &d0) ? SYM_SPAonetimeb : SYM_SPAonetimef));
         return;
     }
     g.nopuck[o] = 0xA;
@@ -3130,8 +3130,8 @@ void dopass_count(int o, uint16_t a0, int a3, uint16_t y)
     assinsert(a0 >> 1, apassrec);
     uint16_t save = r16(RAM_OFF_frame + a0);
     uint16_t dir = r16(RAM_OFF_attribute + a0) & 0x0800 ? (uint16_t)(0 - r16(RAM_OFF_facedir + a0)) : r16(RAM_OFF_facedir + a0);
-    uint16_t t = rom16(SYM_SPAonetimerf + (uint16_t)((dir & 7) << 1));
-    w16(RAM_OFF_frame + a0, rom16((SYM_SPAonetimerf & 0xFF0000) | t));
+    uint16_t t = rom16(SYM_SPAonetimef + (uint16_t)((dir & 7) << 1));
+    w16(RAM_OFF_frame + a0, rom16((SYM_SPAonetimef & 0xFF0000) | t));
     int16_t hx, hy;
     GetHot(a0 >> 1, &hx, &hy);
     w16(RAM_OFF_frame + a0, save);

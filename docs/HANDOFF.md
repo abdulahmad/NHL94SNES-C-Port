@@ -40,6 +40,8 @@ Overbar overlay/bar on [#9](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/
   remaining other_module routines into their asm module files. Names gate **844 ok / 0 other_module / 6 renamed
   / 5 missing**. `test/check.sh` 7 of 7, clock table 851, vanilla PASS.
 
+2026-11-24: `SYM_SPAonetimef` / `SYM_SPAonetimeb` (and their direction labels) renamed from `SYM_SPAonetimer*` to follow the 95PC retail HOCKEY.EXE debug string table (`onetimef` / `onetimeb` at file offsets 0x10930C / 0x109315; also bcrt2000, 12 May 2025, nhl94.com thread “New NHL95 PC tools for extracting in-game sprites, music, sounds…”), matching NHL94SNES. RAM names such as `onetimer` / `onetimerreq` are unchanged.
+
 ## Next, in order
 
 1. **Ask INDIO for ninety-four-snes's oracle tools** (snes9x hook, recordings, the routine-by-routine checker),
