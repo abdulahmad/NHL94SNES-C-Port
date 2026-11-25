@@ -383,6 +383,19 @@ static void sides_apply(const ob_pads_seats *r, void *ud)
     mouse_pl = r->mouse_player;
     for (int p = 0; p < PADS; p++) player_ctrl[p] = r->ctrl[p];
 }
+extern void (*platform_game_start_hook)(void);
+/* a new game: the select-sides screen first (kept off in a session, where the room decides; settings.ini sides.at_start=0 turns it off) */
+static void game_starting(void)
+{
+    if (netplay_on() || !pm_settings_get_int(set, "sides.at_start", 1)) return;
+    ob_pads_sides_open();
+    while (ob_pads_sides_active()) {
+        ob_plat_pump();
+        ob_pads_tick();
+        ob_plat_present();
+        SDL_Delay(15);
+    }
+}
 static const char *const side_teams[2] = { "Away", "Home" };
 static void shell_sides(void) { ob_pads_sides_open(); }
 
@@ -569,6 +582,7 @@ int main(int argc, char *argv[])
         shell.controllers = shell_controllers;
         shell.sides = shell_sides;
         ob_pads_sides_register(PADS, side_teams, NULL, sides_apply, NULL);
+        platform_game_start_hook = game_starting;
         overbar_client_host()->sides_menu = 1;
         ob_shell_set(&shell);
     }
