@@ -19,6 +19,7 @@
  * File: settings.ini, beside the program. */
 #include <SDL2/SDL.h>
 #include "overbar/plat.h"
+#include "overbar/plat_pads.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -67,6 +68,8 @@ static SDL_Scancode key[PADS][NB];
 static int player_ctrl[PADS];           /* each player's controller slot + 1 (0: none) */
 static int cbutton[NB];                 /* the controllers' button for each of the pad's (the directions' unused) */
 static int dead_zone;                   /* the left stick's, in % */
+static unsigned kbd_mask = ~0u;         /* the players whose keys play (the select-sides screen narrows it) */
+static int mouse_pl = -1;               /* the player the mouse plays */
 
 /* the settings overlay: Overbar; each controller's stick held up or down (-1, 1; 0: not) */
 static int show_fps;
@@ -372,6 +375,17 @@ static void online_setup(void)
 /* the menu bar's Input > Controllers: the port's own setup screen */
 static void shell_controllers(void) { setup_open(-1); }
 
+/* the select-sides screen's result: who plays what */
+static void sides_apply(const ob_pads_seats *r, void *ud)
+{
+    (void)ud;
+    kbd_mask = r->kbd_mask;
+    mouse_pl = r->mouse_player;
+    for (int p = 0; p < PADS; p++) player_ctrl[p] = r->ctrl[p];
+}
+static const char *const side_teams[2] = { "Away", "Home" };
+static void shell_sides(void) { ob_pads_sides_open(); }
+
 
 /* ---- each frame ---- */
 
@@ -414,10 +428,15 @@ static void read_pads(void)
     uint16_t local[PADS], all[NETPLAY_PADS];
     for (int p = 0; p < PADS; p++) {
         uint16_t b = 0;
-        for (int i = 0; i < NB; i++) if (key[p][i] != SDL_SCANCODE_UNKNOWN && down[key[p][i]]) b |= buttons[i].bit;
+        if (kbd_mask & (1u << p))
+            for (int i = 0; i < NB; i++) if (key[p][i] != SDL_SCANCODE_UNKNOWN && down[key[p][i]]) b |= buttons[i].bit;
         SDL_GameController *c = player_pad(p);
         if (c) b |= ctrl_buttons(c);
-        local[p] = (setup || overbar_client_open()) ? 0 : b;
+        if (p == mouse_pl) {                              /* the mouse as a pad: the pointer from the window's middle steers; left shoots, right passes */
+            const uint32_t dir[4] = { buttons[0].bit, buttons[1].bit, buttons[2].bit, buttons[3].bit }, btn[3] = { 0x0080, 0x8000, 0x4000 };
+            b |= (uint16_t)ob_pads_mouse_bits(dir, btn);
+        }
+        local[p] = (setup || overbar_client_open() || ob_pads_sides_active()) ? 0 : b;
     }
     const uint16_t *pad = netplay_pads(local, all, net_wait) ? all : local;
     for (int p = 0; p < PADS; p++) machine.io.pad[p] = pad[p];
@@ -451,7 +470,7 @@ void console_frame_done(uint32_t frame)
         setup_tick();
         netplay_frame(SDL_GetTicks());                    /* (a session's start or end: the console from power on, not returning) */
         ob_plat_present();
-        hold = (setup || overbar_client_open()) && !netplay_on();
+        hold = (setup || overbar_client_open() || ob_pads_sides_active()) && !netplay_on();
         if (hold) SDL_Delay(15);
     } while (hold);
     if (dev) {
@@ -510,12 +529,13 @@ static const char *find_rom(char *found, size_t size)
 
 static const uint32_t *hook_picture(void) { return picture; }
 static int hook_action(int id) { if (id == OB_ID_CONTROLLERS) setup_open(-1); return 1; }
-static int hook_captures(void) { return setup; }
+static int hook_captures(void) { return setup || ob_pads_sides_active(); }
 static void hook_raw_key(int scancode) { setup_key((SDL_Scancode)scancode); }
 static void hook_raw_button(int slot, int button) { setup_button(slot, button == -1 ? TRIGGER_L : button == -2 ? TRIGGER_R : button); }
 static void hook_draw_over(const SDL_Rect *dst)
 {
     banner_draw(dst);
+    ob_pads_mouse_draw(dst);
     if (setup) setup_draw(dst);
 }
 
@@ -547,6 +567,9 @@ int main(int argc, char *argv[])
         ob_shell shell;
         memset(&shell, 0, sizeof shell);
         shell.controllers = shell_controllers;
+        shell.sides = shell_sides;
+        ob_pads_sides_register(PADS, side_teams, NULL, sides_apply, NULL);
+        overbar_client_host()->sides_menu = 1;
         ob_shell_set(&shell);
     }
     {
