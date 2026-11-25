@@ -385,6 +385,7 @@ static void sides_apply(const ob_pads_seats *r, void *ud)
 }
 extern void (*platform_game_start_hook)(void);
 extern volatile unsigned platform_play_frames;
+extern int platform_player_on_screen(int p, int *dx, int *dy);
 /* a new game: the select-sides screen first (kept off in a session, where the room decides; settings.ini sides.at_start=0 turns it off) */
 static void game_starting(void)
 {
@@ -442,7 +443,11 @@ static void read_pads(void)
     uint16_t local[PADS], all[NETPLAY_PADS];
     {   static unsigned seen; static Uint32 play_ms;      /* the mouse steers only while DoGameFrame runs; elsewhere it moves the menus */
         if (platform_play_frames != seen) { seen = platform_play_frames; play_ms = SDL_GetTicks(); }
-        ob_pads_mouse_mode(play_ms && SDL_GetTicks() - play_ms < 250u); }
+        ob_pads_mouse_mode(play_ms && SDL_GetTicks() - play_ms < 250u);
+        {   int ax, ay;                                   /* the green arrow starts from the controlled player */
+            if (mouse_pl >= 0 && platform_player_on_screen(mouse_pl, &ax, &ay)) ob_pads_mouse_anchor(ax, ay);
+            else ob_pads_mouse_anchor(0, 0);
+        } }
     for (int p = 0; p < PADS; p++) {
         uint16_t b = 0;
         if (kbd_mask & (1u << p))
