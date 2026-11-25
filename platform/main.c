@@ -384,6 +384,7 @@ static void sides_apply(const ob_pads_seats *r, void *ud)
     for (int p = 0; p < PADS; p++) player_ctrl[p] = r->ctrl[p];
 }
 extern void (*platform_game_start_hook)(void);
+extern volatile unsigned platform_play_frames;
 /* a new game: the select-sides screen first (kept off in a session, where the room decides; settings.ini sides.at_start=0 turns it off) */
 static void game_starting(void)
 {
@@ -439,6 +440,9 @@ static void read_pads(void)
 {
     const Uint8 *down = SDL_GetKeyboardState(NULL);
     uint16_t local[PADS], all[NETPLAY_PADS];
+    {   static unsigned seen; static Uint32 play_ms;      /* the mouse steers only while DoGameFrame runs; elsewhere it moves the menus */
+        if (platform_play_frames != seen) { seen = platform_play_frames; play_ms = SDL_GetTicks(); }
+        ob_pads_mouse_mode(play_ms && SDL_GetTicks() - play_ms < 250u); }
     for (int p = 0; p < PADS; p++) {
         uint16_t b = 0;
         if (kbd_mask & (1u << p))
@@ -447,7 +451,7 @@ static void read_pads(void)
         if (c) b |= ctrl_buttons(c);
         if (p == mouse_pl) {                              /* the mouse as a pad: the pointer from the window's middle steers; left shoots, right passes */
             const uint32_t dir[4] = { buttons[0].bit, buttons[1].bit, buttons[2].bit, buttons[3].bit }, btn[3] = { 0x0080, 0x8000, 0x4000 };
-            b |= (uint16_t)ob_pads_mouse_bits(dir, btn);
+            b |= (uint16_t)ob_pads_mouse_read(dir, btn);
         }
         local[p] = (setup || overbar_client_open() || ob_pads_sides_active()) ? 0 : b;
     }
