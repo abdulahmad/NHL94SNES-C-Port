@@ -89,6 +89,19 @@ NOI static uint32_t address_of(void *fn)
     return f ? f->addr : 0;
 }
 
+/* where pad p's controlled player is on the screen, in picture pixels from the picture's middle (setvideo_t1's arithmetic: the player's
+ * place less the scroll). 0 when nobody is controlled or the rink is sideways */
+int platform_player_on_screen(int p, int *dx, int *dy)
+{
+    uint16_t o;
+    if (p < 0 || p > 4 || g.sfhormode) return 0;
+    o = r16(RAM_OFF_c1playernum + 2 * p);
+    if (o & 0x8000) return 0;
+    *dx = (int16_t)(r16(RAM_OFF_Xpos + o) - g.Hpos);
+    *dy = -(int16_t)(r16(RAM_OFF_Ypos + o) - g.Vpos);
+    return 1;
+}
+
 volatile unsigned platform_play_frames;               /* DoGameFrame calls so far (the mouse steers only while the game plays) */
 void (*platform_game_start_hook)(void);                /* set by the platform: a new game is about to begin (the select-sides screen) */
 
