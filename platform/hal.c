@@ -102,6 +102,41 @@ int platform_player_on_screen(int p, int *dx, int *dy)
     return 1;
 }
 
+/* Where the game's menus put their rows, for the mouse (the window front end points at them). Seen from the compiler's hooks: the pause menu
+ * prints five rows from psfirst (PmenuDefValue is called per row, printy its row), the setup screen's rows are the lines the play mode shows,
+ * two tiles apart from tile row $E. */
+volatile unsigned platform_menu_calls;                    /* setoptions_11 calls: the setup screen is idle */
+static volatile int in_pausewait;                         /* inside SelectPauseController */
+static int pause_y[5], pause_n;
+int platform_menu_waiting(void) { return in_pausewait; }
+
+/* -> 1 pause menu, 2 setup screen, 0 none; rows are on the 256x224 picture */
+int platform_menu_rows(int rect[][4], int max, int *n, int *sel, int *lr)
+{
+    *lr = 0;
+    if (in_pausewait) {
+        int i, shown = (int)g.pmenucount - (int16_t)g.psfirst;
+        *n = pause_n < shown ? pause_n : shown;
+        if (*n > max) *n = max;
+        *sel = (int16_t)g.psitem - (int16_t)g.psfirst;
+        if (*n <= 0 || *sel < 0 || *sel >= *n) return 0;
+        for (i = 0; i < *n; i++) { rect[i][0] = 6 * 8; rect[i][1] = pause_y[i] * 8; rect[i][2] = 22 * 8; rect[i][3] = 8; }
+        return 1;
+    }
+    {   int k = 0, at = -1;
+        for (int x = 0; x < 0x0E; x += 2) {
+            if (!rom16(SYM_setoptions_13 + (uint16_t)((uint16_t)(g.OptPlayMode << 4) + x + (g.OptPlayMode >> 12 & 1)))) continue;
+            if (k < max) { rect[k][0] = 3 * 8; rect[k][1] = (0x0E + 2 * k) * 8 - 4; rect[k][2] = 29 * 8; rect[k][3] = 16; }
+            if (x == (int)g.d7) at = k;
+            k++;
+        }
+        *n = k < max ? k : max;
+        *sel = at;
+        *lr = 1;
+        return *n > 0 && at >= 0 ? 2 : 0;
+    }
+}
+
 volatile unsigned platform_play_frames;               /* DoGameFrame calls so far (the mouse steers only while the game plays) */
 void (*platform_game_start_hook)(void);                /* set by the platform: a new game is about to begin (the select-sides screen) */
 
@@ -114,11 +149,16 @@ void __cyg_profile_func_enter(void *fn, void *site)
     if (a) clock_entry(a);
     if (fn == (void *)SetIRQ || fn == (void *)IRQOff) clock_mask(1);
     if (fn == (void *)DoGameFrame) platform_play_frames++;
+    else if (fn == (void *)setoptions_11) platform_menu_calls++;
+    else if (fn == (void *)SelectPauseController) in_pausewait = 1;
+    else if (fn == (void *)SetupPauseScreen) pause_n = 0;
+    else if (fn == (void *)PmenuDefValue) { if (pause_n < 5) pause_y[pause_n++] = (int16_t)g.printy; }
     if (fn == (void *)StartGame && platform_game_start_hook) platform_game_start_hook();
 }
 void __cyg_profile_func_exit(void *fn, void *site)
 {
     (void)site;
+    if (fn == (void *)SelectPauseController) in_pausewait = 0;
     if (fn == (void *)SetIRQ || fn == (void *)IRQOff) clock_mask(0);
 }
 
