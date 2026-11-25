@@ -1,13 +1,14 @@
 # Handoff
 
-Where the C-port work stands in this repository. Plan: `alignment-plan/c_ports_plan.md` in the project files.
-Project-wide handoff (always current, read it first): `alignment-plan/c_ports_HANDOFF.md` in the project files; how the project is run: `alignment-plan/HARNESS.md`.
+Where the C-port work stands in this repository (this file is the current handoff). Plan:
+[c_ports_plan.md](https://github.com/abdulahmad/nhl-disasm-report/blob/main/docs/project/c_ports_plan.md) in nhl-disasm-report (a history copy of the project files, with an older
+[c_ports_HANDOFF.md](https://github.com/abdulahmad/nhl-disasm-report/blob/main/docs/project/c_ports_HANDOFF.md)); how the project is run: [HARNESS.md](https://github.com/abdulahmad/nhl-disasm-report/blob/main/docs/project/HARNESS.md).
 
 Rules: [AGENTS.md](../AGENTS.md), [RULES.md](RULES.md), [VANILLA.md](VANILLA.md).
 
 ## Now
 
-Overbar overlay/bar on [#9](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/9) (`cursor/overbar-snes-6801`): opaque overlay pixels + Win32 `CreateMenu`. Host-only; do not merge. Asstab slot indexes named from cleaned 94S (`anull`, `adefo`, `abreakaway` $10, `adumpin` $14) landed on `main` ([#8](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/8), merge `27dcc03`). Values stay this ROM's numbers. S0–S3 remain on `main`. Names 844/0/6/5. Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked.
+Overbar overlay/bar ([#9](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/9), merged 2026-11-09) is on `main`: opaque overlay pixels + Win32 `CreateMenu`. New work is a short branch off the current `main` and one PR into `main`. Asstab slot indexes named from cleaned 94S (`anull`, `adefo`, `abreakaway` $10, `adumpin` $14) landed on `main` ([#8](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/8), merge `27dcc03`). Values stay this ROM's numbers. S0–S3 remain on `main`. Names 844/0/6/5. Parked 6 / missing 5 stay. Oracle (plan S1/S2) still parked.
 
 ## Done
 
@@ -24,19 +25,19 @@ Overbar overlay/bar on [#9](https://github.com/abdulahmad/NHL94SNES-C-Port/pull/
   docs/RULES.md), missing 4.
 * Re-cut: every original routine now sits in its asm module's file (one commit per unit: logic, setup, middle,
   video, replay's helpers, hockey, stats, decompress, main, sound, then snes.c's routines). New files
-  `game/system/decompress.c`, `game/system/main.c`; `game/system/snes.c` keeps only the port's glue. The names gate
+  `game/decompress.c`, `game/main.c`; `game/snes.c` keeps only the port's glue. The names gate
   now counts one-line functions too: 855 routines, ok 844, other module 0, renamed 6 (parked), missing 5.
   `test/check.sh` 7 of 7, the clock table 851 and 0 warnings after every unit; the vanilla gate passes at the end.
 
-2026-11-04: CONTRIBUTING.md added. Work stays on `claude/project-thread-4gad59`; do not merge to main.
+2026-11-04: CONTRIBUTING.md added (its branch rule then was `claude/project-thread-4gad59`; now work goes to `main` through PRs).
 
 2026-11-06: aligned to current NHL94SNES (leftover recut #387 on asm `main`, plus later cleaned names).
-`claude/project-thread-4gad59` was already merged; this work is on `cursor/94s-cport-align-9908`. Do not merge to main.
+`claude/project-thread-4gad59` was already merged; this work was on `cursor/94s-cport-align-9908` and is on `main` now.
 
 * Names: 30 routines renamed to current 94S labels (`Start`, `VBlank`, `ManualGoalieMenu`, `puckunflip`,
   `waitx`, `forcefade`, `TitleScreen_ret`, `PlayShootout_ret`, `Reset_Fast_ret`, pause/stats/scout labels).
   Six parked locals unchanged (C `SYM_*_t1`/`_t2` at other addresses than the asm's `Parent.t1`/`.t2`).
-* Re-cut: `ManualGoalieMenu` into `period.c` (94S leftover); new `game/system/print.c` and `game/screen/title.c`;
+* Re-cut: `ManualGoalieMenu` into `period.c` (94S leftover); new `game/print.c` and `game/title.c`;
   remaining other_module routines into their asm module files. Names gate **844 ok / 0 other_module / 6 renamed
   / 5 missing**. `test/check.sh` 7 of 7, clock table 851, vanilla PASS.
 
