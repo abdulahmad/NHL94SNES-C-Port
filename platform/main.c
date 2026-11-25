@@ -443,6 +443,7 @@ static void net_wait(void)
  * from the session */
 static void read_pads(void)
 {
+    ob_pads_mouse_start(0x1000);                           /* the mouse's fourth button is Start */
     const Uint8 *down = SDL_GetKeyboardState(NULL);
     uint16_t local[PADS], all[NETPLAY_PADS];
     {   static unsigned seen; static Uint32 play_ms;      /* the mouse steers only while DoGameFrame runs; elsewhere it moves the menus */
