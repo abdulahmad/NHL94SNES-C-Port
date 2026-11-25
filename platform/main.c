@@ -388,6 +388,7 @@ extern volatile unsigned platform_play_frames;
 extern int platform_player_on_screen(int p, int *dx, int *dy);
 extern int platform_menu_rows(int rect[][4], int max, int *n, int *sel, int *lr);
 extern int platform_menu_waiting(void);
+extern int platform_menu_kind(void);
 extern volatile unsigned platform_menu_calls;
 /* a new game: the select-sides screen first (kept off in a session, where the room decides; settings.ini sides.at_start=0 turns it off) */
 static void game_starting(void)
@@ -449,12 +450,13 @@ static void read_pads(void)
         ob_pads_mouse_mode(play_ms && SDL_GetTicks() - play_ms < 250u);
         {   static unsigned seen_menu; static Uint32 menu_ms;                 /* a game menu is being read: the mouse points at its rows */
             static ob_menu_rect mr[OB_MENU_ROWS]; int rect[OB_MENU_ROWS][4], n, sel, lr;
-            ob_pad_menu pm = { mr, 0, 0, 0, 0x0080, 0x8000, 256, 400 };
+            ob_pad_menu pm = { mr, 0, 0, 0, 0x0080, 0x8000, 256, 400, 0 };
             if (platform_menu_calls != seen_menu) { seen_menu = platform_menu_calls; menu_ms = SDL_GetTicks(); }
             if (((menu_ms && SDL_GetTicks() - menu_ms < 250u) || platform_menu_waiting()) && !(play_ms && SDL_GetTicks() - play_ms < 250u) &&
                 platform_menu_rows(rect, OB_MENU_ROWS, &n, &sel, &lr)) {
                 for (int i = 0; i < n; i++) { mr[i].x = rect[i][0]; mr[i].y = rect[i][1]; mr[i].w = rect[i][2]; mr[i].h = rect[i][3]; }
                 pm.n = n; pm.sel = sel; pm.lr = lr;
+                if (platform_menu_kind() == 3) pm.back = 0x1000;       /* the player select: right click is Start */
                 ob_pads_menu(&pm);
             } else ob_pads_menu(NULL);
         }
@@ -471,6 +473,11 @@ static void read_pads(void)
         if (p == mouse_pl || (mouse_pl < 0 && p == 0 && !ob_pads_mouse_playing())) {                              /* the mouse as a pad: the pointer from the window's middle steers; left shoots, right passes */
             const uint32_t dir[4] = { buttons[0].bit, buttons[1].bit, buttons[2].bit, buttons[3].bit }, btn[3] = { 0x0080, 0x8000, 0x4000 };
             b |= (uint16_t)ob_pads_mouse_read(dir, btn);
+        }
+        if (p == 0) {                                      /* cloud tests: OVERBAR_TEST_PADFILE names a file holding a hex mask for pad 1 (read each frame) */
+            static const char *pf; static int pf_ready;
+            if (!pf_ready) { pf = getenv("OVERBAR_TEST_PADFILE"); pf_ready = 1; }
+            if (pf) { FILE *f = fopen(pf, "r"); unsigned m = 0; if (f) { if (fscanf(f, "%x", &m) != 1) m = 0; fclose(f); } b |= (uint16_t)m; }
         }
         local[p] = (setup || overbar_client_open() || ob_pads_sides_active()) ? 0 : b;
     }
