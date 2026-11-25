@@ -89,6 +89,7 @@ NOI static uint32_t address_of(void *fn)
     return f ? f->addr : 0;
 }
 
+volatile unsigned platform_play_frames;               /* DoGameFrame calls so far (the mouse steers only while the game plays) */
 void (*platform_game_start_hook)(void);                /* set by the platform: a new game is about to begin (the select-sides screen) */
 
 NOI void __cyg_profile_func_enter(void *fn, void *site);
@@ -99,6 +100,7 @@ void __cyg_profile_func_enter(void *fn, void *site)
     uint32_t a = address_of(fn);
     if (a) clock_entry(a);
     if (fn == (void *)SetIRQ || fn == (void *)IRQOff) clock_mask(1);
+    if (fn == (void *)DoGameFrame) platform_play_frames++;
     if (fn == (void *)StartGame && platform_game_start_hook) platform_game_start_hook();
 }
 void __cyg_profile_func_exit(void *fn, void *site)
