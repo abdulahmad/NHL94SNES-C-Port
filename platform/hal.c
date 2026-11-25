@@ -109,12 +109,19 @@ volatile unsigned platform_menu_calls;                    /* setoptions_11 calls
 static volatile int in_pausewait;                         /* inside SelectPauseController */
 static volatile int menu_kind;                            /* the screen that last ran: 1 the pause menu, 2 the setup screen */
 static int pause_y[5], pause_n;
-int platform_menu_waiting(void) { return in_pausewait; }
+static volatile int in_psel;                              /* inside PlayerSelect (the side each pad takes) */
+int platform_menu_waiting(void) { return in_pausewait || in_psel; }
+int platform_menu_kind(void) { return menu_kind; }
 
 /* -> 1 pause menu, 2 setup screen, 0 none; rows are on the 256x224 picture */
 int platform_menu_rows(int rect[][4], int max, int *n, int *sel, int *lr)
 {
     *lr = 0;
+    if (menu_kind == 3) {                                     /* the player select: left / right of the middle is the side */
+        *n = 1; *sel = 0; *lr = 1;
+        rect[0][0] = 0; rect[0][1] = 0; rect[0][2] = 256; rect[0][3] = 224;
+        return 3;
+    }
     if (menu_kind == 1) {
         int i, shown = (int)g.pmenucount - (int16_t)g.psfirst;
         *n = pause_n < shown ? pause_n : shown;
@@ -152,6 +159,7 @@ void __cyg_profile_func_enter(void *fn, void *site)
     if (fn == (void *)DoGameFrame) platform_play_frames++;
     else if (fn == (void *)setoptions_11) { menu_kind = 2; platform_menu_calls++; }
     else if (fn == (void *)SelectPauseController) { in_pausewait = 1; menu_kind = 1; platform_menu_calls++; }
+    else if (fn == (void *)PlayerSelect) { in_psel++; menu_kind = 3; platform_menu_calls++; }
     else if (fn == (void *)SetupPauseScreen) pause_n = 0;
     else if (fn == (void *)PmenuDefValue) { if (pause_n < 5) pause_y[pause_n++] = (int16_t)g.printy; }
     if (fn == (void *)StartGame && platform_game_start_hook) platform_game_start_hook();
@@ -160,6 +168,7 @@ void __cyg_profile_func_exit(void *fn, void *site)
 {
     (void)site;
     if (fn == (void *)SelectPauseController) in_pausewait = 0;
+    if (fn == (void *)PlayerSelect && in_psel > 0) in_psel--;
     if (fn == (void *)SetIRQ || fn == (void *)IRQOff) clock_mask(0);
 }
 
